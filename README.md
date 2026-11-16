@@ -61,6 +61,6 @@ While a dialog is open, notification close buttons remain clickable without dism
 
 Use the settings button beside a column heading to configure its agent name, Codex CLI model ID, effort, optional instructions, and sandbox permissions. Unconfigured columns show **No agent configured**. Each column owns its settings; tasks do not override them.
 
-Settings are stored in the same SQLite database as tasks and survive reloads and app restarts. Saving settings does not start a run. Model IDs are entered explicitly because availability depends on your Codex account; configuration validates required fields and supported effort/permission choices, without making an agent call. Choose an effort supported by the selected model. Actual execution belongs to the next ticket.
+Settings are stored in the same SQLite database as tasks and survive reloads and app restarts. Saving settings does not start a run. The model input offers searchable suggestions and accepts custom model IDs because availability depends on your Codex account; configuration validates required fields and supported effort/permission choices, without making an agent call. Choose an effort supported by the selected model. Actual execution belongs to the next ticket.
 
 The column agent stories cover saving/reopening, field validation, and retaining drafts after failed saves. Store tests cover persistence, updates isolated to a column, validation, and unchanged task state.

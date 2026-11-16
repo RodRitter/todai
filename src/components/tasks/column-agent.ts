@@ -1,5 +1,12 @@
 import { statuses, type Status } from './task.ts';
 
+export const executionTools = [{ value: 'codex', label: 'Codex CLI' }] as const;
+// Suggested models from the local Codex catalog; custom model IDs are also accepted.
+export const suggestedModels = [
+  'gpt-6.1-sol', 'gpt-6-astra', 'gpt-6.1-terra', 'gpt-6-sol',
+  'gpt-6-luna', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna',
+] as const;
+
 export const effortLevels = ['low', 'medium', 'high', 'xhigh'] as const;
 export const permissionModes = ['read-only', 'workspace-write', 'danger-full-access'] as const;
 export type ColumnAgent = {

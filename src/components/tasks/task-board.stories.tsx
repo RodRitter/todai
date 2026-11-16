@@ -92,6 +92,10 @@ export const ConfigureColumnAgent: Story = {
     let dialog = within(await body.findByRole('dialog'));
     await userEvent.clear(dialog.getByLabelText('Agent name'));
     await userEvent.type(dialog.getByLabelText('Agent name'), 'Reviewer');
+    await expect(dialog.getByRole('combobox', { name: 'Execution tool' })).toHaveValue('codex');
+    await userEvent.selectOptions(dialog.getByRole('combobox', { name: 'Execution tool' }), 'codex');
+    await expect(dialog.getByRole('combobox', { name: 'Model' })).toHaveAttribute('list', 'agent-model-options');
+    await expect(canvasElement.ownerDocument.getElementById('agent-model-options')).toContainHTML('value="gpt-6.1-sol"');
     await userEvent.type(dialog.getByLabelText('Model'), 'review-model');
     await userEvent.selectOptions(dialog.getByLabelText('Effort'), 'high');
     await userEvent.type(dialog.getByLabelText('Instructions'), 'Check the changes.');

@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
 import { notifyOperation } from '@/components/ui/toast';
-import { AgentValidationError, effortLevels, parseColumnAgent, type ColumnAgent } from './column-agent';
+import { AgentValidationError, effortLevels, executionTools, suggestedModels, parseColumnAgent, type ColumnAgent } from './column-agent';
 import type { Status } from './task';
 
 export function ColumnAgentEditor({ column, agent, onClose, onSave }: {
@@ -26,7 +26,7 @@ export function ColumnAgentEditor({ column, agent, onClose, onSave }: {
     const data = new FormData(event.currentTarget);
     let draft: ColumnAgent;
     try {
-      draft = parseColumnAgent({ ...Object.fromEntries(data), column, tool: 'codex' });
+      draft = parseColumnAgent({ ...Object.fromEntries(data), column });
     } catch (error) {
       setError(error as AgentValidationError);
       return;
@@ -61,15 +61,20 @@ export function ColumnAgentEditor({ column, agent, onClose, onSave }: {
           </div>
           <div className="space-y-2">
             <Label htmlFor="agent-tool">Execution tool</Label>
-            <Input id="agent-tool" value="Codex CLI" readOnly />
+            <NativeSelect id="agent-tool" name="tool" defaultValue={agent?.tool ?? 'codex'}>
+              {executionTools.map(tool => <option key={tool.value} value={tool.value}>{tool.label}</option>)}
+            </NativeSelect>
           </div>
           <div className="space-y-2">
             <Label htmlFor="agent-model">Model</Label>
-            <Input id="agent-model" name="model" defaultValue={agent?.model ?? ''} required
+            <Input id="agent-model" name="model" list="agent-model-options" autoComplete="off" defaultValue={agent?.model ?? ''} required
               aria-invalid={error?.field === 'model'} aria-describedby={error?.field === 'model' ? 'agent-model-help agent-model-error' : 'agent-model-help'}
               onChange={() => setError(null)} />
+            <datalist id="agent-model-options">
+              {suggestedModels.map(model => <option key={model} value={model} />)}
+            </datalist>
             {error?.field === 'model' && <p id="agent-model-error" role="alert" className="text-sm text-destructive">{error.message}</p>}
-            <p id="agent-model-help" className="text-sm text-muted-foreground">Enter a model ID available to your Codex CLI account.</p>
+            <p id="agent-model-help" className="text-sm text-muted-foreground">Search suggested models or enter a custom model ID.</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="agent-effort">Effort</Label>
