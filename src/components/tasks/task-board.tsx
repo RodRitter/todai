@@ -66,8 +66,8 @@ export function TaskBoard({ initialTasks = [], persistence }: {
     <AppShell headerActions={
       <Button size="sm" disabled={busy} onClick={() => openEditor()}><Plus /> New task</Button>
     }>
-      <main id="task-board" className="p-4 md:p-8" aria-label="Task board" tabIndex={-1}>
-        <div ref={boardRef} className="grid items-start gap-6 md:grid-cols-2 xl:grid-cols-4">
+      <main id="task-board" className="flex min-h-[calc(100dvh-3.5rem)] flex-col p-4 md:p-8" aria-label="Task board" tabIndex={-1}>
+        <div ref={boardRef} className="grid flex-1 items-stretch gap-6 md:grid-cols-2 xl:grid-cols-4">
           {statuses.map((column) => {
             const columnTasks = tasks.filter((task) => task.status === column);
             return (
@@ -81,7 +81,7 @@ export function TaskBoard({ initialTasks = [], persistence }: {
                 onDragLeave={() => setDropColumn(null)}
                 onDrop={() => {
                   const task = tasks.find(item => item.id === draggedTaskId);
-                  if (task && !saving.current) void notifyOperation(() => saveTask({ ...task, status: column }), {
+                  if (task && task.status !== column && !saving.current) void notifyOperation(() => saveTask({ ...task, status: column }), {
                     loading: "Moving task…",
                     success: `Task moved to ${column}.`,
                     error: "Could not confirm the move was saved. Try again or reload to check its saved column.",
