@@ -51,3 +51,55 @@ test('invalid names and stale or incomplete reorders leave columns intact', () =
     }
   } finally { store.close(); }
 });
+
+test('renaming a column preserves tasks, assignments and queued work across restart', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'todai-rename-'));
+  const path = join(directory, 'tasks.sqlite');
+  let store = new TaskStore(path);
+  try {
+    store.saveAgent({ id: 'planner', name: 'Planner', tool: 'codex', model: 'custom-model', effort: 'medium', instructions: '', permissions: 'read-only' });
+    store.assignColumnAgent({ column: 'To do', agentId: 'planner' });
+    store.save({ id: 'one', title: 'Plan work', description: '', status: 'To do' });
+    store.renameColumn('To do', '  Backlog  ');
+    store.close();
+    store = new TaskStore(path);
+    assert.deepEqual(store.listColumns(), ['Backlog', 'In progress', 'In review', 'Done']);
+    assert.equal(store.list()[0].status, 'Backlog');
+    assert.deepEqual(store.boardSnapshot(), { tasks: store.list(), columns: ['Backlog', 'In progress', 'In review', 'Done'], assignments: [{ column: 'Backlog', agentId: 'planner' }] });
+    assert.equal(store.list()[0].agentStatus, 'Queued');
+    assert.deepEqual(store.listColumnAgents(), [{ column: 'Backlog', agentId: 'planner' }]);
+    assert.equal(store.history().length, 1);
+    assert.equal(store.history()[0].column, 'Backlog');
+    assert.throws(() => store.renameColumn('Backlog', 'Done'), /already exists/);
+    assert.throws(() => store.renameColumn('Backlog', ' '), /name/);
+    assert.throws(() => store.renameColumn('Missing', 'New'), /existing/);
+    assert.equal(store.list()[0].status, 'Backlog');
+  } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
+});
+
+test('deleting empty columns clears assignments, preserves agents, and never deletes tasks or the last column', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'todai-delete-column-'));
+  const path = join(directory, 'tasks.sqlite');
+  let store = new TaskStore(path);
+  try {
+    const task = store.save({ id: 'one', title: 'Keep work', description: '', status: 'To do' });
+    store.saveAgent({ id: 'planner', name: 'Planner', tool: 'codex', model: 'custom-model', effort: 'medium', instructions: '', permissions: 'read-only' });
+    store.assignColumnAgent({ column: 'In progress', agentId: 'planner' });
+    assert.throws(() => store.deleteColumn('To do'), /Move.*tasks/);
+    store.deleteColumn('In progress');
+    store.close();
+    store = new TaskStore(path);
+    assert.deepEqual(store.listColumns(), ['To do', 'In review', 'Done']);
+    assert.deepEqual(store.listColumnAgents(), []);
+    assert.equal(store.listAgents().length, 1);
+    assert.deepEqual(store.list(), [task]);
+    store.createColumn('Planning');
+    assert.deepEqual(store.listColumns(), ['To do', 'In review', 'Done', 'Planning']);
+    store.deleteColumn('In review');
+    store.deleteColumn('Done');
+    store.deleteColumn('Planning');
+    store.delete('one');
+    assert.throws(() => store.deleteColumn('To do'), /at least one/);
+    assert.throws(() => store.deleteColumn('Missing'), /existing/);
+  } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
+});

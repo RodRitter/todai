@@ -93,21 +93,63 @@ export class TaskStore {
     }
   }
 
+  boardSnapshot() {
+    return this.transaction(() => ({ tasks: this.list(), columns: this.listColumns(), assignments: this.listColumnAgents() }));
+  }
+
   listColumns(): string[] {
     return this.db.prepare('SELECT name FROM board_columns ORDER BY position').all().map(row => row.name as string);
   }
 
-  createColumn(input: unknown): string[] {
+  private columnName(input: unknown, current?: string): string {
     if (typeof input !== 'string' || !input.trim() || input.trim().length > 80) {
       throw new ColumnValidationError('Enter a column name between 1 and 80 characters.');
     }
     const name = input.trim();
+    if (this.listColumns().some(column => column !== current && column.toLowerCase() === name.toLowerCase())) {
+      throw new ColumnValidationError('A column with that name already exists.');
+    }
+    return name;
+  }
+
+  createColumn(input: unknown): string[] {
+    return this.transaction(() => {
+      const name = this.columnName(input);
+      this.db.prepare('INSERT INTO board_columns (name, position) VALUES (?, ?)').run(name, this.listColumns().length);
+      return this.listColumns();
+    });
+  }
+
+  renameColumn(column: unknown, input: unknown): string[] {
+    return this.transaction(() => {
+      if (typeof column !== 'string' || !this.listColumns().includes(column)) {
+        throw new ColumnValidationError('Choose an existing column. Reload settings and try again.');
+      }
+      const name = this.columnName(input, column);
+      this.db.prepare('UPDATE board_columns SET name = ? WHERE name = ?').run(name, column);
+      this.db.prepare('UPDATE tasks SET status = ? WHERE status = ?').run(name, column);
+      this.db.prepare('UPDATE column_assignments SET column = ? WHERE column = ?').run(name, column);
+      this.db.prepare("UPDATE runs SET column = ? WHERE column = ? AND status IN ('Queued', 'Running')").run(name, column);
+      this.db.prepare("UPDATE runs SET interruptionColumn = ? WHERE interruptionColumn = ? AND status = 'Running'").run(name, column);
+      return this.listColumns();
+    });
+  }
+
+  deleteColumn(column: unknown): string[] {
     return this.transaction(() => {
       const columns = this.listColumns();
-      if (columns.some(column => column.toLowerCase() === name.toLowerCase())) {
-        throw new ColumnValidationError('A column with that name already exists.');
+      if (typeof column !== 'string' || !columns.includes(column)) {
+        throw new ColumnValidationError('Choose an existing column. Reload settings and try again.');
       }
-      this.db.prepare('INSERT INTO board_columns (name, position) VALUES (?, ?)').run(name, columns.length);
+      if (columns.length === 1) throw new ColumnValidationError('Keep at least one board column.');
+      if (this.db.prepare('SELECT id FROM tasks WHERE status = ? LIMIT 1').get(column)) {
+        throw new ColumnValidationError('Move all tasks to another column before deleting this column.');
+      }
+      this.db.prepare('DELETE FROM column_assignments WHERE column = ?').run(column);
+      this.db.prepare('DELETE FROM board_columns WHERE name = ?').run(column);
+      for (const [position, name] of this.listColumns().entries()) {
+        this.db.prepare('UPDATE board_columns SET position = ? WHERE name = ?').run(position, name);
+      }
       return this.listColumns();
     });
   }

@@ -26,6 +26,9 @@ export function TaskEditor({ columns = statuses, open, task: editing = null, def
   const pendingRun = editing?.agentStatus === "Queued" || editing?.agentStatus === "Running";
   const draftId = useRef<string | null>(null);
   const [titleError, setTitleError] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState<Status | null>(null);
+  const currentStatus = selectedStatus !== null && columns.includes(selectedStatus)
+    ? selectedStatus : editing?.status ?? defaultStatus;
 
   const [busy, setBusy] = useState(false);
 
@@ -39,6 +42,7 @@ export function TaskEditor({ columns = statuses, open, task: editing = null, def
           : "Could not confirm changes were saved. Try again to save your draft.",
       });
       draftId.current = null;
+      setSelectedStatus(null);
       onOpenChange(false);
     } catch { /* Keep the draft open; notifyOperation reports the failure. */ }
     finally { setBusy(false); }
@@ -65,7 +69,7 @@ export function TaskEditor({ columns = statuses, open, task: editing = null, def
   }
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => { if (!busy) { if (!nextOpen) draftId.current = null; setTitleError(false); onOpenChange(nextOpen); } }}>
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!busy) { if (!nextOpen) { draftId.current = null; setSelectedStatus(null); } setTitleError(false); onOpenChange(nextOpen); } }}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:max-w-3xl sm:p-8">
         <DialogHeader>
           <DialogTitle>{editing ? "Edit task" : "Create task"}</DialogTitle>
@@ -110,7 +114,7 @@ export function TaskEditor({ columns = statuses, open, task: editing = null, def
               <Label htmlFor="task-status" className="text-muted-foreground gap-2 leading-snug font-normal">
                 Status
               </Label>
-              <NativeSelect id="task-status" name="status" defaultValue={editing?.status ?? defaultStatus} className="bg-background dark:bg-background h-10 w-32 rounded-lg border-transparent shadow-none hover:bg-accent sm:w-40">
+              <NativeSelect id="task-status" name="status" value={currentStatus} onChange={event => setSelectedStatus(event.target.value)} className="bg-background dark:bg-background h-10 w-32 rounded-lg border-transparent shadow-none hover:bg-accent sm:w-40">
                 {columns.map((option) => <option key={option}>{option}</option>)}
               </NativeSelect>
             </div>

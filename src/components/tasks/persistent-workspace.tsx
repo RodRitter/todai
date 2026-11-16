@@ -28,7 +28,7 @@ export function PersistentWorkspace({ screen = "board" }: { screen?: "board" | "
   useEffect(() => {
     let active = true;
     const id = toast.loading('Loading workspace…');
-    Promise.all([requestBoardData('/api/tasks'), requestBoardData('/api/agents'), requestBoardData('/api/column-agents'), requestBoardData('/api/columns')]).then(([tasks, agents, assignments, columns]) => {
+    Promise.all([requestBoardData('/api/tasks?workspace=true'), requestBoardData('/api/agents')]).then(([{ tasks, assignments, columns }, agents]) => {
       if (active) { setColumns(columns); setTasks(tasks); setAgents(agents); setAssignments(assignments); toast.dismiss(id); }
     }).catch(() => {
       if (active) {
@@ -43,6 +43,8 @@ export function PersistentWorkspace({ screen = "board" }: { screen?: "board" | "
   </main>;
   if (screen === 'settings') return <ColumnSettings initialColumns={columns}
     create={name => requestBoardData('/api/columns', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(name) })}
+    rename={(column, name) => requestBoardData('/api/columns', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ column, name }) })}
+    remove={column => requestBoardData('/api/columns', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(column) })}
     reorder={columns => requestBoardData('/api/columns', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(columns) })}
   />;
   if (screen === 'agents') return <AgentLibrary initialAgents={agents} initialAssignments={assignments} persistence={{
@@ -52,7 +54,7 @@ export function PersistentWorkspace({ screen = "board" }: { screen?: "board" | "
   return <TaskBoard columns={columns} initialTasks={tasks} initialAgents={agents} initialAssignments={assignments}
     assignAgent={(column, agentId) => requestBoardData('/api/column-agents', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ column, agentId }) })}
     persistence={{
-    list: () => requestBoardData('/api/tasks'),
+    list: () => requestBoardData('/api/tasks?workspace=true'),
     save: task => requestBoardData('/api/tasks', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(task) }),
     delete: id => requestBoardData(`/api/tasks?id=${encodeURIComponent(id)}`, { method: 'DELETE' }),
   }} />;

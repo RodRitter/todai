@@ -29,7 +29,7 @@ export function Toaster() {
 export async function notifyOperation<T>(operation: () => T | Promise<T>, messages: {
   loading: string;
   success: string;
-  error: string;
+  error: string | ((error: unknown) => string);
 }): Promise<T> {
   const id = toast.loading(messages.loading);
   try {
@@ -37,7 +37,7 @@ export async function notifyOperation<T>(operation: () => T | Promise<T>, messag
     toast.success(messages.success, { id });
     return result;
   } catch (error) {
-    toast.error(messages.error, { id, duration: Infinity });
+    toast.error(typeof messages.error === 'function' ? messages.error(error) : messages.error, { id, duration: Infinity });
     throw error;
   }
 }

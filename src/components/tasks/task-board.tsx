@@ -13,15 +13,16 @@ import { ColumnAgentPicker } from "./column-agent-picker";
 import type { AgentProfile, ColumnAssignment } from "./column-agent";
 import { TaskEditor } from "./task-editor";
 
-export function TaskBoard({ columns = statuses, initialTasks = [], initialAgents = [], initialAssignments = [], assignAgent, persistence }: {
+export function TaskBoard({ columns: initialColumns = statuses, initialTasks = [], initialAgents = [], initialAssignments = [], assignAgent, persistence }: {
   columns?: readonly string[];
   initialTasks?: Task[];
   initialAgents?: AgentProfile[];
   initialAssignments?: ColumnAssignment[];
   assignAgent?: (column: Status, agentId: string | null) => Promise<ColumnAssignment | null>;
-  persistence?: { list?: () => Promise<Task[]>; save: (task: Task) => Promise<Task>; delete: (id: string) => Promise<void> };
+  persistence?: { list?: () => Promise<Task[] | { tasks: Task[]; columns: string[]; assignments: ColumnAssignment[] }>; save: (task: Task) => Promise<Task>; delete: (id: string) => Promise<void> };
 }) {
   const agents = initialAgents;
+  const [columns, setColumns] = useState(initialColumns);
   const [assignments, setAssignments] = useState(initialAssignments);
   const [configuringColumn, setConfiguringColumn] = useState<Status | null>(null);
   const saving = useRef(false);
@@ -44,7 +45,14 @@ export function TaskBoard({ columns = statuses, initialTasks = [], initialAgents
       const before = revision.current;
       try {
         const latest = await refresh!();
-        if (active && !saving.current && before === revision.current) setTasks(latest);
+        if (active && !saving.current && before === revision.current) {
+          if (Array.isArray(latest)) setTasks(latest);
+          else {
+            setTasks(latest.tasks);
+            setColumns(latest.columns);
+            setAssignments(latest.assignments);
+          }
+        }
         if (active && errorToast !== undefined) { toast.dismiss(errorToast); errorToast = undefined; }
       } catch {
         if (active && errorToast === undefined) errorToast = toast.error('Live task updates are unavailable. Retrying…', { duration: Infinity });
@@ -141,10 +149,10 @@ export function TaskBoard({ columns = statuses, initialTasks = [], initialAgents
           agents={agents}
           agentId={assignments.find(item => item.column === configuringColumn)?.agentId}
           onClose={() => setConfiguringColumn(null)}
-          onSave={async agentId => {
+          onSave={agentId => mutate(async () => {
             const saved = assignAgent ? await assignAgent(configuringColumn, agentId) : agentId ? { column: configuringColumn, agentId } : null;
             setAssignments(current => [...current.filter(item => item.column !== configuringColumn), ...(saved ? [saved] : [])]);
-          }}
+          })}
         />}
         <TaskEditor
           key={editing?.id ?? "new"}
