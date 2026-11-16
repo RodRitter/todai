@@ -73,6 +73,9 @@ export class TaskStore {
         if (!runColumns.some(item => item.name === column)) this.db.exec(`ALTER TABLE runs ADD COLUMN ${column} TEXT`);
       }
       const columns = this.db.prepare('PRAGMA table_info(tasks)').all();
+      if (!columns.some(column => column.name === 'autoWorkflow')) {
+        this.db.exec('ALTER TABLE tasks ADD COLUMN autoWorkflow INTEGER NOT NULL DEFAULT 0');
+      }
       if (columns.some(column => column.name === 'owner')) {
         this.db.exec('ALTER TABLE tasks DROP COLUMN owner');
       }
@@ -170,14 +173,15 @@ export class TaskStore {
 
   list(): Task[] {
     return (this.db.prepare('SELECT * FROM tasks ORDER BY rowid').all() as unknown as Task[])
-      .map(task => ({ ...task, comments: this.db.prepare('SELECT * FROM comments WHERE taskId = ? ORDER BY createdAt, rowid').all(task.id) as unknown as NonNullable<Task['comments']> }));
+      .map(task => ({ ...task, autoWorkflow: Boolean(task.autoWorkflow), comments: this.db.prepare('SELECT * FROM comments WHERE taskId = ? ORDER BY createdAt, rowid').all(task.id) as unknown as NonNullable<Task['comments']> }));
   }
 
   save(input: unknown): Task {
     if (!input || typeof input !== 'object') throw new Error('Invalid task.');
     const task = input as Task;
     if (typeof task.id !== 'string' || !task.id.trim() || typeof task.title !== 'string' || !task.title.trim() ||
-        typeof task.description !== 'string' || !this.listColumns().includes(task.status)) {
+        typeof task.description !== 'string' || !this.listColumns().includes(task.status) ||
+        (task.autoWorkflow !== undefined && typeof task.autoWorkflow !== 'boolean')) {
       throw new Error('Enter a title and valid task properties.');
     }
     return this.transaction(() => {
@@ -190,20 +194,24 @@ export class TaskStore {
           WHEN EXISTS (SELECT 1 FROM runs WHERE taskId = ? AND status = 'Running') THEN 'Running'
           ELSE 'Not started' END WHERE id = ?`).run(task.id, task.id);
       }
-      this.db.prepare(`INSERT INTO tasks (id, title, description, status) VALUES (?, ?, ?, ?)
+      this.db.prepare(`INSERT INTO tasks (id, title, description, status, autoWorkflow) VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET title=excluded.title, description=excluded.description,
-        status=excluded.status`).run(task.id, task.title.trim(), task.description, task.status);
+        status=excluded.status, autoWorkflow=excluded.autoWorkflow`).run(task.id, task.title.trim(), task.description, task.status, Number(task.autoWorkflow ?? previous?.autoWorkflow ?? false));
       if (!previous || previous.status !== task.status) {
-        const assignment = this.listColumnAgents().find(item => item.column === task.status);
-        const profile = this.listAgents().find(item => item.id === assignment?.agentId);
-        if (profile) {
-          this.db.prepare(`INSERT INTO runs (id, taskId, column, profile, status, createdAt)
-            VALUES (?, ?, ?, ?, 'Queued', ?)`).run(randomUUID(), task.id, task.status, JSON.stringify(profile), new Date().toISOString());
-          this.db.prepare("UPDATE tasks SET agentStatus = 'Queued' WHERE id = ?").run(task.id);
-        }
+        this.queueAgent(task.id, task.status);
       }
       return this.list().find(item => item.id === task.id)!;
     });
+  }
+
+  private queueAgent(taskId: string, column: string) {
+    const assignment = this.listColumnAgents().find(item => item.column === column);
+    const profile = this.listAgents().find(item => item.id === assignment?.agentId);
+    if (profile) {
+      this.db.prepare(`INSERT INTO runs (id, taskId, column, profile, status, createdAt)
+        VALUES (?, ?, ?, ?, 'Queued', ?)`).run(randomUUID(), taskId, column, JSON.stringify(profile), new Date().toISOString());
+      this.db.prepare("UPDATE tasks SET agentStatus = 'Queued' WHERE id = ?").run(taskId);
+    }
   }
 
   private transaction<T>(operation: () => T): T {
@@ -257,6 +265,16 @@ export class TaskStore {
         WHEN EXISTS (SELECT 1 FROM runs WHERE taskId = ? AND status = 'Queued') THEN 'Queued'
         ELSE ? END WHERE id = ?`).run(run.taskId, status, run.taskId);
       this.addComment({ id: randomUUID(), taskId: run.taskId, body: summary, createdAt: finishedAt, authorName: run.profile.name });
+      const task = this.list().find(task => task.id === run.taskId);
+      if (status === 'Complete' && task?.autoWorkflow && task.status === run.column) {
+        const columns = this.listColumns();
+        const index = columns.indexOf(task.status);
+        const nextColumn = index >= 0 ? columns[index + 1] : undefined;
+        if (nextColumn) {
+          this.db.prepare("UPDATE tasks SET status = ?, agentStatus = 'Not started' WHERE id = ?").run(nextColumn, task.id);
+          this.queueAgent(task.id, nextColumn);
+        }
+      }
     });
   }
 

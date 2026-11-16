@@ -264,3 +264,62 @@ test('moving away and back still interrupts, even when success arrives before ca
     assert.equal(f.service.history(task.id).length, 1);
   } finally { f.cleanup(); }
 });
+
+
+test('auto-workflow follows column order, chains agents with handovers, and stops at an unassigned column', async () => {
+  const contexts: string[][] = [];
+  const f = fixture(async ({ task }) => {
+    contexts.push(task.comments?.map(comment => comment.body) ?? []);
+    return `Finished ${task.status}`;
+  });
+  try {
+    f.store.createColumn('Approval');
+    f.store.reorderColumns(['To do', 'In progress', 'In review', 'Approval', 'Done']);
+    f.store.assignColumnAgent({ column: 'In review', agentId: 'builder' });
+    f.service.save({ id: 'auto', title: 'Build', description: '', status: 'In progress', autoWorkflow: true });
+    await f.service.drain();
+    assert.deepEqual(contexts, [[], ['Finished In progress']]);
+    assert.equal(f.service.list()[0].status, 'Approval');
+    assert.equal(f.service.list()[0].autoWorkflow, true);
+    assert.deepEqual(f.service.history('auto').map(run => run.status), ['Complete', 'Complete']);
+    await f.service.drain();
+    assert.equal(f.service.history('auto').length, 2);
+  } finally { f.cleanup(); }
+});
+
+for (const outcome of ['Complete', 'Failed', 'Interrupted'] as const) {
+  test(`auto-workflow handles ${outcome} once and stays in the last column`, () => {
+    const f = fixture(async () => 'Unused');
+    try {
+      f.service.save({ id: 'auto', title: 'Build', description: '', status: 'In progress', autoWorkflow: true });
+      const run = f.store.claimRun()!;
+      f.store.finishRun(run.id, outcome, 'Result');
+      f.store.finishRun(run.id, outcome, 'Duplicate');
+      assert.equal(f.service.list()[0].status, outcome === 'Complete' ? 'In review' : 'In progress');
+      assert.equal(f.service.list()[0].comments?.length, 1);
+      f.store.assignColumnAgent({ column: 'Done', agentId: 'builder' });
+      f.service.save({ ...f.service.list()[0], status: 'Done' });
+      f.store.finishRun(f.store.claimRun()!.id, outcome, 'Last column');
+      assert.equal(f.service.list()[0].status, 'Done');
+      assert.equal(f.service.list()[0].agentStatus, outcome);
+    } finally { f.cleanup(); }
+  });
+}
+
+test('auto-workflow respects disabling and manual moves while a run is active', () => {
+  const f = fixture(async () => 'Unused');
+  try {
+    const task = f.service.save({ id: 'auto', title: 'Build', description: '', status: 'In progress', autoWorkflow: true });
+    const run = f.store.claimRun()!;
+    f.service.save({ ...task, autoWorkflow: false });
+    f.store.finishRun(run.id, 'Complete', 'Finished');
+    assert.equal(f.service.list()[0].status, 'In progress');
+    f.service.save({ ...task, status: 'To do' });
+    f.service.save(task);
+    const nextRun = f.store.claimRun()!;
+    f.service.save({ ...task, status: 'In review' });
+    f.store.finishRun(nextRun.id, 'Complete', 'Late result');
+    assert.equal(f.service.list()[0].status, 'In review');
+    assert.equal(f.service.list()[0].agentStatus, 'Interrupted');
+  } finally { f.cleanup(); }
+});

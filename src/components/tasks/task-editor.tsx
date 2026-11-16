@@ -35,13 +35,15 @@ function TaskEditorSession({ columns = statuses, open, task: editing = null, def
     ? selectedStatus : editing?.status ?? defaultStatus;
 
   const [busy, setBusy] = useState(false);
+  const [autoWorkflow, setAutoWorkflow] = useState(editing?.autoWorkflow ?? false);
   const [title, setTitle] = useState(editing?.title ?? '');
   const [description, setDescription] = useState(editing?.description ?? '');
   const [savedDescription, setSavedDescription] = useState(editing?.description ?? '');
   const canSave = Boolean(title.trim()) && (!editing
     || title.trim() !== editing.title.trim()
     || description.trim() !== savedDescription.trim()
-    || currentStatus !== editing.status);
+    || currentStatus !== editing.status
+    || autoWorkflow !== (editing.autoWorkflow ?? false));
 
   async function persist(operation: () => void | Promise<void>, deleting = false) {
     setBusy(true);
@@ -76,6 +78,7 @@ function TaskEditorSession({ columns = statuses, open, task: editing = null, def
       description: String(data.get("description") ?? "").trim(),
       status,
       agentStatus,
+      autoWorkflow,
       comments: editing?.comments ?? [],
     }));
   }
@@ -132,6 +135,13 @@ function TaskEditorSession({ columns = statuses, open, task: editing = null, def
                 {columns.map((option) => <option key={option}>{option}</option>)}
               </NativeSelect>
             </div>
+            <div className="flex items-center justify-between gap-3 rounded-lg px-1 py-1.5">
+              <Label htmlFor="task-auto-workflow" className="text-muted-foreground font-normal">Auto-workflow</Label>
+              <input id="task-auto-workflow" name="autoWorkflow" type="checkbox" checked={autoWorkflow}
+                onChange={event => setAutoWorkflow(event.target.checked)} aria-describedby="auto-workflow-hint"
+                className="size-4 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" />
+            </div>
+            <p id="auto-workflow-hint" className="px-1 text-xs text-muted-foreground">Move to the next column when the agent completes successfully, and start its agent if assigned.</p>
             {pendingRun && <p className="px-1 text-xs text-muted-foreground">Moving this task stops its current run and queues work for the destination’s agent, if assigned. Deletion is available after execution stops.</p>}
           </div>
           {editing && <section aria-label="Comments" className="mt-8 space-y-5 border-t pt-6">

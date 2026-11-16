@@ -12,9 +12,13 @@ test('create, edit, move and delete survive reopening SQLite', () => {
   try {
     const task = store.save({ id: 'one', title: 'Build board', description: 'Persist work', status: 'To do' });
     assert.equal(task.agentStatus, 'Not started');
+    assert.equal(task.autoWorkflow, false);
+    store.save({ ...task, autoWorkflow: true });
     store.close();
     store = new TaskStore(path);
     assert.equal(store.list()[0].description, 'Persist work');
+    assert.equal(store.list()[0].autoWorkflow, true);
+    assert.throws(() => store.save({ ...task, autoWorkflow: 'true' }), /valid task properties/);
     store.save({ ...task, title: 'Saved board', status: 'Done' });
     store.close();
     store = new TaskStore(path);
@@ -70,6 +74,7 @@ test('existing tasks and comments survive removing legacy task assignees', async
   try {
     const task = store.list()[0];
     assert.equal('owner' in task, false);
+    assert.equal(task.autoWorkflow, false);
     assert.equal(task.status, 'In review');
     assert.equal(task.comments?.[0].body, 'Existing handover');
     store.save({ ...task, title: 'Updated task' });

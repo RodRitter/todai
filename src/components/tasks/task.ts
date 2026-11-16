@@ -19,6 +19,7 @@ export type Task = {
   description: string;
   status: Status;
   agentStatus: AgentStatus;
+  autoWorkflow?: boolean;
   comments?: TaskComment[];
 };
 
