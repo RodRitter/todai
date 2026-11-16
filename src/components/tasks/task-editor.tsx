@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, type FormEvent } from "react";
+import { notifyOperation } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -23,13 +24,19 @@ export function TaskEditor({ open, task: editing = null, defaultStatus = "To do"
   const [titleError, setTitleError] = useState(false);
 
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
 
-  async function persist(operation: () => void | Promise<void>) {
+  async function persist(operation: () => void | Promise<void>, deleting = false) {
     setBusy(true);
-    setError('');
-    try { await operation(); draftId.current = null; onOpenChange(false); }
-    catch { setError('Could not confirm changes were saved. Try again to save your draft.'); }
+    try {
+      await notifyOperation(operation, {
+        loading: deleting ? "Deleting task…" : "Saving task…",
+        success: deleting ? "Task deleted." : editing ? "Task saved." : "Task created.",
+        error: deleting ? "Could not confirm the task was deleted. Try again or reload to check."
+          : "Could not confirm changes were saved. Try again to save your draft.",
+      });
+      draftId.current = null;
+      onOpenChange(false);
+    } catch { /* Keep the draft open; notifyOperation reports the failure. */ }
     finally { setBusy(false); }
   }
 
@@ -54,7 +61,7 @@ export function TaskEditor({ open, task: editing = null, defaultStatus = "To do"
   }
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => { if (!busy) { if (!nextOpen) draftId.current = null; setTitleError(false); setError(''); onOpenChange(nextOpen); } }}>
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!busy) { if (!nextOpen) draftId.current = null; setTitleError(false); onOpenChange(nextOpen); } }}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>{editing ? "Edit task" : "Create task"}</DialogTitle>
@@ -101,8 +108,6 @@ export function TaskEditor({ open, task: editing = null, defaultStatus = "To do"
               </li>
             ))}</ol> : <p className="text-muted-foreground text-sm">No comments yet.</p>}
           </section>}
-          {error && <p role="alert" className="text-destructive text-sm">{error}</p>}
-          {busy && <p role="status" className="text-sm">Saving…</p>}
           <DialogFooter className="flex-row flex-wrap items-center justify-end gap-2 pt-6">
             {editing && onDelete && (
               <Button
@@ -112,7 +117,7 @@ export function TaskEditor({ open, task: editing = null, defaultStatus = "To do"
                 aria-label="Delete task"
                 className="text-muted-foreground mr-auto px-2 text-xs hover:bg-destructive/10 hover:text-destructive"
                 onClick={() => {
-                  void persist(() => onDelete(editing.id));
+                  void persist(() => onDelete(editing.id), true);
                 }}
               >
                 Delete

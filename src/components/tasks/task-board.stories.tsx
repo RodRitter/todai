@@ -73,7 +73,7 @@ export const MoveKeepsColumnsStill: Story = {
     await fireEvent.drop(target, { dataTransfer });
     await fireEvent.dragEnd(card, { dataTransfer });
     try {
-      await canvas.findByRole('status');
+      await within(canvasElement.ownerDocument.body).findByText('Moving task…');
       await expect(headings.map(heading => heading.getBoundingClientRect().top)).toEqual(positions);
     } finally {
       finishSave?.();

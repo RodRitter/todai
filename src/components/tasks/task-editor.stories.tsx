@@ -71,7 +71,15 @@ export const FailedSave: Story = {
     await userEvent.clear(dialog.getByLabelText('Title'));
     await userEvent.type(dialog.getByLabelText('Title'), 'Unsaved draft');
     await userEvent.click(dialog.getByRole('button', { name: 'Save changes' }));
-    await expect(await dialog.findByRole('alert')).toBeVisible();
+    await waitFor(() => expect(within(canvasElement.ownerDocument.body).getByText('Could not confirm changes were saved. Try again to save your draft.')).toBeVisible());
+    await expect(dialog.getByLabelText('Title')).toHaveValue('Unsaved draft');
+    await userEvent.click(within(canvasElement.ownerDocument.body).getByRole('button', { name: 'Dismiss notification' }));
+    await expect(dialog.getByLabelText('Title')).toHaveValue('Unsaved draft');
+    await waitFor(() => expect(within(canvasElement.ownerDocument.body).queryByText('Could not confirm changes were saved. Try again to save your draft.')).not.toBeInTheDocument());
+    await userEvent.click(dialog.getByRole('button', { name: 'Save changes' }));
+    await within(canvasElement.ownerDocument.body).findByText('Could not confirm changes were saved. Try again to save your draft.');
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(within(canvasElement.ownerDocument.body).queryByText('Could not confirm changes were saved. Try again to save your draft.')).not.toBeInTheDocument());
     await expect(dialog.getByLabelText('Title')).toHaveValue('Unsaved draft');
   },
 };
@@ -83,7 +91,7 @@ export const RetryUnconfirmedCreate: Story = {
     const dialog = within(await within(canvasElement.ownerDocument.body).findByRole('dialog'));
     await userEvent.type(dialog.getByLabelText('Title'), 'Retry safely');
     await userEvent.click(dialog.getByRole('button', { name: 'Create task' }));
-    await dialog.findByRole('alert');
+    await within(canvasElement.ownerDocument.body).findByText('Could not confirm changes were saved. Try again to save your draft.');
     await userEvent.click(dialog.getByRole('button', { name: 'Create task' }));
     await expect(args.onSave).toHaveBeenCalledTimes(2);
     await expect(args.onSave.mock.calls[0][0].id).toBe(args.onSave.mock.calls[1][0].id);
@@ -98,7 +106,7 @@ export const CancelUnconfirmedCreate: Story = {
     let dialog = within(await body.findByRole('dialog'));
     await userEvent.type(dialog.getByLabelText('Title'), 'Abandoned draft');
     await userEvent.click(dialog.getByRole('button', { name: 'Create task' }));
-    await dialog.findByRole('alert');
+    await within(canvasElement.ownerDocument.body).findByText('Could not confirm changes were saved. Try again to save your draft.');
     await userEvent.click(dialog.getByRole('button', { name: 'Cancel' }));
     await userEvent.click(await within(canvasElement).findByRole('button', { name: 'New task' }));
     dialog = within(await body.findByRole('dialog'));

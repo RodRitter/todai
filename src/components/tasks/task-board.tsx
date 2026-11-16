@@ -3,6 +3,7 @@
 import { useRef, useState, type SetStateAction } from "react";
 import { Plus } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { notifyOperation } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { useBoardMotion } from "@/hooks/use-board-motion";
 import { statuses, type Status, type Task } from "./task";
@@ -16,7 +17,6 @@ export function TaskBoard({ initialTasks = [], persistence }: {
 }) {
   const saving = useRef(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
   const [tasks, setTasks] = useState(initialTasks);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Task | null>(null);
@@ -33,7 +33,6 @@ export function TaskBoard({ initialTasks = [], persistence }: {
     if (saving.current) throw new Error('Wait for the current save to finish.');
     saving.current = true;
     setBusy(true);
-    setError('');
     try { await operation(); }
     finally { saving.current = false; setBusy(false); }
   }
@@ -65,13 +64,9 @@ export function TaskBoard({ initialTasks = [], persistence }: {
 
   return (
     <AppShell headerActions={
-      <div className="flex items-center gap-3">
-        {busy && <span role="status" className="sr-only text-muted-foreground text-sm sm:not-sr-only">Saving…</span>}
-        <Button size="sm" disabled={busy} onClick={() => openEditor()}><Plus /> New task</Button>
-      </div>
+      <Button size="sm" disabled={busy} onClick={() => openEditor()}><Plus /> New task</Button>
     }>
       <main id="task-board" className="p-4 md:p-8" aria-label="Task board" tabIndex={-1}>
-        {error && <p role="alert" className="text-destructive mb-4">{error}</p>}
         <div ref={boardRef} className="grid items-start gap-6 md:grid-cols-2 xl:grid-cols-4">
           {statuses.map((column) => {
             const columnTasks = tasks.filter((task) => task.status === column);
@@ -86,8 +81,11 @@ export function TaskBoard({ initialTasks = [], persistence }: {
                 onDragLeave={() => setDropColumn(null)}
                 onDrop={() => {
                   const task = tasks.find(item => item.id === draggedTaskId);
-                  if (task && !saving.current) void saveTask({ ...task, status: column })
-                    .catch(() => setError('Could not confirm the move was saved. Try again or reload to check its saved column.'));
+                  if (task && !saving.current) void notifyOperation(() => saveTask({ ...task, status: column }), {
+                    loading: "Moving task…",
+                    success: `Task moved to ${column}.`,
+                    error: "Could not confirm the move was saved. Try again or reload to check its saved column.",
+                  }).catch(() => {});
                   endDrag();
                 }}
               >

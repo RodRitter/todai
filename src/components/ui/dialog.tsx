@@ -2,6 +2,7 @@
 import * as React from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { XIcon } from "lucide-react";
+import { dismissLatestNotification } from "./toast";
 import { cn } from "@/lib/utils";
 function Dialog(props: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />;
@@ -40,6 +41,8 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  onInteractOutside,
+  onEscapeKeyDown,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
@@ -54,6 +57,16 @@ function DialogContent({
           className,
         )}
         {...props}
+        onInteractOutside={(event) => {
+          if (event.target instanceof Element && event.target.closest("[data-sonner-toaster]")) {
+            event.preventDefault();
+          }
+          onInteractOutside?.(event);
+        }}
+        onEscapeKeyDown={(event) => {
+          onEscapeKeyDown?.(event);
+          if (!event.defaultPrevented && dismissLatestNotification()) event.preventDefault();
+        }}
       >
         {children}
         {showCloseButton && (

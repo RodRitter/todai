@@ -25,7 +25,7 @@ npm run build-storybook # Static Storybook in storybook-static/
 
 ## Adding components
 
-Create components under `src/components/` and colocate their `*.stories.tsx` files. Storybook discovers these stories automatically. Documentation and accessibility addons are installed; the preview loads the app's global CSS with no custom decorators, toolbar, or story ordering.
+Create components under `src/components/` and colocate their `*.stories.tsx` files. Storybook discovers these stories automatically. Documentation and accessibility addons are installed; the preview loads the app's global CSS and shared toast host, with no custom toolbar or story ordering.
 
 The shadcn configuration in `components.json`, theme tokens in `src/app/globals.css`, and `cn` helper in `src/lib/utils.ts` remain available as a foundation for new components.
 
@@ -46,3 +46,13 @@ Task placement is separate from agent execution: new tasks display **Not started
 Saves update the board after SQLite confirms them. A failed save keeps the editor open and retains the draft; retrying a new task uses the same ID. A failed move leaves the displayed board unchanged and offers retry or reload. Loading failures are displayed instead of an empty board.
 
 Run `npm test` for SQLite persistence checks. These use temporary databases and cover create, edit, move, reopen, delete, and comment attachment/order. The Task editor stories include persisted comments and failed-save draft retention.
+
+## Notification standard
+
+Use the shared `toast` and `notifyOperation` exports from `src/components/ui/toast.tsx` for all app notifications. Do not add inline save banners, progress messages, or success/error alerts that shift page or dialog content. Field validation stays beside its input; empty states and retry controls are content, not notifications.
+
+The app layout and Storybook preview each mount one `Toaster`. Do not mount additional toasters in individual components. Use `notifyOperation` for an asynchronous action: it replaces loading feedback with success or error in the same toast and rethrows failures so the caller can preserve its draft. Notify at the interaction boundary once, not again in lower-level persistence functions. Errors remain until dismissed; success notifications expire after four seconds. Direct error toasts must use `duration: Infinity`. Loading toasts must be resolved or dismissed when work finishes. Component-scoped loading requests must dismiss their toast on unmount; submitted mutations report their result at app scope even if their initiating component unmounts.
+
+See **Feedback / Toast** in Storybook for success, error, information, warning, loading, and asynchronous examples. Toasts overlay content without moving the board and keep notifications available while a dialog is open.
+
+While a dialog is open, notification close buttons remain clickable without dismissing the dialog. Escape dismisses the latest non-loading notification first; a subsequent Escape closes the dialog.

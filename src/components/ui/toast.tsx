@@ -1,0 +1,42 @@
+"use client";
+
+import { Toaster as SonnerToaster, toast } from "sonner";
+
+export { toast };
+
+export function dismissLatestNotification() {
+  const notification = toast.getToasts().filter(item => !("dismiss" in item) && item.type !== "loading").at(-1);
+  if (!notification) return false;
+  toast.dismiss(notification.id);
+  return true;
+}
+
+export function Toaster() {
+  return <SonnerToaster
+    position="bottom-right"
+    style={{ pointerEvents: "auto" }}
+    closeButton
+    duration={4000}
+    toastOptions={{
+      style: { background: "var(--popover)", color: "var(--popover-foreground)", borderColor: "var(--border)" },
+      closeButtonAriaLabel: "Dismiss notification",
+    }}
+  />;
+}
+
+// Replace progress with its result, preserving one notification per operation.
+export async function notifyOperation<T>(operation: () => T | Promise<T>, messages: {
+  loading: string;
+  success: string;
+  error: string;
+}): Promise<T> {
+  const id = toast.loading(messages.loading);
+  try {
+    const result = await operation();
+    toast.success(messages.success, { id });
+    return result;
+  } catch (error) {
+    toast.error(messages.error, { id, duration: Infinity });
+    throw error;
+  }
+}
