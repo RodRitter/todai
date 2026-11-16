@@ -1,3 +1,4 @@
+import { parseColumnAgent, type ColumnAgent } from '../components/tasks/column-agent.ts';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -12,6 +13,10 @@ export class TaskStore {
     this.db.exec(`
       PRAGMA foreign_keys = ON;
       PRAGMA busy_timeout = 5000;
+      CREATE TABLE IF NOT EXISTS column_agents (
+        column TEXT PRIMARY KEY, name TEXT NOT NULL, tool TEXT NOT NULL,
+        model TEXT NOT NULL, effort TEXT NOT NULL, instructions TEXT NOT NULL, permissions TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS tasks (
         id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL,
         status TEXT NOT NULL,
@@ -60,6 +65,21 @@ export class TaskStore {
   addComment(comment: TaskComment) {
     this.db.prepare('INSERT INTO comments (id, taskId, body, createdAt) VALUES (?, ?, ?, ?)')
       .run(comment.id, comment.taskId, comment.body, new Date(comment.createdAt).toISOString());
+  }
+
+  listColumnAgents(): ColumnAgent[] {
+    return (this.db.prepare('SELECT * FROM column_agents ORDER BY rowid').all() as unknown as ColumnAgent[])
+      .map(agent => ({ ...agent }));
+  }
+
+  saveColumnAgent(input: unknown): ColumnAgent {
+    const agent = parseColumnAgent(input);
+    this.db.prepare(`INSERT INTO column_agents (column, name, tool, model, effort, instructions, permissions)
+      VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(column) DO UPDATE SET
+      name=excluded.name, tool=excluded.tool, model=excluded.model, effort=excluded.effort,
+      instructions=excluded.instructions, permissions=excluded.permissions`)
+      .run(agent.column, agent.name, agent.tool, agent.model, agent.effort, agent.instructions, agent.permissions);
+    return agent;
   }
 
   close() { this.db.close(); }

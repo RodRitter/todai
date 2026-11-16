@@ -82,3 +82,59 @@ export const MoveKeepsColumnsStill: Story = {
     await expect(headings.map(heading => heading.getBoundingClientRect().top)).toEqual(positions);
   },
 };
+
+export const ConfigureColumnAgent: Story = {
+  args: { initialTasks: [] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole('button', { name: 'Configure agent for In review' }));
+    let dialog = within(await body.findByRole('dialog'));
+    await userEvent.clear(dialog.getByLabelText('Agent name'));
+    await userEvent.type(dialog.getByLabelText('Agent name'), 'Reviewer');
+    await userEvent.type(dialog.getByLabelText('Model'), 'review-model');
+    await userEvent.selectOptions(dialog.getByLabelText('Effort'), 'high');
+    await userEvent.type(dialog.getByLabelText('Instructions'), 'Check the changes.');
+    await userEvent.selectOptions(dialog.getByLabelText('Permissions'), 'read-only');
+    await userEvent.click(dialog.getByRole('button', { name: 'Save agent' }));
+    await waitFor(() => expect(body.queryByRole('dialog')).not.toBeInTheDocument());
+    await expect(within(canvas.getByRole('region', { name: 'In review' })).getByText('Reviewer')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Configure agent for In review' }));
+    dialog = within(await body.findByRole('dialog'));
+    await expect(dialog.getByLabelText('Model')).toHaveValue('review-model');
+    await expect(dialog.getByLabelText('Effort')).toHaveValue('high');
+    await expect(dialog.getByLabelText('Instructions')).toHaveValue('Check the changes.');
+    await expect(dialog.getByLabelText('Permissions')).toHaveValue('read-only');
+  },
+};
+
+export const InvalidColumnAgent: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole('button', { name: 'Configure agent for To do' }));
+    const dialog = within(await body.findByRole('dialog'));
+    await userEvent.click(dialog.getByRole('button', { name: 'Save agent' }));
+    await expect(dialog.getByLabelText('Model')).toHaveAttribute('aria-invalid', 'true');
+    await expect(dialog.getByText('Enter a model supported by your Codex CLI account.')).toBeVisible();
+    await userEvent.click(dialog.getByRole('button', { name: 'Cancel' }));
+    await expect(within(canvas.getByRole('region', { name: 'To do' })).getByText('No agent configured')).toBeVisible();
+  },
+};
+
+export const FailedColumnAgentSave: Story = {
+  args: { saveAgent: async () => { throw new Error('Storage unavailable'); } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole('button', { name: 'Configure agent for Done' }));
+    const dialog = within(await body.findByRole('dialog'));
+    await userEvent.type(dialog.getByLabelText('Model'), 'report-model');
+    await userEvent.click(dialog.getByRole('button', { name: 'Save agent' }));
+    await body.findByText('Could not save column agent. Check local database access and try again. Your draft is still open.');
+    await expect(dialog.getByLabelText('Model')).toHaveValue('report-model');
+    await expect(dialog.getByRole('button', { name: 'Save agent' })).toBeEnabled();
+    await userEvent.click(dialog.getByRole('button', { name: 'Cancel' }));
+    await expect(within(canvas.getByRole('region', { name: 'Done' })).getByText('No agent configured')).toBeVisible();
+  },
+};

@@ -9,12 +9,18 @@ import { useBoardMotion } from "@/hooks/use-board-motion";
 import { statuses, type Status, type Task } from "./task";
 import { TaskCard } from "./task-card";
 import { TaskColumn } from "./task-column";
+import { ColumnAgentEditor } from "./column-agent-editor";
+import type { ColumnAgent } from "./column-agent";
 import { TaskEditor } from "./task-editor";
 
-export function TaskBoard({ initialTasks = [], persistence }: {
+export function TaskBoard({ initialTasks = [], initialAgents = [], saveAgent, persistence }: {
   initialTasks?: Task[];
+  initialAgents?: ColumnAgent[];
+  saveAgent?: (agent: ColumnAgent) => Promise<ColumnAgent>;
   persistence?: { save: (task: Task) => Promise<Task>; delete: (id: string) => Promise<void> };
 }) {
+  const [agents, setAgents] = useState(initialAgents);
+  const [configuringColumn, setConfiguringColumn] = useState<Status | null>(null);
   const saving = useRef(false);
   const [busy, setBusy] = useState(false);
   const [tasks, setTasks] = useState(initialTasks);
@@ -74,6 +80,8 @@ export function TaskBoard({ initialTasks = [], persistence }: {
               <TaskColumn
                 key={column}
                 status={column}
+                agentName={agents.find(agent => agent.column === column)?.name}
+                onConfigureAgent={() => setConfiguringColumn(column)}
                 isEmpty={columnTasks.length === 0}
                 isDropTarget={dropColumn === column}
                 canDrop={!busy && draggedTaskId !== null}
@@ -103,6 +111,15 @@ export function TaskBoard({ initialTasks = [], persistence }: {
             );
           })}
         </div>
+        {configuringColumn && <ColumnAgentEditor
+          column={configuringColumn}
+          agent={agents.find(agent => agent.column === configuringColumn)}
+          onClose={() => setConfiguringColumn(null)}
+          onSave={async agent => {
+            const saved = saveAgent ? await saveAgent(agent) : agent;
+            setAgents(current => [...current.filter(item => item.column !== saved.column), saved]);
+          }}
+        />}
         <TaskEditor
           key={editing?.id ?? "new"}
           open={open}

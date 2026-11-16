@@ -56,3 +56,11 @@ The app layout and Storybook preview each mount one `Toaster`. Do not mount addi
 See **Feedback / Toast** in Storybook for success, error, information, warning, loading, and asynchronous examples. Toasts overlay content without moving the board and keep notifications available while a dialog is open.
 
 While a dialog is open, notification close buttons remain clickable without dismissing the dialog. Escape dismisses the latest non-loading notification first; a subsequent Escape closes the dialog.
+
+## Column agents
+
+Use the settings button beside a column heading to configure its agent name, Codex CLI model ID, effort, optional instructions, and sandbox permissions. Unconfigured columns show **No agent configured**. Each column owns its settings; tasks do not override them.
+
+Settings are stored in the same SQLite database as tasks and survive reloads and app restarts. Saving settings does not start a run. Model IDs are entered explicitly because availability depends on your Codex account; configuration validates required fields and supported effort/permission choices, without making an agent call. Choose an effort supported by the selected model. Actual execution belongs to the next ticket.
+
+The column agent stories cover saving/reopening, field validation, and retaining drafts after failed saves. Store tests cover persistence, updates isolated to a column, validation, and unchanged task state.
