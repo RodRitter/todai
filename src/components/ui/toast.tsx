@@ -18,7 +18,8 @@ export function Toaster() {
     closeButton
     duration={4000}
     toastOptions={{
-      style: { background: "var(--popover)", color: "var(--popover-foreground)", borderColor: "var(--border)" },
+      style: { background: "var(--popover)", color: "var(--popover-foreground)", borderColor: "var(--border)", paddingRight: 48 },
+      classNames: { closeButton: "left-auto! right-3! top-3! transform-none!" },
       closeButtonAriaLabel: "Dismiss notification",
     }}
   />;
