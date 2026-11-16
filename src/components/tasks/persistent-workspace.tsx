@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { WorkspaceSettings } from "./workspace-settings";
+import { ExecutorSettings } from "./executor-settings";
 import { ColumnSettings } from "./column-settings";
 import { AgentLibrary } from "./agent-library";
 import { TaskBoard } from "./task-board";
@@ -75,7 +76,12 @@ export function PersistentWorkspace({
             tasks.filter((task) => task.status === column).length,
           ]),
         )}
-        workspaceSettings={<WorkspaceSettings />}
+        workspaceSettings={
+          <>
+            <WorkspaceSettings />
+            <ExecutorSettings />
+          </>
+        }
         {...columnApi}
       />
     );

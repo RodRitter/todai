@@ -79,6 +79,8 @@ Store tests cover migration, profile validation, sharing, editing, unassignment,
 
 ## Agent execution
 
+In **Settings → Executor tools**, click **Test executor tools** to check Codex availability, sign-in, and a real shell command that reads a temporary test file. The test uses the CLI's default model and read-only sandbox, makes a small model request, and removes its temporary folder afterward. It does not create board tasks. Each check times out after 60 seconds. Failures stay in a dismissible toast with the failed step, available CLI diagnostics, and suggested next steps. This checks the executor independently of individual agent profiles and the selected workspace.
+
 Install Codex CLI and sign in before running Todai. Open **Settings → Workspace** to select an existing directory where agents will work. Type a path to see directory suggestions, including `~/` for your home folder; add a trailing `/` to browse its subdirectories. Save the selection to persist it in SQLite. The saved setting is the only workspace configuration; there is no workspace environment variable. Existing installations default to the ignored `workspace/` directory until a directory is selected.
 
 SQLite stays in `.todai/tasks.sqlite`, independently configurable with `TODAI_DB_PATH`. Selecting a workspace does not move files or change the database. Active runs keep their current directory; subsequent runs (including already queued work) use the latest saved selection without restarting the app. Keep the app server running while agents work. This local scheduler is intended for a persistent Node.js process on macOS/Linux, not serverless hosting.

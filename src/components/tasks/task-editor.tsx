@@ -4,6 +4,7 @@ import { useRef, useState, type FormEvent } from "react";
 import { TaskComments } from "./task-comments";
 import { DescriptionField } from "./description-field";
 import { notifyOperation } from "@/components/ui/toast";
+import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,7 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
-import { Textarea } from "@/components/ui/textarea";
+import { DescriptionEditor } from "./description-editor";
 import { statuses, type Status, type Task } from "@/domain/task";
 
 export type TaskEditorProps = {
@@ -51,6 +52,7 @@ function TaskEditorSession({
   const pendingRun =
     editing?.agentStatus === "Queued" || editing?.agentStatus === "Running";
   const draftId = useRef<string | null>(null);
+  const [isEditingTitle, setIsEditingTitle] = useState(!editing);
   const [titleError, setTitleError] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<Status | null>(null);
   const currentStatus =
@@ -58,6 +60,7 @@ function TaskEditorSession({
       ? selectedStatus
       : (editing?.status ?? defaultStatus);
 
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [autoWorkflow, setAutoWorkflow] = useState(
     editing?.autoWorkflow ?? false,
@@ -157,13 +160,27 @@ function TaskEditorSession({
         >
           <fieldset disabled={busy} className="space-y-4">
             <div className="space-y-2">
+              <input type="hidden" name="title" value={title} />
+              {isEditingTitle ? <>
               <Label htmlFor="task-title">Title</Label>
               <Input
                 id="task-title"
-                name="title"
                 value={title}
                 required
                 autoFocus
+                onBlur={() => { if (title.trim()) setIsEditingTitle(false); }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && title.trim()) {
+                    event.preventDefault();
+                    setIsEditingTitle(false);
+                  }
+                  if (event.key === "Escape" && editing) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setTitle(editing.title);
+                    setIsEditingTitle(false);
+                  }
+                }}
                 aria-invalid={titleError}
                 aria-describedby={titleError ? "title-error" : undefined}
                 onChange={(event) => {
@@ -171,6 +188,11 @@ function TaskEditorSession({
                   setTitleError(false);
                 }}
               />
+              </> : (
+                <h2 className="text-lg font-semibold tracking-tight">
+                  <button type="button" aria-label="Edit title" className="w-full rounded-md text-left outline-none hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setIsEditingTitle(true)}>{title}</button>
+                </h2>
+              )}
               {titleError && (
                 <p id="title-error" className="text-destructive text-sm">
                   Enter a task title.
@@ -205,20 +227,12 @@ function TaskEditorSession({
               ) : (
                 <>
                   <Label htmlFor="task-description">Description</Label>
-                  <Textarea
-                    id="task-description"
-                    name="description"
+                  <input type="hidden" name="description" value={description} />
+                  <DescriptionEditor
                     value={description}
-                    onChange={(event) => setDescription(event.target.value)}
-                    className="min-h-32 font-mono text-sm"
-                    aria-describedby="description-hint"
+                    onChange={setDescription}
+                    disabled={busy}
                   />
-                  <p
-                    id="description-hint"
-                    className="text-muted-foreground text-xs"
-                  >
-                    Markdown supported.
-                  </p>
                 </>
               )}
             </div>
@@ -289,7 +303,7 @@ function TaskEditorSession({
                   disabled={pendingRun}
                   className="text-muted-foreground mr-auto px-2 text-xs hover:bg-destructive/10 hover:text-destructive"
                   onClick={() => {
-                    void persist(() => onDelete(editing.id), true);
+                    setConfirmDelete(true);
                   }}
                 >
                   Delete
@@ -320,6 +334,18 @@ function TaskEditorSession({
           </fieldset>
         </form>
       </DialogContent>
+      {editing && onDelete && (
+        <DeleteConfirmation
+          open={confirmDelete}
+          onOpenChange={setConfirmDelete}
+          title="Delete task?"
+          description={`Delete “${editing.title}” and its comments? This cannot be undone.`}
+          busy={busy}
+          onConfirm={() => {
+            if (!busy && !pendingRun) void persist(() => onDelete(editing.id), true);
+          }}
+        />
+      )}
     </Dialog>
   );
 }

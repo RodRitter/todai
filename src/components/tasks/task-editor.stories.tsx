@@ -148,6 +148,7 @@ export const FailedSave: Story = {
     const dialog = within(
       await within(canvasElement.ownerDocument.body).findByRole("dialog"),
     );
+    await userEvent.click(dialog.getByRole("button", { name: "Edit title" }));
     await userEvent.clear(dialog.getByLabelText("Title"));
     await userEvent.type(dialog.getByLabelText("Title"), "Unsaved draft");
     await userEvent.click(dialog.getByRole("button", { name: "Save changes" }));
@@ -158,13 +159,13 @@ export const FailedSave: Story = {
         ),
       ).toBeVisible(),
     );
-    await expect(dialog.getByLabelText("Title")).toHaveValue("Unsaved draft");
+    await expect(dialog.getByRole("button", { name: "Edit title" })).toHaveTextContent("Unsaved draft");
     await userEvent.click(
       within(canvasElement.ownerDocument.body).getByRole("button", {
         name: "Dismiss notification",
       }),
     );
-    await expect(dialog.getByLabelText("Title")).toHaveValue("Unsaved draft");
+    await expect(dialog.getByRole("button", { name: "Edit title" })).toHaveTextContent("Unsaved draft");
     await waitFor(() =>
       expect(
         within(canvasElement.ownerDocument.body).queryByText(
@@ -184,7 +185,7 @@ export const FailedSave: Story = {
         ),
       ).not.toBeInTheDocument(),
     );
-    await expect(dialog.getByLabelText("Title")).toHaveValue("Unsaved draft");
+    await expect(dialog.getByRole("button", { name: "Edit title" })).toHaveTextContent("Unsaved draft");
   },
 };
 
@@ -285,20 +286,18 @@ export const MarkdownContent: Story = {
     await userEvent.click(
       dialog.getByRole("button", { name: "Edit description" }),
     );
-    await expect(dialog.getByLabelText("Description")).toHaveValue(
-      args.task!.description,
-    );
+    await expect(dialog.getByLabelText("Description")).toHaveTextContent("Requirements");
     await userEvent.clear(dialog.getByLabelText("Description"));
     await userEvent.type(
       dialog.getByLabelText("Description"),
-      "## Updated requirements\n\n**Preserve** this source.",
+      "Updated requirements",
     );
     await userEvent.click(
       dialog.getByRole("button", { name: "Save description" }),
     );
     await waitFor(() =>
       expect(
-        dialog.getByRole("heading", { name: "Updated requirements" }),
+        dialog.getByText("Updated requirements"),
       ).toBeVisible(),
     );
     await expect(
@@ -306,7 +305,7 @@ export const MarkdownContent: Story = {
     ).not.toBeInTheDocument();
     await expect(args.onSave).toHaveBeenCalledWith(
       expect.objectContaining({
-        description: "## Updated requirements\n\n**Preserve** this source.",
+        description: "Updated requirements",
       }),
     );
     await expect(
@@ -355,7 +354,7 @@ export const FailedDescriptionSave: Story = {
     await userEvent.clear(dialog.getByLabelText("Description"));
     await userEvent.type(
       dialog.getByLabelText("Description"),
-      "**Retained draft**",
+      "Retained draft",
     );
     await userEvent.click(
       dialog.getByRole("button", { name: "Save description" }),
@@ -363,8 +362,8 @@ export const FailedDescriptionSave: Story = {
     await within(canvasElement.ownerDocument.body).findByText(
       "Could not save the description. Your draft is still open; try again.",
     );
-    await expect(dialog.getByLabelText("Description")).toHaveValue(
-      "**Retained draft**",
+    await expect(dialog.getByLabelText("Description")).toHaveTextContent(
+      "Retained draft",
     );
     await userEvent.click(
       dialog.getByRole("button", { name: "Save description" }),
@@ -389,5 +388,20 @@ export const RedirectQueuedTask: Story = {
   args: {
     open: true,
     task: { ...exampleTasks[0], status: "In review", agentStatus: "Queued" },
+  },
+};
+
+export const InlineTitle: Story = {
+  args: { open: true, task: exampleTasks[2] },
+  play: async ({ canvasElement, args }) => {
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await expect(dialog.queryByRole("textbox", { name: "Title" })).not.toBeInTheDocument();
+    await userEvent.click(dialog.getByRole("button", { name: "Edit title" }));
+    await userEvent.clear(dialog.getByLabelText("Title"));
+    await userEvent.type(dialog.getByLabelText("Title"), "Updated title{Enter}");
+    await expect(dialog.queryByRole("textbox", { name: "Title" })).not.toBeInTheDocument();
+    await expect(dialog.getByRole("button", { name: "Edit title" })).toHaveTextContent("Updated title");
+    await userEvent.click(dialog.getByRole("button", { name: "Save changes" }));
+    await expect(args.onSave).toHaveBeenCalledWith(expect.objectContaining({ title: "Updated title" }));
   },
 };

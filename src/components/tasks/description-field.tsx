@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Markdown } from "@/components/ui/markdown";
-import { Textarea } from "@/components/ui/textarea";
+import { DescriptionEditor } from "./description-editor";
 
 export function DescriptionField({
   initialValue,
@@ -49,21 +49,17 @@ export function DescriptionField({
       />
       {isEditing ? (
         <div className="space-y-2">
-          <Textarea
-            id="task-description"
+          <DescriptionEditor
             value={draft}
-            onChange={(event) => {
-              setDraft(event.target.value);
-              onChange(event.target.value);
+            disabled={disabled}
+            onChange={(value) => {
+              setDraft(value);
+              onChange(value);
             }}
             autoFocus
-            className="min-h-32 font-mono text-sm"
-            aria-describedby="description-hint"
           />
           <div className="flex items-center justify-between gap-3">
-            <p id="description-hint" className="text-muted-foreground text-xs">
-              Markdown supported.
-            </p>
+
             <div className="flex gap-1">
               <Button
                 type="button"
@@ -97,7 +93,7 @@ export function DescriptionField({
           tabIndex={disabled ? -1 : 0}
           aria-label="Edit description"
           aria-disabled={disabled}
-          className="min-h-24 cursor-text rounded-lg border p-3 outline-none transition-colors hover:bg-muted/30 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
+          className="min-h-24 cursor-text border-l-2 border-border p-3 outline-none transition-colors hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring/50"
           onClick={(event) => {
             if (!(event.target as HTMLElement).closest("a")) startEditing();
           }}

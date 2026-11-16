@@ -69,6 +69,21 @@ export const columnApi = {
 };
 
 const settingsError = "Could not load workspace settings.";
+export const executorApi = {
+  test: async () => {
+    try {
+      return await request<{ message: string }>(
+        "/api/executor-test",
+        { method: "POST" },
+        "Executor test failed. Check the app server logs and retry.",
+      );
+    } catch (error) {
+      if (error instanceof TypeError || error instanceof SyntaxError)
+        throw new Error("Could not reach the executor test or read its response. Check that the app server is running, then retry.");
+      throw error;
+    }
+  },
+};
 export const workspaceApi = {
   get: () => request<{ path: string }>("/api/workspace", {}, settingsError),
   save: (path: string) =>

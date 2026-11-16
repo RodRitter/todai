@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import { Bot, LayoutGrid, PanelLeft, Settings } from "lucide-react";
+import { BookOpen, Bot, LayoutGrid, PanelLeft, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function AppShell({
@@ -12,7 +12,7 @@ export function AppShell({
 }: {
   children: ReactNode;
   headerActions?: ReactNode;
-  screen?: "board" | "agents" | "settings";
+  screen?: "board" | "agents" | "skills" | "settings";
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -64,6 +64,16 @@ export function AppShell({
               </Link>
             </Button>
             <Button
+              variant={screen === "skills" ? "secondary" : "ghost"}
+              className="mt-1 w-full md:justify-start"
+              asChild
+            >
+              <Link href="/skills" aria-current={screen === "skills" ? "page" : undefined} aria-label="Skills">
+                <BookOpen />
+                <span className="hidden md:inline">Skills</span>
+              </Link>
+            </Button>
+            <Button
               variant={screen === "settings" ? "secondary" : "ghost"}
               className="mt-1 w-full md:justify-start"
               asChild
@@ -97,7 +107,9 @@ export function AppShell({
               ? "Settings"
               : screen === "agents"
                 ? "Agents"
-                : "Task board"}
+                : screen === "skills"
+                  ? "Skills"
+                  : "Task board"}
           </h1>
           <div className="ml-auto">{headerActions}</div>
         </header>

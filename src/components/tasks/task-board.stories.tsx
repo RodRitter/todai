@@ -57,6 +57,12 @@ export const CreateEditDelete: Story = {
     );
     dialog = within(await body.findByRole("dialog"));
     await userEvent.click(dialog.getByRole("button", { name: "Delete task" }));
+    const confirmation = within(await body.findByRole("alertdialog"));
+    await expect(confirmation.getByRole("button", { name: "Cancel" })).toHaveFocus();
+    await userEvent.click(confirmation.getByRole("button", { name: "Cancel" }));
+    await expect(dialog.getByRole("button", { name: "Delete task" })).toBeVisible();
+    await userEvent.click(dialog.getByRole("button", { name: "Delete task" }));
+    await userEvent.click(within(await body.findByRole("alertdialog")).getByRole("button", { name: "Delete" }));
     await waitFor(() =>
       expect(body.queryByRole("dialog")).not.toBeInTheDocument(),
     );

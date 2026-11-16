@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
+import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { Button } from "@/components/ui/button";
 import { notifyOperation } from "@/components/ui/toast";
 import { AgentEditor } from "./agent-editor";
@@ -26,6 +27,7 @@ export function AgentLibrary({
   const [editing, setEditing] = useState<AgentProfile | null | undefined>(
     undefined,
   );
+  const [pendingDelete, setPendingDelete] = useState<AgentProfile | null>(null);
   const [busy, setBusy] = useState(false);
   const deleting = useRef(false);
 
@@ -37,6 +39,7 @@ export function AgentLibrary({
       await notifyOperation(
         async () => {
           await persistence?.delete(agent.id);
+          setPendingDelete(null);
           setAgents((current) =>
             current.filter((item) => item.id !== agent.id),
           );
@@ -106,7 +109,7 @@ export function AgentLibrary({
                           title="Delete agent"
                           className="text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 hover:text-destructive motion-reduce:transition-none [@media(hover:none)]:opacity-100"
                           disabled={busy}
-                          onClick={() => void deleteAgent(agent)}
+                          onClick={() => setPendingDelete(agent)}
                         >
                           <Trash2 className="size-4" />
                         </Button>
@@ -136,6 +139,14 @@ export function AgentLibrary({
             }}
           />
         )}
+        <DeleteConfirmation
+          open={pendingDelete !== null}
+          onOpenChange={(open) => { if (!open) setPendingDelete(null); }}
+          title="Delete agent?"
+          description={`Delete “${pendingDelete?.name ?? ""}” and remove it from its columns? This cannot be undone.`}
+          busy={busy}
+          onConfirm={() => { if (pendingDelete) void deleteAgent(pendingDelete); }}
+        />
       </main>
     </AppShell>
   );

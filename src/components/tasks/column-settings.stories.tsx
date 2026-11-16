@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
+import { userEvent, within } from "storybook/test";
 import { ColumnSettings } from "./column-settings";
 import { statuses } from "@/domain/task";
 
@@ -7,6 +8,9 @@ const meta = {
   component: ColumnSettings,
   parameters: { layout: "fullscreen" },
   tags: ["autodocs"],
+  play: async ({ canvasElement }) => {
+    await userEvent.click(within(canvasElement).getByRole("tab", { name: "Board" }));
+  },
   render: function Render(args) {
     let columns = [...args.initialColumns];
     return (
@@ -41,6 +45,7 @@ const meta = {
     );
   },
   args: {
+    workspaceSettings: <p className="text-sm text-muted-foreground">Workspace and executor settings appear here.</p>,
     initialColumns: [...statuses],
     create: async (name) => [...statuses, name],
     reorder: async (columns) => columns,
