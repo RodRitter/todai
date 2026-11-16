@@ -13,7 +13,8 @@ import { ColumnAgentPicker } from "./column-agent-picker";
 import type { AgentProfile, ColumnAssignment } from "./column-agent";
 import { TaskEditor } from "./task-editor";
 
-export function TaskBoard({ initialTasks = [], initialAgents = [], initialAssignments = [], assignAgent, persistence }: {
+export function TaskBoard({ columns = statuses, initialTasks = [], initialAgents = [], initialAssignments = [], assignAgent, persistence }: {
+  columns?: readonly string[];
   initialTasks?: Task[];
   initialAgents?: AgentProfile[];
   initialAssignments?: ColumnAssignment[];
@@ -98,7 +99,7 @@ export function TaskBoard({ initialTasks = [], initialAgents = [], initialAssign
     }>
       <main id="task-board" className="flex min-h-[calc(100dvh-3.5rem)] flex-col p-4 md:p-8" aria-label="Task board" tabIndex={-1}>
         <div ref={boardRef} className="grid flex-1 items-stretch gap-6 md:grid-cols-2 xl:grid-cols-4">
-          {statuses.map((column) => {
+          {columns.map((column) => {
             const columnTasks = tasks.filter((task) => task.status === column);
             return (
               <TaskColumn
@@ -147,6 +148,8 @@ export function TaskBoard({ initialTasks = [], initialAgents = [], initialAssign
         />}
         <TaskEditor
           key={editing?.id ?? "new"}
+          columns={columns}
+          defaultStatus={columns[0]}
           open={open}
           task={editing ? tasks.find(task => task.id === editing.id) ?? editing : null}
           onOpenChange={setOpen}

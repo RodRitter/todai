@@ -1,5 +1,5 @@
 export const statuses = ["To do", "In progress", "In review", "Done"] as const;
-export type Status = (typeof statuses)[number];
+export type Status = string;
 export const agentStatuses = ["Not started", "Queued", "Complete", "Failed", "Interrupted", "Running", "Paused", "Review", "Blocked"] as const;
 export type AgentStatus = (typeof agentStatuses)[number];
 export const agentStatusColors: Record<AgentStatus, string> = {

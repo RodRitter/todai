@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { statuses, type Status, type Task } from "./task";
 
 export type TaskEditorProps = {
+  columns?: readonly string[];
   open: boolean;
   task?: Task | null;
   defaultStatus?: Status;
@@ -21,7 +22,7 @@ export type TaskEditorProps = {
   onDelete?: (id: string) => void | Promise<void>;
 };
 
-export function TaskEditor({ open, task: editing = null, defaultStatus = "To do", onOpenChange, onSave, onDelete }: TaskEditorProps) {
+export function TaskEditor({ columns = statuses, open, task: editing = null, defaultStatus = "To do", onOpenChange, onSave, onDelete }: TaskEditorProps) {
   const pendingRun = editing?.agentStatus === "Queued" || editing?.agentStatus === "Running";
   const draftId = useRef<string | null>(null);
   const [titleError, setTitleError] = useState(false);
@@ -51,7 +52,7 @@ export function TaskEditor({ open, task: editing = null, defaultStatus = "To do"
       setTitleError(true);
       return;
     }
-    const status = statuses.find((value) => value === data.get("status")) ?? editing?.status ?? defaultStatus;
+    const status = columns.find((value) => value === data.get("status")) ?? editing?.status ?? defaultStatus;
     const agentStatus = editing?.agentStatus ?? "Not started";
     void persist(() => onSave({
       id: editing?.id ?? (draftId.current ??= crypto.randomUUID()),
@@ -110,7 +111,7 @@ export function TaskEditor({ open, task: editing = null, defaultStatus = "To do"
                 Status
               </Label>
               <NativeSelect id="task-status" name="status" defaultValue={editing?.status ?? defaultStatus} className="bg-background dark:bg-background h-10 w-32 rounded-lg border-transparent shadow-none hover:bg-accent sm:w-40">
-                {statuses.map((option) => <option key={option}>{option}</option>)}
+                {columns.map((option) => <option key={option}>{option}</option>)}
               </NativeSelect>
             </div>
             {pendingRun && <p className="px-1 text-xs text-muted-foreground">Moving this task stops its current run and queues work for the destination’s agent, if assigned. Deletion is available after execution stops.</p>}

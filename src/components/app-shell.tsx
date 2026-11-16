@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import { Bot, LayoutGrid, PanelLeft } from "lucide-react";
+import { Bot, LayoutGrid, PanelLeft, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export function AppShell({ children, headerActions, screen = "board" }: { children: ReactNode; headerActions?: ReactNode; screen?: "board" | "agents" }) {
+export function AppShell({ children, headerActions, screen = "board" }: { children: ReactNode; headerActions?: ReactNode; screen?: "board" | "agents" | "settings" }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
@@ -34,6 +34,11 @@ export function AppShell({ children, headerActions, screen = "board" }: { childr
                 <Bot /><span className="hidden md:inline">Agents</span>
               </Link>
             </Button>
+            <Button variant={screen === "settings" ? "secondary" : "ghost"} className="mt-1 w-full md:justify-start" asChild>
+              <Link href="/settings" aria-current={screen === "settings" ? "page" : undefined} aria-label="Settings">
+                <Settings /><span className="hidden md:inline">Settings</span>
+              </Link>
+            </Button>
           </nav>
         </div>
       </aside>
@@ -49,7 +54,7 @@ export function AppShell({ children, headerActions, screen = "board" }: { childr
           >
             <PanelLeft />
           </Button>
-          <h1 className="text-sm font-medium">{screen === "agents" ? "Agents" : "Task board"}</h1>
+          <h1 className="text-sm font-medium">{screen === "settings" ? "Settings" : screen === "agents" ? "Agents" : "Task board"}</h1>
           <div className="ml-auto">{headerActions}</div>
         </header>
         {children}

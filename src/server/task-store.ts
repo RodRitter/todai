@@ -6,6 +6,8 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { statuses, type Task, type TaskComment } from '../components/tasks/task.ts';
 
+export class ColumnValidationError extends Error {}
+
 export class PendingRunError extends Error {}
 
 export type AgentRun = {
@@ -50,6 +52,12 @@ export class TaskStore {
     );`);
     try {
       this.db.exec('BEGIN IMMEDIATE');
+      this.db.exec('CREATE TABLE IF NOT EXISTS board_columns (name TEXT PRIMARY KEY, position INTEGER NOT NULL)');
+      if (!this.db.prepare('SELECT name FROM board_columns LIMIT 1').get()) {
+        for (const [position, name] of statuses.entries()) {
+          this.db.prepare('INSERT INTO board_columns (name, position) VALUES (?, ?)').run(name, position);
+        }
+      }
       const commentColumns = this.db.prepare('PRAGMA table_info(comments)').all();
       if (!commentColumns.some(column => column.name === 'authorName')) {
         this.db.exec(`ALTER TABLE comments ADD COLUMN authorName TEXT;
@@ -85,6 +93,39 @@ export class TaskStore {
     }
   }
 
+  listColumns(): string[] {
+    return this.db.prepare('SELECT name FROM board_columns ORDER BY position').all().map(row => row.name as string);
+  }
+
+  createColumn(input: unknown): string[] {
+    if (typeof input !== 'string' || !input.trim() || input.trim().length > 80) {
+      throw new ColumnValidationError('Enter a column name between 1 and 80 characters.');
+    }
+    const name = input.trim();
+    return this.transaction(() => {
+      const columns = this.listColumns();
+      if (columns.some(column => column.toLowerCase() === name.toLowerCase())) {
+        throw new ColumnValidationError('A column with that name already exists.');
+      }
+      this.db.prepare('INSERT INTO board_columns (name, position) VALUES (?, ?)').run(name, columns.length);
+      return this.listColumns();
+    });
+  }
+
+  reorderColumns(input: unknown): string[] {
+    return this.transaction(() => {
+      const columns = this.listColumns();
+      if (!Array.isArray(input) || input.length !== columns.length || new Set(input).size !== columns.length ||
+          !input.every(name => typeof name === 'string' && columns.includes(name))) {
+        throw new ColumnValidationError('Include every existing column exactly once. Reload settings and try again.');
+      }
+      for (const [position, name] of input.entries()) {
+        this.db.prepare('UPDATE board_columns SET position = ? WHERE name = ?').run(position, name);
+      }
+      return this.listColumns();
+    });
+  }
+
   list(): Task[] {
     return (this.db.prepare('SELECT * FROM tasks ORDER BY rowid').all() as unknown as Task[])
       .map(task => ({ ...task, comments: this.db.prepare('SELECT * FROM comments WHERE taskId = ? ORDER BY createdAt, rowid').all(task.id) as unknown as NonNullable<Task['comments']> }));
@@ -94,7 +135,7 @@ export class TaskStore {
     if (!input || typeof input !== 'object') throw new Error('Invalid task.');
     const task = input as Task;
     if (typeof task.id !== 'string' || !task.id.trim() || typeof task.title !== 'string' || !task.title.trim() ||
-        typeof task.description !== 'string' || !statuses.includes(task.status)) {
+        typeof task.description !== 'string' || !this.listColumns().includes(task.status)) {
       throw new Error('Enter a title and valid task properties.');
     }
     return this.transaction(() => {
@@ -222,7 +263,7 @@ export class TaskStore {
   assignColumnAgent(input: unknown): ColumnAssignment | null {
     if (!input || typeof input !== 'object') throw new AgentValidationError('Choose a column and agent.');
     const { column, agentId } = input as { column: ColumnAssignment['column']; agentId: unknown };
-    if (!statuses.includes(column)) throw new AgentValidationError('Choose an existing board column.');
+    if (!this.listColumns().includes(column)) throw new AgentValidationError('Choose an existing board column.');
     if (agentId === null) {
       this.db.prepare('DELETE FROM column_assignments WHERE column = ?').run(column);
       return null;
