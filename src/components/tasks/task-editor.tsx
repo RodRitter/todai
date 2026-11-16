@@ -89,7 +89,7 @@ export function TaskEditor({ open, task: editing = null, defaultStatus = "To do"
             {titleError && <p id="title-error" className="text-destructive text-sm">Enter a task title.</p>}
           </div>
           <div className="space-y-2">
-            <DescriptionField initialValue={editing?.description ?? ""} disabled={busy} onSave={editing ? async description => {
+            {editing ? <DescriptionField initialValue={editing.description} disabled={busy} onSave={async description => {
               setBusy(true);
               try {
                 await notifyOperation(() => onSave({ ...editing, description }), {
@@ -98,7 +98,11 @@ export function TaskEditor({ open, task: editing = null, defaultStatus = "To do"
                   error: 'Could not save the description. Your draft is still open; try again.',
                 });
               } finally { setBusy(false); }
-            } : undefined} />
+            }} /> : <>
+              <Label htmlFor="task-description">Description</Label>
+              <Textarea id="task-description" name="description" className="min-h-32 font-mono text-sm" aria-describedby="description-hint" />
+              <p id="description-hint" className="text-muted-foreground text-xs">Markdown supported.</p>
+            </>}
           </div>
           <div role="group" aria-label="Task properties" className="bg-muted/50 mt-6 flex flex-col gap-1 rounded-xl p-3">
             <div className="flex items-center justify-between gap-3 rounded-lg px-1 py-1.5">
@@ -170,7 +174,7 @@ export function TaskEditor({ open, task: editing = null, defaultStatus = "To do"
 function DescriptionField({ initialValue, disabled, onSave }: {
   initialValue: string;
   disabled: boolean;
-  onSave?: (description: string) => Promise<void>;
+  onSave: (description: string) => Promise<void>;
 }) {
   const [description, setDescription] = useState(initialValue);
   const [draft, setDraft] = useState(initialValue);
@@ -179,7 +183,7 @@ function DescriptionField({ initialValue, disabled, onSave }: {
   async function saveDescription() {
     const value = draft.trim();
     try {
-      await onSave?.(value);
+      await onSave(value);
       setDescription(value);
       setIsEditing(false);
     } catch { /* Keep the draft open; the persistence boundary reports the failure. */ }

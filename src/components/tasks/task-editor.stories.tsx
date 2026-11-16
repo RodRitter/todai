@@ -37,9 +37,14 @@ export const SaveNewTask: Story = {
     const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
     await expect(dialog.queryByLabelText("Assignee")).not.toBeInTheDocument();
     await userEvent.type(dialog.getByLabelText("Title"), "Review the changes");
+    await expect(dialog.getByRole('textbox', { name: 'Description' })).toBeVisible();
+    await expect(dialog.queryByRole('button', { name: 'Edit description' })).not.toBeInTheDocument();
+    await expect(dialog.queryByRole('button', { name: 'Save description' })).not.toBeInTheDocument();
+    await expect(dialog.queryByRole('button', { name: 'Cancel description edit' })).not.toBeInTheDocument();
+    await userEvent.type(dialog.getByLabelText('Description'), '**Review** the implementation.');
     await userEvent.selectOptions(dialog.getByLabelText("Status"), "In review");
     await userEvent.click(dialog.getByRole("button", { name: "Create task" }));
-    await expect(args.onSave).toHaveBeenCalledWith(expect.objectContaining({ title: "Review the changes", status: "In review" }));
+    await expect(args.onSave).toHaveBeenCalledWith(expect.objectContaining({ title: "Review the changes", status: "In review", description: "**Review** the implementation." }));
   },
 };
 export const InvalidTitle: Story = {
