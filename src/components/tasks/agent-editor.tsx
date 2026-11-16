@@ -3,6 +3,7 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Combobox } from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
@@ -76,12 +77,10 @@ export function AgentEditor({ agent, onClose, onSave }: {
           </div>
           <div className="space-y-2">
             <Label htmlFor="agent-model">Model</Label>
-            <Input id="agent-model" name="model" list="agent-model-options" autoComplete="off" value={model} required
+            <Combobox id="agent-model" name="model" options={selectedTool.models} value={model} required disabled={busy}
+              placeholder="Select or enter a model"
               aria-invalid={error?.field === 'model'} aria-describedby={error?.field === 'model' ? 'agent-model-error' : undefined}
-              onChange={event => { setModel(event.target.value); setError(null); }} />
-            <datalist id="agent-model-options">
-              {selectedTool.models.map(model => <option key={model} value={model} />)}
-            </datalist>
+              onValueChange={value => { setModel(value); setError(null); }} />
             {error?.field === 'model' && <p id="agent-model-error" role="alert" className="text-sm text-destructive">{error.message}</p>}
           </div>
           <div className="space-y-2">

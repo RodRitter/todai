@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
+import { WorkspaceSettings } from './workspace-settings';
 import { ColumnSettings } from './column-settings';
 import { AgentLibrary } from './agent-library';
 import { TaskBoard } from './task-board';
@@ -42,6 +43,7 @@ export function PersistentWorkspace({ screen = "board" }: { screen?: "board" | "
     {failed && <Button onClick={() => { setFailed(false); setAttempt(value => value + 1); }}>Retry loading workspace</Button>}
   </main>;
   if (screen === 'settings') return <ColumnSettings initialColumns={columns}
+    initialTaskCounts={Object.fromEntries(columns.map(column => [column, tasks.filter(task => task.status === column).length]))} workspaceSettings={<WorkspaceSettings />}
     create={name => requestBoardData('/api/columns', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(name) })}
     rename={(column, name) => requestBoardData('/api/columns', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ column, name }) })}
     remove={column => requestBoardData('/api/columns', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(column) })}

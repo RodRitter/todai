@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { executionWorkspace } from './workspace-settings';
 import { resolve } from 'node:path';
 import { TaskStore } from './task-store';
 import { ExecutionService } from './execution-service';
@@ -11,10 +11,8 @@ const state = globalThis as typeof globalThis & {
 };
 
 async function drainWorkspace() {
-  const workspace = resolve(process.env.TODAI_WORKSPACE_PATH ?? 'workspace');
-  mkdirSync(workspace, { recursive: true });
   const store = new TaskStore(resolve(process.env.TODAI_DB_PATH ?? '.todai/tasks.sqlite'));
-  try { await new ExecutionService(store, createCodexRunner(), workspace).drain(); }
+  try { await new ExecutionService(store, createCodexRunner(), () => executionWorkspace(store)).drain(); }
   finally { store.close(); }
 }
 

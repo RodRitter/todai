@@ -69,13 +69,9 @@ Store tests cover migration, profile validation, sharing, editing, unassignment,
 
 ## Agent execution
 
-Install Codex CLI and sign in before running Todai. Agents work in a separate `workspace/` folder, created automatically and ignored by this repository. To choose another directory, set `TODAI_WORKSPACE_PATH` (absolute paths or paths relative to Todai are accepted) and restart the app. For example:
+Install Codex CLI and sign in before running Todai. Open **Settings → Workspace** to select an existing directory where agents will work. Type a path to see directory suggestions, including `~/` for your home folder; add a trailing `/` to browse its subdirectories. Save the selection to persist it in SQLite. The saved setting is the only workspace configuration; there is no workspace environment variable. Existing installations default to the ignored `workspace/` directory until a directory is selected.
 
-```sh
-TODAI_WORKSPACE_PATH=/path/to/project npm run dev
-```
-
-SQLite stays in `.todai/tasks.sqlite`, independently configurable with `TODAI_DB_PATH`. Use one database for a workspace and keep the app server running while agents work. This local scheduler is intended for a persistent Node.js process on macOS/Linux, not serverless hosting. Changing workspace settings while work is queued will direct pending work to the newly configured directory; finish the queue before changing the setting.
+SQLite stays in `.todai/tasks.sqlite`, independently configurable with `TODAI_DB_PATH`. Selecting a workspace does not move files or change the database. Active runs keep their current directory; subsequent runs (including already queued work) use the latest saved selection without restarting the app. Keep the app server running while agents work. This local scheduler is intended for a persistent Node.js process on macOS/Linux, not serverless hosting.
 
 Creating a task in a column with an assigned agent, or moving an existing task into a different assigned column, queues one run. Retrying the same creation, saving a profile, reloading, and dropping into the same column do not start additional runs. Runs snapshot the profile at queue time and read task details and earlier comments when starting. Codex receives the selected model, effort, instructions, and sandbox permissions, with interactive approvals disabled. Directories without a Git repository are supported.
 

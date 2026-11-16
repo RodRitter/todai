@@ -35,3 +35,10 @@ export const CustomColumns: Story = {
 export const FailedSave: Story = {
   render: args => <ColumnSettings {...args} create={async () => { throw new Error('Could not save columns. Try again.'); }} reorder={async () => { throw new Error('Could not save columns. Try again.'); }} rename={async () => { throw new Error('Could not rename the column. Try again.'); }} remove={async () => { throw new Error('Move all tasks to another column before deleting this column.'); }} />,
 };
+
+export const WithTaskCounts: Story = {
+  args: { initialTaskCounts: { 'To do': 12, 'In progress': 1, 'In review': 3, Done: 0 } },
+};
+export const LastColumn: Story = {
+  args: { initialColumns: ['To do'] },
+};

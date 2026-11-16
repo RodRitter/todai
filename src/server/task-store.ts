@@ -25,6 +25,7 @@ export class TaskStore {
     mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
     this.db.exec(`
+      CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       PRAGMA foreign_keys = ON;
       PRAGMA busy_timeout = 5000;
       CREATE TABLE IF NOT EXISTS agents (
@@ -94,6 +95,14 @@ export class TaskStore {
       this.db.close();
       throw error;
     }
+  }
+
+  getWorkspacePath(): string | undefined {
+    return this.db.prepare("SELECT value FROM settings WHERE key = 'workspacePath'").get()?.value as string | undefined;
+  }
+
+  setWorkspacePath(path: string) {
+    this.db.prepare("INSERT INTO settings (key, value) VALUES ('workspacePath', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(path);
   }
 
   boardSnapshot() {

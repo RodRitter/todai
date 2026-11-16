@@ -9,8 +9,8 @@ export type Runner = (request: RunRequest) => Promise<string>;
 export class ExecutionService {
   private store: TaskStore;
   private runner: Runner;
-  private workspace: string;
-  constructor(store: TaskStore, runner: Runner, workspace: string) {
+  private workspace: string | (() => string);
+  constructor(store: TaskStore, runner: Runner, workspace: string | (() => string)) {
     this.store = store;
     this.runner = runner;
     this.workspace = workspace;
@@ -41,7 +41,7 @@ export class ExecutionService {
       }, 50);
       let summary: string;
       try {
-        summary = await this.runner({ run, task, workspace: this.workspace, signal: controller.signal,
+        summary = await this.runner({ run, task, workspace: typeof this.workspace === 'function' ? this.workspace() : this.workspace, signal: controller.signal,
           onStart: pid => this.store.recordRunner(run.id, pid) });
       } catch (error) {
         this.store.finishRun(run.id, 'Failed', `Agent run failed: ${error instanceof Error ? error.message : 'Unknown execution error.'}`);
