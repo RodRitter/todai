@@ -92,7 +92,7 @@ export class TaskStore {
       this.db.prepare(`INSERT INTO tasks (id, title, description, status) VALUES (?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET title=excluded.title, description=excluded.description,
         status=excluded.status`).run(task.id, task.title.trim(), task.description, task.status);
-      if (previous && previous.status !== task.status) {
+      if (!previous || previous.status !== task.status) {
         const assignment = this.listColumnAgents().find(item => item.column === task.status);
         const profile = this.listAgents().find(item => item.id === assignment?.agentId);
         if (profile) {

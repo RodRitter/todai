@@ -16,7 +16,7 @@ function fixture(runner: Runner) {
   return { store, service, directory, cleanup() { store.close(); rmSync(directory, { recursive: true, force: true }); } };
 }
 
-test('only a move to an assigned column queues a run, with a profile snapshot', async () => {
+test('a move to an assigned column queues a run, with a profile snapshot', async () => {
   const f = fixture(async () => 'Finished');
   try {
     const task = f.service.save({ id: 'one', title: 'Build', description: 'A board', status: 'To do' });
@@ -28,9 +28,6 @@ test('only a move to an assigned column queues a run, with a profile snapshot', 
     f.store.saveAgent({ ...profile, model: 'changed' });
     assert.equal(f.service.history('one').length, 1);
     assert.equal(f.service.history('one')[0].profile.model, 'test-model');
-    const created = f.service.save({ id: 'two', title: 'New', description: '', status: 'In progress' });
-    assert.equal(created.agentStatus, 'Not started');
-    assert.equal(f.service.history('two').length, 0);
     await f.service.drain();
   } finally { f.cleanup(); }
 });
@@ -153,5 +150,24 @@ test('restart does not treat a reused owner PID as the original app process', as
     archived.close();
     await f.service.drain();
     assert.equal(f.service.history('stale')[0].status, 'Interrupted');
+  } finally { f.cleanup(); }
+});
+
+
+test('creating in an assigned column queues once, including when creation is retried after completion', async () => {
+  const executed: string[] = [];
+  const f = fixture(async ({ task }) => { executed.push(task.id); return 'Created task finished'; });
+  try {
+    const input = { id: 'created', title: 'New task', description: 'Run on creation', status: 'In progress' };
+    assert.equal(f.service.save(input).agentStatus, 'Queued');
+    f.service.save(input);
+    assert.equal(f.service.history(input.id).length, 1);
+    await f.service.drain();
+    assert.deepEqual(executed, ['created']);
+    assert.equal(f.service.list()[0].comments?.[0].body, 'Created task finished');
+    assert.equal(f.service.save(input).agentStatus, 'Complete');
+    await f.service.drain();
+    assert.equal(f.service.history(input.id).length, 1);
+    assert.deepEqual(executed, ['created']);
   } finally { f.cleanup(); }
 });
