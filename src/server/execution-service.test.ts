@@ -156,11 +156,12 @@ test('restart does not treat a reused owner PID as the original app process', as
 });
 
 
-test('creating in an assigned column queues once, including when creation is retried after completion', async () => {
+test('creating in To do with an assigned agent queues once, including retries after completion', async () => {
   const executed: string[] = [];
   const f = fixture(async ({ task }) => { executed.push(task.id); return 'Created task finished'; });
   try {
-    const input = { id: 'created', title: 'New task', description: 'Run on creation', status: 'In progress' };
+    f.store.assignColumnAgent({ column: 'To do', agentId: 'builder' });
+    const input = { id: 'created', title: 'New task', description: 'Run on creation', status: 'To do' };
     assert.equal(f.service.save(input).agentStatus, 'Queued');
     f.service.save(input);
     assert.equal(f.service.history(input.id).length, 1);
