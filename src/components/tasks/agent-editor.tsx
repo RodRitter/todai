@@ -8,15 +8,14 @@ import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
 import { notifyOperation } from '@/components/ui/toast';
-import { AgentValidationError, effortLevels, executionTools, suggestedModels, parseColumnAgent, type ColumnAgent } from './column-agent';
-import type { Status } from './task';
+import { AgentValidationError, effortLevels, executionTools, suggestedModels, parseAgentProfile, type AgentProfile } from './column-agent';
 
-export function ColumnAgentEditor({ column, agent, onClose, onSave }: {
-  column: Status;
-  agent?: ColumnAgent;
+export function AgentEditor({ agent, onClose, onSave }: {
+  agent?: AgentProfile;
   onClose: () => void;
-  onSave: (agent: ColumnAgent) => Promise<void>;
+  onSave: (agent: AgentProfile) => Promise<void>;
 }) {
+  const draftId = useRef<string | null>(null);
   const saving = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<AgentValidationError | null>(null);
@@ -24,9 +23,9 @@ export function ColumnAgentEditor({ column, agent, onClose, onSave }: {
     event.preventDefault();
     if (saving.current) return;
     const data = new FormData(event.currentTarget);
-    let draft: ColumnAgent;
+    let draft: AgentProfile;
     try {
-      draft = parseColumnAgent({ ...Object.fromEntries(data), column });
+      draft = parseAgentProfile({ ...Object.fromEntries(data), id: agent?.id ?? (draftId.current ??= crypto.randomUUID()) });
     } catch (error) {
       setError(error as AgentValidationError);
       return;
@@ -36,9 +35,9 @@ export function ColumnAgentEditor({ column, agent, onClose, onSave }: {
     setBusy(true);
     try {
       await notifyOperation(() => onSave(draft), {
-        loading: 'Saving column agent…',
-        success: 'Column agent saved.',
-        error: 'Could not save column agent. Check local database access and try again. Your draft is still open.',
+        loading: 'Saving agent…',
+        success: 'Agent saved.',
+        error: 'Could not save agent. Check local database access and try again. Your draft is still open.',
       });
       onClose();
     } catch { /* Keep the draft available for retry. */ }
@@ -47,14 +46,14 @@ export function ColumnAgentEditor({ column, agent, onClose, onSave }: {
   return <Dialog open onOpenChange={open => { if (!open && !saving.current) onClose(); }}>
     <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:p-6">
       <DialogHeader>
-        <DialogTitle>Agent for {column}</DialogTitle>
-        <DialogDescription>Configure the agent assigned to this column. Saving settings does not start a run.</DialogDescription>
+        <DialogTitle>{agent ? "Edit agent" : "Create agent"}</DialogTitle>
+        <DialogDescription>Save a reusable agent, then assign it to columns on the board. Changes apply to every column using this agent.</DialogDescription>
       </DialogHeader>
       <form onSubmit={save} noValidate className="space-y-4">
         <fieldset disabled={busy} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="agent-name">Agent name</Label>
-            <Input id="agent-name" name="name" defaultValue={agent?.name ?? `${column} agent`} required
+            <Input id="agent-name" name="name" defaultValue={agent?.name ?? ''} required
               aria-invalid={error?.field === 'name'} aria-describedby={error?.field === 'name' ? 'agent-name-error' : undefined}
               onChange={() => setError(null)} />
             {error?.field === 'name' && <p id="agent-name-error" role="alert" className="text-sm text-destructive">{error.message}</p>}

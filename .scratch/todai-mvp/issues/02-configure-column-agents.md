@@ -16,3 +16,5 @@
 - [x] Verify saving and reopening column configuration, persistence after restart, and validation of invalid settings.
 
 Implemented per-column Codex CLI settings in SQLite with a shared-component editor, visible agent names, required-field validation, and failed-save draft retention. Verified with store tests, Storybook interactions, and a production browser flow covering save/reload, invalid API input, and an actual app-process restart against a temporary database. Saving settings leaves task state unchanged.
+
+Follow-up: Agents are now reusable profiles managed on a separate Agents screen. Columns assign or remove existing profiles and display the selected agent in a badge. One profile can be reused across columns, editing it affects each assignment, and deleting it clears its assignments. Legacy per-column settings migrate without losing configuration. Execution tool remains a dropdown and model remains searchable text with custom values accepted.

@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { Settings2 } from "lucide-react";
+import { Bot, Settings2 } from "lucide-react";
 import type { Status } from "./task";
 
 export type TaskColumnProps = {
@@ -45,7 +45,9 @@ export function TaskColumn({ status, agentName, onConfigureAgent, isEmpty = fals
           <h2 className="text-lg font-semibold">{status}</h2>
           {onConfigureAgent && <Button variant="ghost" size="icon" aria-label={`Configure agent for ${status}`} onClick={onConfigureAgent}><Settings2 /></Button>}
         </div>
-        {onConfigureAgent && <p className="text-sm text-muted-foreground break-words">{agentName ?? 'No agent configured'}</p>}
+        {agentName ? <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground" aria-label={`Assigned agent: ${agentName}`}>
+          <Bot className="size-3 shrink-0" aria-hidden="true" /><span className="min-w-0 break-words">{agentName}</span>
+        </span> : onConfigureAgent && <p className="text-sm text-muted-foreground">No agent assigned</p>}
       </div>
       {isEmpty ? <div className="min-h-36 flex-1 rounded-lg border border-dashed p-4" aria-hidden="true" /> : children}
     </section>

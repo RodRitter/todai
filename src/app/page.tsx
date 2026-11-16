@@ -1,5 +1,5 @@
-import { PersistentTaskBoard } from '@/components/tasks/persistent-task-board';
+import { PersistentWorkspace } from '@/components/tasks/persistent-workspace';
 
 export default function Home() {
-  return <PersistentTaskBoard />;
+  return <PersistentWorkspace />;
 }

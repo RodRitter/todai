@@ -1,10 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import { LayoutGrid, PanelLeft } from "lucide-react";
+import { Bot, LayoutGrid, PanelLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export function AppShell({ children, headerActions }: { children: ReactNode; headerActions?: ReactNode }) {
+export function AppShell({ children, headerActions, screen = "board" }: { children: ReactNode; headerActions?: ReactNode; screen?: "board" | "agents" }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
@@ -22,11 +23,16 @@ export function AppShell({ children, headerActions }: { children: ReactNode; hea
             <span className="hidden font-semibold md:inline">Todai</span>
           </div>
           <nav className="p-3" aria-label="Main navigation">
-            <Button variant="secondary" className="w-full md:justify-start" asChild>
-              <a href="#task-board" aria-current="page" aria-label="Task board">
+            <Button variant={screen === "board" ? "secondary" : "ghost"} className="w-full md:justify-start" asChild>
+              <Link href="/" aria-current={screen === "board" ? "page" : undefined} aria-label="Task board">
                 <LayoutGrid />
                 <span className="hidden md:inline">Board</span>
-              </a>
+              </Link>
+            </Button>
+            <Button variant={screen === "agents" ? "secondary" : "ghost"} className="mt-1 w-full md:justify-start" asChild>
+              <Link href="/agents" aria-current={screen === "agents" ? "page" : undefined} aria-label="Agents">
+                <Bot /><span className="hidden md:inline">Agents</span>
+              </Link>
             </Button>
           </nav>
         </div>
@@ -43,7 +49,7 @@ export function AppShell({ children, headerActions }: { children: ReactNode; hea
           >
             <PanelLeft />
           </Button>
-          <h1 className="text-sm font-medium">Task board</h1>
+          <h1 className="text-sm font-medium">{screen === "agents" ? "Agents" : "Task board"}</h1>
           <div className="ml-auto">{headerActions}</div>
         </header>
         {children}

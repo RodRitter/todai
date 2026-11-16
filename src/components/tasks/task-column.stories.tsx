@@ -22,3 +22,6 @@ export const Populated: Story = {
 };
 export const Empty: Story = { args: { status: "In review", isEmpty: true } };
 export const DropTarget: Story = { args: { ...Empty.args, canDrop: true, isDropTarget: true } };
+
+export const AssignedAgent: Story = { args: { ...Empty.args, agentName: 'Reviewer', onConfigureAgent: fn() } };
+export const LongAgentName: Story = { args: { ...AssignedAgent.args, agentName: 'Architecture and implementation review specialist' } };

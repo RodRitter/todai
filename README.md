@@ -57,10 +57,12 @@ See **Feedback / Toast** in Storybook for success, error, information, warning, 
 
 While a dialog is open, notification close buttons remain clickable without dismissing the dialog. Escape dismisses the latest non-loading notification first; a subsequent Escape closes the dialog.
 
-## Column agents
+## Agents and column assignments
 
-Use the settings button beside a column heading to configure its agent name, Codex CLI model ID, effort, optional instructions, and sandbox permissions. Unconfigured columns show **No agent configured**. Each column owns its settings; tasks do not override them.
+Open **Agents** in the sidebar to create, edit, or delete reusable agent profiles. Each profile contains a name, execution tool (Codex CLI), model, effort, optional instructions, and sandbox permissions. The model input offers searchable suggestions and accepts custom IDs. Choose a model and effort supported by your Codex account.
 
-Settings are stored in the same SQLite database as tasks and survive reloads and app restarts. Saving settings does not start a run. The model input offers searchable suggestions and accepts custom model IDs because availability depends on your Codex account; configuration validates required fields and supported effort/permission choices, without making an agent call. Choose an effort supported by the selected model. Actual execution belongs to the next ticket.
+On the board, use a column's settings button to select a saved agent or **No agent**. An assigned agent appears as a badge below the column heading. One profile can serve multiple columns; editing it updates all of those assignments. Removing an assignment keeps the profile available in Agents. Deleting a profile removes its assignments.
 
-The column agent stories cover saving/reopening, field validation, and retaining drafts after failed saves. Store tests cover persistence, updates isolated to a column, validation, and unchanged task state.
+Profiles and assignments persist in SQLite. Existing per-column configurations migrate automatically into reusable profiles with their original assignments. Saving profiles or assignments does not start an agent run; execution belongs to the next ticket.
+
+Store tests cover migration, profile validation, sharing, editing, unassignment, deletion, restart persistence, and unchanged task state. Storybook interactions cover the Agents screen, custom model entry, assignment/removal, and failed-save draft retention.

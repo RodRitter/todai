@@ -9,17 +9,19 @@ import { useBoardMotion } from "@/hooks/use-board-motion";
 import { statuses, type Status, type Task } from "./task";
 import { TaskCard } from "./task-card";
 import { TaskColumn } from "./task-column";
-import { ColumnAgentEditor } from "./column-agent-editor";
-import type { ColumnAgent } from "./column-agent";
+import { ColumnAgentPicker } from "./column-agent-picker";
+import type { AgentProfile, ColumnAssignment } from "./column-agent";
 import { TaskEditor } from "./task-editor";
 
-export function TaskBoard({ initialTasks = [], initialAgents = [], saveAgent, persistence }: {
+export function TaskBoard({ initialTasks = [], initialAgents = [], initialAssignments = [], assignAgent, persistence }: {
   initialTasks?: Task[];
-  initialAgents?: ColumnAgent[];
-  saveAgent?: (agent: ColumnAgent) => Promise<ColumnAgent>;
+  initialAgents?: AgentProfile[];
+  initialAssignments?: ColumnAssignment[];
+  assignAgent?: (column: Status, agentId: string | null) => Promise<ColumnAssignment | null>;
   persistence?: { save: (task: Task) => Promise<Task>; delete: (id: string) => Promise<void> };
 }) {
-  const [agents, setAgents] = useState(initialAgents);
+  const agents = initialAgents;
+  const [assignments, setAssignments] = useState(initialAssignments);
   const [configuringColumn, setConfiguringColumn] = useState<Status | null>(null);
   const saving = useRef(false);
   const [busy, setBusy] = useState(false);
@@ -80,7 +82,7 @@ export function TaskBoard({ initialTasks = [], initialAgents = [], saveAgent, pe
               <TaskColumn
                 key={column}
                 status={column}
-                agentName={agents.find(agent => agent.column === column)?.name}
+                agentName={agents.find(agent => agent.id === assignments.find(item => item.column === column)?.agentId)?.name}
                 onConfigureAgent={() => setConfiguringColumn(column)}
                 isEmpty={columnTasks.length === 0}
                 isDropTarget={dropColumn === column}
@@ -111,13 +113,14 @@ export function TaskBoard({ initialTasks = [], initialAgents = [], saveAgent, pe
             );
           })}
         </div>
-        {configuringColumn && <ColumnAgentEditor
+        {configuringColumn && <ColumnAgentPicker
           column={configuringColumn}
-          agent={agents.find(agent => agent.column === configuringColumn)}
+          agents={agents}
+          agentId={assignments.find(item => item.column === configuringColumn)?.agentId}
           onClose={() => setConfiguringColumn(null)}
-          onSave={async agent => {
-            const saved = saveAgent ? await saveAgent(agent) : agent;
-            setAgents(current => [...current.filter(item => item.column !== saved.column), saved]);
+          onSave={async agentId => {
+            const saved = assignAgent ? await assignAgent(configuringColumn, agentId) : agentId ? { column: configuringColumn, agentId } : null;
+            setAssignments(current => [...current.filter(item => item.column !== configuringColumn), ...(saved ? [saved] : [])]);
           }}
         />}
         <TaskEditor
