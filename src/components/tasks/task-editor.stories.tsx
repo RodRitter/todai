@@ -133,13 +133,47 @@ export const MarkdownContent: Story = {
     const dialog = within(await within(canvasElement.ownerDocument.body).findByRole('dialog'));
     await expect(dialog.getByRole('heading', { name: 'Requirements' })).toBeVisible();
     await expect(dialog.getByRole('heading', { name: 'Handover' })).toBeVisible();
-    await userEvent.click(dialog.getByRole('button', { name: 'Write' }));
+    await userEvent.click(dialog.getByRole('button', { name: 'Edit description' }));
     await expect(dialog.getByLabelText('Description')).toHaveValue(args.task!.description);
     await userEvent.clear(dialog.getByLabelText('Description'));
     await userEvent.type(dialog.getByLabelText('Description'), '## Updated requirements\n\n**Preserve** this source.');
-    await userEvent.click(dialog.getByRole('button', { name: 'Preview' }));
-    await expect(dialog.getByRole('heading', { name: 'Updated requirements' })).toBeVisible();
+    await userEvent.click(dialog.getByRole('button', { name: 'Save description' }));
+    await waitFor(() => expect(dialog.getByRole('heading', { name: 'Updated requirements' })).toBeVisible());
+    await expect(dialog.queryByRole('textbox', { name: 'Description' })).not.toBeInTheDocument();
+    await expect(args.onSave).toHaveBeenCalledWith(expect.objectContaining({ description: '## Updated requirements\n\n**Preserve** this source.' }));
     await userEvent.click(dialog.getByRole('button', { name: 'Save changes' }));
     await expect(args.onSave).toHaveBeenCalledWith(expect.objectContaining({ description: '## Updated requirements\n\n**Preserve** this source.' }));
+  },
+};
+
+export const CancelDescriptionEdit: Story = {
+  args: { open: true, task: { ...exampleTasks[2], description: '**Original description**' } },
+  play: async ({ canvasElement, args }) => {
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole('dialog'));
+    const preview = dialog.getByRole('button', { name: 'Edit description' });
+    preview.focus();
+    await userEvent.keyboard('{Enter}');
+    await userEvent.clear(dialog.getByLabelText('Description'));
+    await userEvent.type(dialog.getByLabelText('Description'), 'Discard this draft');
+    await userEvent.click(dialog.getByRole('button', { name: 'Cancel description edit' }));
+    await expect(dialog.getByText('Original description')).toBeVisible();
+    await expect(args.onSave).not.toHaveBeenCalled();
+  },
+};
+
+export const FailedDescriptionSave: Story = {
+  args: { open: true, task: exampleTasks[2], onSave: fn() },
+  play: async ({ canvasElement, args }) => {
+    args.onSave.mockRejectedValueOnce(new Error('Save failed')).mockResolvedValue(undefined);
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole('dialog'));
+    await userEvent.click(dialog.getByRole('button', { name: 'Edit description' }));
+    await userEvent.clear(dialog.getByLabelText('Description'));
+    await userEvent.type(dialog.getByLabelText('Description'), '**Retained draft**');
+    await userEvent.click(dialog.getByRole('button', { name: 'Save description' }));
+    await within(canvasElement.ownerDocument.body).findByText('Could not save the description. Your draft is still open; try again.');
+    await expect(dialog.getByLabelText('Description')).toHaveValue('**Retained draft**');
+    await userEvent.click(dialog.getByRole('button', { name: 'Save description' }));
+    await waitFor(() => expect(dialog.getByText('Retained draft')).toBeVisible());
+    await expect(dialog.queryByRole('textbox', { name: 'Description' })).not.toBeInTheDocument();
   },
 };

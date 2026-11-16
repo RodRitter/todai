@@ -87,4 +87,4 @@ Queued/running tasks can be edited, but moving or deleting them is disabled unti
 
 ## Markdown content
 
-Task descriptions and comments render Markdown, including headings, emphasis, lists, links, block quotes, fenced code, tables, and task lists. Existing descriptions open in **Preview**; choose **Write** to edit their Markdown source, then switch back to preview before saving. The original Markdown is stored and supplied to agents. Board cards show a compact formatted preview; open the task to follow links or read the full description.
+Task descriptions and comments render Markdown, including headings, emphasis, lists, links, block quotes, fenced code, tables, and task lists. Descriptions display formatted Markdown by default. Click a description (or focus it and press Enter) to edit its source in a textarea. **Save** persists an existing task’s description and closes the inline editor; **Cancel** discards the description draft. For new tasks, save the description draft, then create the task. The original Markdown is stored and supplied to agents. Board cards show a compact formatted preview; open the task to follow links or read the full description.

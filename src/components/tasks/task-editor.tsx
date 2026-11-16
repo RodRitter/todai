@@ -89,7 +89,16 @@ export function TaskEditor({ open, task: editing = null, defaultStatus = "To do"
             {titleError && <p id="title-error" className="text-destructive text-sm">Enter a task title.</p>}
           </div>
           <div className="space-y-2">
-            <DescriptionField initialValue={editing?.description ?? ""} />
+            <DescriptionField initialValue={editing?.description ?? ""} disabled={busy} onSave={editing ? async description => {
+              setBusy(true);
+              try {
+                await notifyOperation(() => onSave({ ...editing, description }), {
+                  loading: 'Saving description…',
+                  success: 'Description saved.',
+                  error: 'Could not save the description. Your draft is still open; try again.',
+                });
+              } finally { setBusy(false); }
+            } : undefined} />
           </div>
           <div role="group" aria-label="Task properties" className="bg-muted/50 mt-6 flex flex-col gap-1 rounded-xl p-3">
             <div className="flex items-center justify-between gap-3 rounded-lg px-1 py-1.5">
@@ -158,23 +167,57 @@ export function TaskEditor({ open, task: editing = null, defaultStatus = "To do"
   );
 }
 
-function DescriptionField({ initialValue }: { initialValue: string }) {
+function DescriptionField({ initialValue, disabled, onSave }: {
+  initialValue: string;
+  disabled: boolean;
+  onSave?: (description: string) => Promise<void>;
+}) {
   const [description, setDescription] = useState(initialValue);
-  const [preview, setPreview] = useState(Boolean(initialValue));
+  const [draft, setDraft] = useState(initialValue);
+  const [isEditing, setIsEditing] = useState(false);
+
+  async function saveDescription() {
+    const value = draft.trim();
+    try {
+      await onSave?.(value);
+      setDescription(value);
+      setIsEditing(false);
+    } catch { /* Keep the draft open; the persistence boundary reports the failure. */ }
+  }
+
+  function startEditing() {
+    if (disabled) return;
+    setDraft(description);
+    setIsEditing(true);
+  }
+
   return <>
-    <div className="flex items-center justify-between gap-3">
-      <Label htmlFor="task-description">Description</Label>
-      <div className="flex gap-1" role="group" aria-label="Description mode">
-        <Button type="button" size="sm" variant={preview ? 'ghost' : 'secondary'} aria-pressed={!preview} onClick={() => setPreview(false)}>Write</Button>
-        <Button type="button" size="sm" variant={preview ? 'secondary' : 'ghost'} aria-pressed={preview} onClick={() => setPreview(true)}>Preview</Button>
+    <Label htmlFor="task-description">Description</Label>
+    <input type="hidden" name="description" value={isEditing ? draft : description} />
+    {isEditing ? <div className="space-y-2">
+      <Textarea id="task-description" value={draft} onChange={event => setDraft(event.target.value)} autoFocus className="min-h-32 font-mono text-sm" aria-describedby="description-hint" />
+      <div className="flex items-center justify-between gap-3">
+        <p id="description-hint" className="text-muted-foreground text-xs">Markdown supported.</p>
+        <div className="flex gap-1">
+          <Button type="button" size="sm" variant="ghost" aria-label="Cancel description edit" onClick={() => setIsEditing(false)}>Cancel</Button>
+          <Button type="button" size="sm" aria-label="Save description" onClick={() => { void saveDescription(); }}>Save</Button>
+        </div>
       </div>
-    </div>
-    <div hidden={preview}>
-      <Textarea id="task-description" name="description" value={description} onChange={event => setDescription(event.target.value)} className="min-h-32 font-mono text-sm" aria-describedby="description-hint" />
-      <p id="description-hint" className="text-muted-foreground mt-2 text-xs">Markdown supported.</p>
-    </div>
-    {preview && <div role="region" aria-label="Description preview" className="min-h-24 rounded-lg border p-3">
-      {description.trim() ? <Markdown>{description}</Markdown> : <p className="text-muted-foreground text-sm">Nothing to preview yet.</p>}
+    </div> : <div
+      role="button"
+      tabIndex={disabled ? -1 : 0}
+      aria-label="Edit description"
+      aria-disabled={disabled}
+      className="min-h-24 cursor-text rounded-lg border p-3 outline-none transition-colors hover:bg-muted/30 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
+      onClick={event => { if (!(event.target as HTMLElement).closest('a')) startEditing(); }}
+      onKeyDown={event => {
+        if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault();
+          startEditing();
+        }
+      }}
+    >
+      {description.trim() ? <Markdown>{description}</Markdown> : <p className="text-muted-foreground text-sm">Click to add a description…</p>}
     </div>}
   </>;
 }
