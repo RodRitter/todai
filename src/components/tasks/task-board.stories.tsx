@@ -154,3 +154,13 @@ export const ExecutionOutcomes: Story = {
     { id: 'interrupted', title: 'App restarted during execution', description: '', status: 'In review', agentStatus: 'Interrupted' },
   ] },
 };
+
+export const ResponsiveColumns: Story = {
+  args: {
+    columns: ['Backlog', 'To do', 'In progress', 'In review', 'Done', 'Follow up'],
+    initialTasks: exampleTasks,
+  },
+  parameters: {
+    docs: { description: { story: 'Resize the board or collapse the sidebar: columns share one row when space allows, then wrap at a readable 14rem minimum. Narrow screens use the full available width.' } },
+  },
+};

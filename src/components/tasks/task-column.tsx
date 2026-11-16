@@ -21,7 +21,7 @@ export type TaskColumnProps = {
 export function TaskColumn({ status, agentName, onConfigureAgent, isEmpty = false, isDropTarget = false, canDrop = false, onDragOver, onDragLeave, onDrop, children }: TaskColumnProps) {
   return (
     <section
-      className={`group/column flex min-h-64 flex-col gap-4 rounded-lg p-3 outline-1 outline-dashed outline-offset-0 transition-[background-color,outline-color] duration-150 motion-reduce:transition-none ${isDropTarget ? "bg-muted/50 outline-border" : "outline-transparent"}`}
+      className={`group/column flex min-h-64 min-w-0 flex-col gap-4 rounded-lg p-3 outline-1 outline-dashed outline-offset-0 transition-[background-color,outline-color] duration-150 motion-reduce:transition-none ${isDropTarget ? "bg-muted/50 outline-border" : "outline-transparent"}`}
       aria-label={status}
       onDragOver={(event) => {
         if (!canDrop) return;
@@ -42,7 +42,7 @@ export function TaskColumn({ status, agentName, onConfigureAgent, isEmpty = fals
     >
       <div className="space-y-1">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold">{status}</h2>
+          <h2 className="min-w-0 text-lg font-semibold wrap-anywhere">{status}</h2>
           {onConfigureAgent && <Button className="[@media(hover:hover)]:opacity-0 group-hover/column:opacity-100 group-focus-within/column:opacity-100 focus-visible:opacity-100 transition-opacity" variant="ghost" size="icon" aria-label={`Configure agent for ${status}`} onClick={onConfigureAgent}><Settings2 /></Button>}
         </div>
         {agentName ? <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground" aria-label={`Assigned agent: ${agentName}`}>

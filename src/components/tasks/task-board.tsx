@@ -106,7 +106,7 @@ export function TaskBoard({ columns: initialColumns = statuses, initialTasks = [
       <Button size="sm" disabled={busy} onClick={() => openEditor()}><Plus /> New task</Button>
     }>
       <main id="task-board" className="flex min-h-[calc(100dvh-3.5rem)] flex-col p-4 md:p-8" aria-label="Task board" tabIndex={-1}>
-        <div ref={boardRef} className="grid flex-1 items-stretch gap-6 md:grid-cols-2 xl:grid-cols-4">
+        <div ref={boardRef} className="grid flex-1 grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] items-stretch gap-2">
           {columns.map((column) => {
             const columnTasks = tasks.filter((task) => task.status === column);
             return (
