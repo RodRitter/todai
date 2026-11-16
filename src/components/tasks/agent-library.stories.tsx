@@ -29,7 +29,7 @@ export const CreateEditDelete: Story = {
     await userEvent.click(dialog.getByRole('button', { name: 'Save agent' }));
     await waitFor(() => expect(body.queryByRole('dialog')).not.toBeInTheDocument());
     await expect(canvas.getByRole('region', { name: 'My reviewer' })).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: 'Edit agent' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Edit My reviewer' }));
     dialog = within(await body.findByRole('dialog'));
     await expect(dialog.getByLabelText('Model')).toHaveValue('my-custom-model');
     await userEvent.clear(dialog.getByLabelText('Agent name'));
@@ -77,5 +77,26 @@ export const CompactList: Story = {
       { ...reviewer, id: 'builder', name: 'Builder', model: 'gpt-6.1-terra', permissions: 'workspace-write' },
     ],
     initialAssignments: [{ column: 'To do', agentId: 'planner' }, { column: 'In review', agentId: 'reviewer' }, { column: 'In progress', agentId: 'builder' }],
+  },
+};
+
+
+export const KeyboardRowEditing: Story = {
+  args: { initialAgents: [reviewer] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    const row = canvas.getByRole('button', { name: 'Edit Reviewer' });
+    for (const key of ['{Enter}', ' ']) {
+      row.focus();
+      await userEvent.keyboard(key);
+      const dialog = within(await body.findByRole('dialog'));
+      await expect(dialog.getByLabelText('Agent name')).toHaveValue('Reviewer');
+      await userEvent.click(dialog.getByRole('button', { name: 'Cancel' }));
+      await waitFor(() => expect(body.queryByRole('dialog')).not.toBeInTheDocument());
+    }
+    await userEvent.click(canvas.getByRole('button', { name: 'Delete agent' }));
+    await waitFor(() => expect(canvas.queryByRole('button', { name: 'Edit Reviewer' })).not.toBeInTheDocument());
+    await expect(body.queryByRole('dialog')).not.toBeInTheDocument();
   },
 };
