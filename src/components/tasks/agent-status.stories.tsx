@@ -17,3 +17,8 @@ export const Running: Story = {};
 export const Paused: Story = { args: { status: "Paused" } };
 export const Review: Story = { args: { status: "Review" } };
 export const Blocked: Story = { args: { status: "Blocked" } };
+
+export const Queued: Story = { args: { status: "Queued" } };
+export const Complete: Story = { args: { status: "Complete" } };
+export const Failed: Story = { args: { status: "Failed" } };
+export const Interrupted: Story = { args: { status: "Interrupted" } };

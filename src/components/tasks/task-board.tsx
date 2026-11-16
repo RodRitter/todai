@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useState, type SetStateAction } from "react";
+import { useEffect, useRef, useState, type SetStateAction } from "react";
 import { Plus } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { notifyOperation } from "@/components/ui/toast";
+import { notifyOperation, toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { useBoardMotion } from "@/hooks/use-board-motion";
 import { statuses, type Status, type Task } from "./task";
@@ -18,12 +18,13 @@ export function TaskBoard({ initialTasks = [], initialAgents = [], initialAssign
   initialAgents?: AgentProfile[];
   initialAssignments?: ColumnAssignment[];
   assignAgent?: (column: Status, agentId: string | null) => Promise<ColumnAssignment | null>;
-  persistence?: { save: (task: Task) => Promise<Task>; delete: (id: string) => Promise<void> };
+  persistence?: { list?: () => Promise<Task[]>; save: (task: Task) => Promise<Task>; delete: (id: string) => Promise<void> };
 }) {
   const agents = initialAgents;
   const [assignments, setAssignments] = useState(initialAssignments);
   const [configuringColumn, setConfiguringColumn] = useState<Status | null>(null);
   const saving = useRef(false);
+  const revision = useRef(0);
   const [busy, setBusy] = useState(false);
   const [tasks, setTasks] = useState(initialTasks);
   const [open, setOpen] = useState(false);
@@ -32,6 +33,26 @@ export function TaskBoard({ initialTasks = [], initialAgents = [], initialAssign
   const [dropColumn, setDropColumn] = useState<Status | null>(null);
   const { boardRef, capturePositions } = useBoardMotion(tasks);
 
+  const refresh = persistence?.list;
+  useEffect(() => {
+    if (!refresh) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    let errorToast: string | number | undefined;
+    async function poll() {
+      const before = revision.current;
+      try {
+        const latest = await refresh!();
+        if (active && !saving.current && before === revision.current) setTasks(latest);
+        if (active && errorToast !== undefined) { toast.dismiss(errorToast); errorToast = undefined; }
+      } catch {
+        if (active && errorToast === undefined) errorToast = toast.error('Live task updates are unavailable. Retrying…', { duration: Infinity });
+      } finally { if (active) timer = setTimeout(poll, 1000); }
+    }
+    timer = setTimeout(poll, 1000);
+    return () => { active = false; clearTimeout(timer); if (errorToast !== undefined) toast.dismiss(errorToast); };
+  }, [refresh]);
+
   function updateTasks(update: SetStateAction<Task[]>) {
     capturePositions();
     setTasks(update);
@@ -39,6 +60,7 @@ export function TaskBoard({ initialTasks = [], initialAgents = [], initialAssign
 
   async function mutate(operation: () => Promise<void>) {
     if (saving.current) throw new Error('Wait for the current save to finish.');
+    revision.current++;
     saving.current = true;
     setBusy(true);
     try { await operation(); }
@@ -126,7 +148,7 @@ export function TaskBoard({ initialTasks = [], initialAgents = [], initialAssign
         <TaskEditor
           key={editing?.id ?? "new"}
           open={open}
-          task={editing}
+          task={editing ? tasks.find(task => task.id === editing.id) ?? editing : null}
           onOpenChange={setOpen}
           onSave={saveTask}
           onDelete={deleteTask}

@@ -122,3 +122,34 @@ export const FailedColumnAgentSave: Story = {
     await expect(within(canvas.getByRole('region', { name: 'Done' })).getByText('No agent assigned')).toBeVisible();
   },
 };
+
+export const LiveExecution: Story = {
+  args: {
+    initialTasks: [{ id: 'live', title: 'Build the feature', description: 'Use shared components.', status: 'In progress', agentStatus: 'Running', comments: [] }],
+    persistence: {
+      save: async task => task,
+      delete: async () => {},
+      list: async () => [{ id: 'live', title: 'Build the feature', description: 'Use shared components.', status: 'In progress', agentStatus: 'Complete',
+        comments: [{ id: 'handover', taskId: 'live', body: 'Implemented and verified the feature.', createdAt: '2026-11-16T12:00:00Z' }] }],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole('button', { name: 'Edit Build the feature, Running' }));
+    const dialog = within(await body.findByRole('dialog'));
+    await userEvent.clear(dialog.getByLabelText('Title'));
+    await userEvent.type(dialog.getByLabelText('Title'), 'Unsaved draft');
+    await waitFor(() => expect(dialog.getByText('Implemented and verified the feature.')).toBeInTheDocument(), { timeout: 4000 });
+    await expect(dialog.getByLabelText('Title')).toHaveValue('Unsaved draft');
+    await expect(canvas.getByRole('button', { name: 'Edit Build the feature, Complete' })).toBeInTheDocument();
+  },
+};
+
+export const ExecutionOutcomes: Story = {
+  args: { initialTasks: [
+    { id: 'queued', title: 'Waiting for the agent', description: '', status: 'In progress', agentStatus: 'Queued' },
+    { id: 'failed', title: 'Failed execution', description: '', status: 'In progress', agentStatus: 'Failed', comments: [{ id: 'failure', taskId: 'failed', body: 'Agent run failed: Could not launch Codex CLI. Check that codex is installed and signed in.', createdAt: '2026-11-16T12:00:00Z' }] },
+    { id: 'interrupted', title: 'App restarted during execution', description: '', status: 'In review', agentStatus: 'Interrupted' },
+  ] },
+};

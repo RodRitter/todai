@@ -43,3 +43,6 @@ next-env.d.ts
 # Component explorer and local runtime
 storybook-static/
 .todai/
+
+# Default agent working directory
+/workspace/

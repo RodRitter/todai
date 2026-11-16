@@ -20,6 +20,7 @@ export type TaskEditorProps = {
 };
 
 export function TaskEditor({ open, task: editing = null, defaultStatus = "To do", onOpenChange, onSave, onDelete }: TaskEditorProps) {
+  const pendingRun = editing?.agentStatus === "Queued" || editing?.agentStatus === "Running";
   const draftId = useRef<string | null>(null);
   const [titleError, setTitleError] = useState(false);
 
@@ -48,7 +49,7 @@ export function TaskEditor({ open, task: editing = null, defaultStatus = "To do"
       setTitleError(true);
       return;
     }
-    const status = statuses.find((value) => value === data.get("status")) ?? defaultStatus;
+    const status = statuses.find((value) => value === data.get("status")) ?? editing?.status ?? defaultStatus;
     const agentStatus = editing?.agentStatus ?? "Not started";
     void persist(() => onSave({
       id: editing?.id ?? (draftId.current ??= crypto.randomUUID()),
@@ -94,10 +95,11 @@ export function TaskEditor({ open, task: editing = null, defaultStatus = "To do"
               <Label htmlFor="task-status" className="text-muted-foreground gap-2 leading-snug font-normal">
                 Status
               </Label>
-              <NativeSelect id="task-status" name="status" defaultValue={editing?.status ?? defaultStatus} className="bg-background dark:bg-background h-10 w-32 rounded-lg border-transparent shadow-none hover:bg-accent sm:w-40">
+              <NativeSelect id="task-status" name="status" disabled={pendingRun} defaultValue={editing?.status ?? defaultStatus} className="bg-background dark:bg-background h-10 w-32 rounded-lg border-transparent shadow-none hover:bg-accent sm:w-40">
                 {statuses.map((option) => <option key={option}>{option}</option>)}
               </NativeSelect>
             </div>
+            {pendingRun && <p className="px-1 text-xs text-muted-foreground">Wait for the agent run to finish before moving or deleting this task.</p>}
           </div>
           {editing && <section aria-label="Comments" className="space-y-2">
             <h3 className="text-sm font-medium">Comments</h3>
@@ -115,6 +117,7 @@ export function TaskEditor({ open, task: editing = null, defaultStatus = "To do"
                 variant="ghost"
                 size="sm"
                 aria-label="Delete task"
+                disabled={pendingRun}
                 className="text-muted-foreground mr-auto px-2 text-xs hover:bg-destructive/10 hover:text-destructive"
                 onClick={() => {
                   void persist(() => onDelete(editing.id), true);

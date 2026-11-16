@@ -46,6 +46,7 @@ export function PersistentWorkspace({ screen = "board" }: { screen?: "board" | "
   return <TaskBoard initialTasks={tasks} initialAgents={agents} initialAssignments={assignments}
     assignAgent={(column, agentId) => requestBoardData('/api/column-agents', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ column, agentId }) })}
     persistence={{
+    list: () => requestBoardData('/api/tasks'),
     save: task => requestBoardData('/api/tasks', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(task) }),
     delete: id => requestBoardData(`/api/tasks?id=${encodeURIComponent(id)}`, { method: 'DELETE' }),
   }} />;

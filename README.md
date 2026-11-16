@@ -41,7 +41,7 @@ Use `npm run typecheck` to check both app and story types, and `npm run build-st
 
 Use Node.js 24 or newer. The app creates `.todai/tasks.sqlite` in the project directory on first access. This ignored directory contains local workspace data; preserve it across restarts. Set `TODAI_DB_PATH` to use a different SQLite file. No sample tasks are inserted in the app.
 
-Task placement is separate from agent execution: new tasks display **Not started**, including in the Done column. Task details display persisted comments in chronological order. Manual comment creation and agent execution belong to later tickets.
+Task placement is separate from agent execution: new tasks display **Not started**, including in the Done column. Task details display persisted comments in chronological order. Manual comment creation is not included. Agent handovers and execution failures appear as ordinary comments.
 
 Saves update the board after SQLite confirms them. A failed save keeps the editor open and retains the draft; retrying a new task uses the same ID. A failed move leaves the displayed board unchanged and offers retry or reload. Loading failures are displayed instead of an empty board.
 
@@ -63,6 +63,24 @@ Open **Agents** in the sidebar to create, edit, or delete reusable agent profile
 
 On the board, use a column's settings button to select a saved agent or **No agent**. An assigned agent appears as a badge below the column heading. One profile can serve multiple columns; editing it updates all of those assignments. Removing an assignment keeps the profile available in Agents. Deleting a profile removes its assignments.
 
-Profiles and assignments persist in SQLite. Existing per-column configurations migrate automatically into reusable profiles with their original assignments. Saving profiles or assignments does not start an agent run; execution belongs to the next ticket.
+Profiles and assignments persist in SQLite. Existing per-column configurations migrate automatically into reusable profiles with their original assignments. Saving profiles or assignments does not start an agent run. Move an existing task into an assigned column to queue execution.
 
 Store tests cover migration, profile validation, sharing, editing, unassignment, deletion, restart persistence, and unchanged task state. Storybook interactions cover the Agents screen, custom model entry, assignment/removal, and failed-save draft retention.
+
+## Agent execution
+
+Install Codex CLI and sign in before running Todai. Agents work in a separate `workspace/` folder, created automatically and ignored by this repository. To choose another directory, set `TODAI_WORKSPACE_PATH` (absolute paths or paths relative to Todai are accepted) and restart the app. For example:
+
+```sh
+TODAI_WORKSPACE_PATH=/path/to/project npm run dev
+```
+
+SQLite stays in `.todai/tasks.sqlite`, independently configurable with `TODAI_DB_PATH`. Use one database for a workspace and keep the app server running while agents work. This local scheduler is intended for a persistent Node.js process on macOS/Linux, not serverless hosting. Changing workspace settings while work is queued will direct pending work to the newly configured directory; finish the queue before changing the setting.
+
+Moving an existing task into a different column with an assigned agent queues one run. Creating a task, saving a profile, reloading, and dropping into the same column do not start runs. Runs snapshot the profile at queue time and read task details and earlier comments when starting. Codex receives the selected model, effort, instructions, and sandbox permissions, with interactive approvals disabled. Directories without a Git repository are supported.
+
+Only one run executes at a time; later runs wait in queue order. The board polls for statuses and comments every second. Success records a **Complete** state and a handover, without moving the task. Failures record a **Failed** state with details in a comment and allow the next run to start. Run history, timestamps, profile snapshots, and outcomes persist in SQLite. A restart marks abandoned work **Interrupted**, stops any surviving Codex process group before continuing the queue, and preserves workspace files. Completed and interrupted runs are never retried automatically.
+
+Queued/running tasks can be edited, but moving or deleting them is disabled until execution finishes. Ticket 04 adds active interruption and redirection.
+
+`npm test` covers queue ordering, profile snapshots, handover context, restart recovery, and launch/exit failures using temporary databases and controllable runners. **Tasks / Task board / Live execution** checks live handovers without losing an open editor draft.

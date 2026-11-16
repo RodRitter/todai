@@ -20,7 +20,7 @@ export function TaskCard({ task, isDragging = false, onEdit, onDragStart, onDrag
     <Card
       variant="compact"
       data-task-id={task.id}
-      draggable
+      draggable={task.agentStatus !== "Queued" && task.agentStatus !== "Running"}
       role="button"
       tabIndex={0}
       aria-label={`Edit ${task.title}, ${task.agentStatus}`}
