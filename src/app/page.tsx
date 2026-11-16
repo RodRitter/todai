@@ -1,4 +1,5 @@
-// Component development lives in Storybook. Product screens are intentionally deferred.
+import { PersistentTaskBoard } from '@/components/tasks/persistent-task-board';
+
 export default function Home() {
-  return null;
+  return <PersistentTaskBoard />;
 }

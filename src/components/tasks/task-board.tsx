@@ -1,0 +1,117 @@
+"use client";
+
+import { useRef, useState, type SetStateAction } from "react";
+import { Plus } from "lucide-react";
+import { AppShell } from "@/components/app-shell";
+import { Button } from "@/components/ui/button";
+import { useBoardMotion } from "@/hooks/use-board-motion";
+import { statuses, type Status, type Task } from "./task";
+import { TaskCard } from "./task-card";
+import { TaskColumn } from "./task-column";
+import { TaskEditor } from "./task-editor";
+
+export function TaskBoard({ initialTasks = [], persistence }: {
+  initialTasks?: Task[];
+  persistence?: { save: (task: Task) => Promise<Task>; delete: (id: string) => Promise<void> };
+}) {
+  const saving = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [tasks, setTasks] = useState(initialTasks);
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Task | null>(null);
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [dropColumn, setDropColumn] = useState<Status | null>(null);
+  const { boardRef, capturePositions } = useBoardMotion(tasks);
+
+  function updateTasks(update: SetStateAction<Task[]>) {
+    capturePositions();
+    setTasks(update);
+  }
+
+  async function mutate(operation: () => Promise<void>) {
+    if (saving.current) throw new Error('Wait for the current save to finish.');
+    saving.current = true;
+    setBusy(true);
+    setError('');
+    try { await operation(); }
+    finally { saving.current = false; setBusy(false); }
+  }
+
+  function saveTask(task: Task) {
+    return mutate(async () => {
+      const saved = persistence ? await persistence.save(task) : task;
+      updateTasks(current => current.some(item => item.id === saved.id)
+        ? current.map(item => item.id === saved.id ? saved : item) : [...current, saved]);
+    });
+  }
+
+  function deleteTask(id: string) {
+    return mutate(async () => {
+      await persistence?.delete(id);
+      updateTasks(current => current.filter(task => task.id !== id));
+    });
+  }
+
+  function openEditor(task: Task | null = null) {
+    setEditing(task);
+    setOpen(true);
+  }
+
+  function endDrag() {
+    setDraggedTaskId(null);
+    setDropColumn(null);
+  }
+
+  return (
+    <AppShell headerActions={
+      <Button size="sm" disabled={busy} onClick={() => openEditor()}><Plus /> New task</Button>
+    }>
+      <main id="task-board" className="p-4 md:p-8" aria-label="Task board" tabIndex={-1}>
+        {error && <p role="alert" className="text-destructive mb-4">{error}</p>}
+        {busy && <p role="status" className="mb-4">Saving…</p>}
+        <div ref={boardRef} className="grid items-start gap-6 md:grid-cols-2 xl:grid-cols-4">
+          {statuses.map((column) => {
+            const columnTasks = tasks.filter((task) => task.status === column);
+            return (
+              <TaskColumn
+                key={column}
+                status={column}
+                isEmpty={columnTasks.length === 0}
+                isDropTarget={dropColumn === column}
+                canDrop={!busy && draggedTaskId !== null}
+                onDragOver={() => setDropColumn(column)}
+                onDragLeave={() => setDropColumn(null)}
+                onDrop={() => {
+                  const task = tasks.find(item => item.id === draggedTaskId);
+                  if (task && !saving.current) void saveTask({ ...task, status: column })
+                    .catch(() => setError('Could not confirm the move was saved. Try again or reload to check its saved column.'));
+                  endDrag();
+                }}
+              >
+                {columnTasks.map((task) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    isDragging={draggedTaskId === task.id}
+                    onEdit={(task) => { if (!busy) openEditor(task); }}
+                    onDragStart={(dragged) => setDraggedTaskId(dragged.id)}
+                    onDragEnd={endDrag}
+                  />
+                ))}
+              </TaskColumn>
+            );
+          })}
+        </div>
+        <TaskEditor
+          key={editing?.id ?? "new"}
+          open={open}
+          task={editing}
+          onOpenChange={setOpen}
+          onSave={saveTask}
+          onDelete={deleteTask}
+        />
+      </main>
+    </AppShell>
+  );
+}

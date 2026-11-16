@@ -1,59 +1,48 @@
 # Todai
 
-Component foundation for the local agent task manager described in [the MVP plan](docs/todai-plan.md). This bootstrap contains Next.js, TypeScript, Tailwind CSS, shadcn/ui primitives, and Storybook. Product screens, storage, and the worker are deferred; the `/` route intentionally renders nothing.
+A local task-board prototype built with Next.js, TypeScript, Tailwind CSS, and shadcn components. The `/` route and Storybook use the same reusable task components. The app persists tasks, column placement, and comments in local SQLite. Storybook examples keep their state in memory.
 
 ## Getting started
 
 Use Node.js 24 LTS (`nvm use`) and npm.
 
 ```sh
-npm install
+npm ci
 npm run storybook
 ```
 
-Open http://127.0.0.1:6006 for the component explorer. Stories include automatic documentation, editable controls, action logging, accessibility checks, and a light/dark toolbar selector. The same global CSS is used by the app and Storybook, including portaled dialogs.
+Open http://127.0.0.1:6006 for Storybook. Explore **Tasks** for agent statuses, cards, columns, the editor, and the interactive board, or **Layout** for the app shell. Stories include empty, dragging, long-description, and modal states, plus interaction checks that run when their stories are opened.
 
 ```sh
-npm run dev             # Next.js on http://127.0.0.1:3000 (empty root route)
+npm run dev             # Task board on http://127.0.0.1:3000
 npm run lint
-npm run typecheck       # App, components, stories, and Storybook configuration
-npm run typecheck:app   # App and components only
+npm run typecheck       # App, stories, and Storybook configuration
+npm run typecheck:app   # App only, excluding stories
 npm run build
-npm run start           # Serves an existing production build; no worker yet
-npm run build-storybook # Static component explorer in storybook-static/
+npm run start           # Serves an existing production build
+npm run build-storybook # Static Storybook in storybook-static/
 ```
 
-## Components
+## Adding components
 
-Source and colocated stories live in `src/components/ui/`:
+Create components under `src/components/` and colocate their `*.stories.tsx` files. Storybook discovers these stories automatically. Documentation and accessibility addons are installed; the preview loads the app's global CSS with no custom decorators, toolbar, or story ordering.
 
-- Actions: Button.
-- Forms: Input, Textarea, Label, Checkbox, Switch.
-- Feedback: Badge, Alert, Progress, Skeleton.
-- Navigation: Tabs.
-- Overlays: Dialog.
-- Primitives: Separator.
+The shadcn configuration in `components.json`, theme tokens in `src/app/globals.css`, and `cn` helper in `src/lib/utils.ts` remain available as a foundation for new components.
 
-Stories cover the stock variants and relevant disabled, invalid, checked, loading, or selected states. Example wrapper dimensions only give isolated primitives enough room in Storybook; they are not application layouts.
+## Task components
 
-## Design conventions
+`src/components/tasks/` contains the shared task types, sample data, and reusable components. `TaskBoard` owns the session state and composes `TaskColumn`, `TaskCard`, and `TaskEditor` inside `AppShell`. Cards use `AgentStatus` for the color-coded status and running spinner.
 
-Use the standard shadcn/ui New York style, neutral light/dark semantic colors, default radii, Lucide icons, and Radix primitives. There are no Todai-specific component variants or visual overrides. Tailwind's default system font stack keeps builds independent of remote font downloads.
+`TaskCard` exposes edit and drag callbacks; `TaskColumn` exposes drop callbacks. `TaskEditor` is controlled through `open`, `onOpenChange`, `onSave`, and `onDelete`. `TaskBoard` accepts `initialTasks` to seed a new board instance.
 
-Import primitives directly, for example `import { Button } from "@/components/ui/button"`. Keep new primitives aligned with shadcn; compose them when screens are introduced later. Configuration is in `components.json`, theme tokens are in `src/app/globals.css`, and `cn` is in `src/lib/utils.ts`.
+Use `npm run typecheck` to check both app and story types, and `npm run build-storybook` to generate the static component explorer. The Storybook build compiles interaction checks; it does not execute them.
 
-Add another standard component with:
+## Local persistence
 
-```sh
-npx shadcn@latest add select
-```
+Use Node.js 24 or newer. The app creates `.todai/tasks.sqlite` in the project directory on first access. This ignored directory contains local workspace data; preserve it across restarts. Set `TODAI_DB_PATH` to use a different SQLite file. No sample tasks are inserted in the app.
 
-Add a colocated `*.stories.tsx` file for its variants and accessible usage. Preserve the existing shadcn configuration rather than applying a new preset. Custom branding and overrides are a later step.
+Task placement is separate from agent execution: new tasks display **Not started**, including in the Done column. Task details display persisted comments in chronological order. Manual comment creation and agent execution belong to later tickets.
 
-References: [shadcn Next.js setup](https://ui.shadcn.com/docs/installation/next), [Storybook Next.js/Vite integration](https://storybook.js.org/docs/get-started/frameworks/nextjs-vite).
+Saves update the board after SQLite confirms them. A failed save keeps the editor open and retains the draft; retrying a new task uses the same ID. A failed move leaves the displayed board unchanged and offers retry or reload. Loading failures are displayed instead of an empty board.
 
-## Bootstrap environment limitation
-
-Verified locally: `npm run lint`, `npm run typecheck:app`, and `npm run build` passed. The explorer contains 54 stories across 13 primitives.
-
-The initial environment blocked npm network access. App dependencies were installed from the local cache, but Storybook packages were unavailable. Storybook is configured and declared in `package.json`; its installation, full-project type check, interactive preview, and static build still need verification after `npm install` with registry access. No incomplete lockfile is included. Generate and commit `package-lock.json` after that first successful install, then use `npm ci` for repeatable installs.
+Run `npm test` for SQLite persistence checks. These use temporary databases and cover create, edit, move, reopen, delete, and comment attachment/order. The Task editor stories include persisted comments and failed-save draft retention.
