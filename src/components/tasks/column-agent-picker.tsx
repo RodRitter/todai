@@ -15,7 +15,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { notifyOperation } from "@/components/ui/toast";
-import type { AgentProfile } from "@/domain/column-agent";
+import { executorLabel, type AgentProfile } from "@/domain/column-agent";
 import type { Status } from "@/domain/task";
 
 export function ColumnAgentPicker({
@@ -84,7 +84,7 @@ export function ColumnAgentPicker({
                 <option value="">No agent</option>
                 {agents.map((agent) => (
                   <option key={agent.id} value={agent.id}>
-                    {agent.name} · {agent.model}
+                    {agent.name} · {executorLabel(agent.tool)} · {agent.model}
                   </option>
                 ))}
               </NativeSelect>

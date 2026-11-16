@@ -1,3 +1,8 @@
+# TODO
+
+- Artifacts, documents and storage
+- Queries & answers in comments
+
 # Todai
 
 A local task board for managing work with AI coding agents. Organize tasks, assign agents to columns, and follow their progress from one workspace.
@@ -8,7 +13,7 @@ Built with Next.js, React, TypeScript, Tailwind CSS, and SQLite.
 
 - Drag-and-drop task board with customizable columns.
 - Markdown task descriptions and agent handover comments.
-- Reusable Codex agent profiles with model, effort, instructions, and sandbox settings.
+- Reusable Codex CLI and Claude Code profiles with tool-specific model, effort, instructions, and permissions.
 - Queued agent execution with live status updates and persisted run history.
 - Optional auto-workflow to move tasks to the next column after a successful run.
 - JSON import and export of agents, columns, and their assignments.
@@ -16,7 +21,7 @@ Built with Next.js, React, TypeScript, Tailwind CSS, and SQLite.
 
 ## Getting started
 
-Requires Node.js 24 or newer and npm. Agent execution also requires Codex CLI installed and signed in on the machine running Todai.
+Requires Node.js 24 or newer and npm. Agent execution also requires Codex CLI or Claude Code installed and signed in on the machine running Todai. Claude Code requires version 2.1.259 or newer.
 
 ```sh
 npm ci
@@ -25,10 +30,10 @@ npm run dev
 
 Open [localhost:3000](http://127.0.0.1:3000).
 
-1. In **Settings → General**, select your workspace directory and test the executor tools.
-2. In **Agents**, create a profile with your preferred model and permissions.
-3. Use a column’s settings button to assign an agent.
-4. Create a task in that column, or move a task into it, to queue a run.
+1. In **Settings → General**, select your workspace directory.
+2. In **Settings → Executors**, check tool status, test connections, and choose a default executor for new agents.
+3. In **Agents**, choose an executor, model, effort, and permissions.
+4. Assign an agent through a column’s settings, then create or move a task into that column to queue a run.
 
 New boards start with **To do**, **In progress**, **In review**, and **Done**. Customize them in **Settings → Board**.
 
@@ -40,7 +45,9 @@ Data is stored in `.todai/tasks.sqlite`. Set `TODAI_DB_PATH` to use another data
 
 The agent workspace is configured separately in Settings. Configuration exports include selected agents, columns, and assignments; they do not include tasks or workspace paths.
 
-Settings tabs can be linked directly with `/settings?tab=general` or `/settings?tab=board`.
+Settings tabs can be linked directly with `/settings?tab=general`, `/settings?tab=board`, or `/settings?tab=executors`.
+
+Changing the default executor only affects new agent forms. Existing profiles and queued runs retain their executor. Codex sandbox modes and Claude permission modes have different meanings; the agent editor shows the available choices for each tool. Claude runs deny unresolved permission prompts and report denied actions as failures. Connection tests make a small model request; refreshing installation and sign-in status does not.
 
 ## Development
 

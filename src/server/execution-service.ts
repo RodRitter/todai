@@ -51,7 +51,7 @@ export class ExecutionService {
         run.runnerIdentity &&
         processIdentity(run.runnerPid) === run.runnerIdentity
       ) {
-        // Codex and its commands share a process group. Stop orphaned work before claiming another run.
+        // The executor and its commands share a process group. Stop orphaned work before claiming another run.
         try {
           process.kill(-run.runnerPid, "SIGKILL");
         } catch (error) {
@@ -64,7 +64,7 @@ export class ExecutionService {
         )
           await setTimeout(50);
         if (processExists(-run.runnerPid))
-          throw new Error("Waiting for the previous Codex process to stop.");
+          throw new Error("Waiting for the previous agent process to stop.");
       }
       this.store.finishRun(
         run.id,

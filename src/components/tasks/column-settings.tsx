@@ -37,10 +37,12 @@ export function ColumnSettings({
   rename,
   remove,
   workspaceSettings,
+  executorSettings,
   tab,
   onTabChange,
 }: {
-  tab?: "general" | "board";
+  tab?: "general" | "board" | "executors";
+  executorSettings?: ReactNode;
   onTabChange?: (value: string) => void;
   workspaceSettings?: ReactNode;
   initialColumns: string[];
@@ -120,10 +122,12 @@ export function ColumnSettings({
           <TabsList aria-label="Settings sections">
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="board">Board</TabsTrigger>
+            {executorSettings && <TabsTrigger value="executors">Executors</TabsTrigger>}
           </TabsList>
           <TabsContent value="general" forceMount className="space-y-8">
             {workspaceSettings}
           </TabsContent>
+          {executorSettings && <TabsContent value="executors" forceMount>{executorSettings}</TabsContent>}
           <TabsContent value="board" forceMount>
             <section className="space-y-4" aria-labelledby="columns-heading">
               <div>

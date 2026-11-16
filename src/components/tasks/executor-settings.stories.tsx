@@ -6,6 +6,11 @@ const meta = {
   component: ExecutorSettings,
   tags: ["autodocs"],
   args: {
+    load: async () => ({ defaultExecutor: "codex", statuses: [
+      { tool: "codex", installed: true, signedIn: true, message: "Installed and signed in." },
+      { tool: "claude", installed: false, signedIn: null, message: "Install Claude Code and sign in to connect." },
+    ] }),
+    save: async (defaultExecutor) => ({ defaultExecutor }),
     test: async () => ({ message: "Executor test passed." }),
   },
 } satisfies Meta<typeof ExecutorSettings>;

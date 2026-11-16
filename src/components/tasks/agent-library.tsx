@@ -8,13 +8,17 @@ import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { Button } from "@/components/ui/button";
 import { notifyOperation } from "@/components/ui/toast";
 import { AgentEditor } from "./agent-editor";
-import type { AgentProfile, ColumnAssignment } from "@/domain/column-agent";
+import { executorLabel, type ExecutionTool, type ExecutorStatus, type AgentProfile, type ColumnAssignment } from "@/domain/column-agent";
 
 export function AgentLibrary({
   initialAgents = [],
   initialAssignments = [],
   persistence,
+  defaultExecutor = "codex",
+  executorStatuses = [],
 }: {
+  defaultExecutor?: ExecutionTool;
+  executorStatuses?: ExecutorStatus[];
   initialAgents?: AgentProfile[];
   initialAssignments?: ColumnAssignment[];
   persistence?: {
@@ -96,7 +100,8 @@ export function AgentLibrary({
                         {agent.name}
                       </h2>
                       <p className="pointer-events-none relative col-start-1 min-w-0 break-words text-xs text-muted-foreground md:col-start-auto">
-                        {agent.model} · {agent.effort}
+                        {executorLabel(agent.tool)} · {agent.model} · {agent.effort}
+                        {executorStatuses.some((status) => status.tool === agent.tool && (!status.installed || !status.signedIn)) && <span className="block">Executor unavailable — check Settings → Executors</span>}
                       </p>
                       <p className="pointer-events-none relative col-start-1 text-xs text-muted-foreground md:col-start-auto">
                         {columns.length ? columns.join(", ") : "Unassigned"}
@@ -128,6 +133,8 @@ export function AgentLibrary({
         {editing !== undefined && (
           <AgentEditor
             agent={editing ?? undefined}
+            defaultExecutor={defaultExecutor}
+            executorStatuses={executorStatuses}
             onClose={() => setEditing(undefined)}
             onSave={async (agent) => {
               const saved = persistence ? await persistence.save(agent) : agent;

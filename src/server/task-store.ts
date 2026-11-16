@@ -3,6 +3,7 @@ import { initializeSchema } from "./schema.ts";
 import {
   AgentValidationError,
   parseAgentProfile,
+  parseExecutionTool,
   type AgentProfile,
   type ColumnAssignment,
 } from "../domain/column-agent.ts";
@@ -41,6 +42,17 @@ export class TaskStore {
     mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
     initializeSchema(this.db);
+  }
+
+  getDefaultExecutor() {
+    const value = this.db.prepare("SELECT value FROM settings WHERE key = 'defaultExecutor'").get()?.value;
+    return value === undefined ? "codex" as const : parseExecutionTool(value);
+  }
+
+  setDefaultExecutor(value: unknown) {
+    const tool = parseExecutionTool(value);
+    this.db.prepare("INSERT INTO settings (key, value) VALUES ('defaultExecutor', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(tool);
+    return tool;
   }
 
   getWorkspacePath(): string | undefined {

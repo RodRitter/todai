@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,27 +20,33 @@ import { Textarea } from "@/components/ui/textarea";
 import { notifyOperation } from "@/components/ui/toast";
 import {
   AgentValidationError,
-  effortLevels,
   executionTools,
   parseAgentProfile,
   type AgentProfile,
+  type ExecutionTool,
+  type ExecutorStatus,
 } from "@/domain/column-agent";
 
 export function AgentEditor({
   agent,
-  onClose,
+  defaultExecutor = "codex",
+  executorStatuses = [],  onClose,
   onSave,
 }: {
   agent?: AgentProfile;
+  defaultExecutor?: ExecutionTool;
+  executorStatuses?: ExecutorStatus[];
   onClose: () => void;
   onSave: (agent: AgentProfile) => Promise<void>;
 }) {
   const [selectedTool, setSelectedTool] = useState(
     () =>
-      executionTools.find((tool) => tool.value === agent?.tool) ??
+      executionTools.find((tool) => tool.value === (agent?.tool ?? defaultExecutor)) ??
       executionTools[0],
   );
   const [model, setModel] = useState(agent?.model ?? "");
+  const [effort, setEffort] = useState<AgentProfile["effort"]>(agent?.effort ?? "medium");
+  const [permissions, setPermissions] = useState<AgentProfile["permissions"]>(agent?.permissions ?? selectedTool.defaultPermissions);
   const draftId = useRef<string | null>(null);
   const saving = useRef(false);
   const [busy, setBusy] = useState(false);
@@ -133,6 +140,8 @@ export function AgentEditor({
                     if (nextTool && nextTool.value !== selectedTool.value) {
                       setSelectedTool(nextTool);
                       setModel("");
+                      setEffort("medium");
+                      setPermissions(nextTool.defaultPermissions);
                       setError(null);
                     }
                   }}
@@ -178,9 +187,10 @@ export function AgentEditor({
                 <NativeSelect
                   id="agent-effort"
                   name="effort"
-                  defaultValue={agent?.effort ?? "medium"}
+                  value={effort}
+                  onChange={(event) => setEffort(event.target.value as AgentProfile["effort"])}
                 >
-                  {effortLevels.map((effort) => (
+                  {selectedTool.efforts.map((effort) => (
                     <option key={effort}>{effort}</option>
                   ))}
                 </NativeSelect>
@@ -199,15 +209,16 @@ export function AgentEditor({
               <NativeSelect
                 id="agent-permissions"
                 name="permissions"
-                defaultValue={agent?.permissions ?? "workspace-write"}
+                value={permissions}
+                onChange={(event) => setPermissions(event.target.value as AgentProfile["permissions"])}
+                aria-describedby="agent-permissions-help"
               >
-                <option value="read-only">Read only</option>
-                <option value="workspace-write">Write to workspace</option>
-                <option value="danger-full-access">
-                  Full access (no sandbox)
-                </option>
+                {selectedTool.permissions.map((mode) => <option key={mode.value} value={mode.value}>{mode.label}</option>)}
               </NativeSelect>
             </div>
+            <p id="agent-permissions-help" className="text-xs text-muted-foreground">{selectedTool.permissionHelp}</p>
+            {executorStatuses.filter((status) => status.tool === selectedTool.value && (!status.installed || !status.signedIn)).map((status) => <p key={status.tool} className="text-sm text-muted-foreground">{status.message}</p>)}
+            <Link href="/settings?tab=executors" className="text-sm underline">Check executor availability in Settings</Link>
             {error && !error.field && (
               <p role="alert" className="text-sm text-destructive">
                 {error.message}

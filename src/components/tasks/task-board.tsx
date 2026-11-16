@@ -12,7 +12,7 @@ import { TaskCard } from "./task-card";
 import { TaskColumn } from "./task-column";
 import { ColumnAgentPicker } from "./column-agent-picker";
 import { AgentEditor } from "./agent-editor";
-import type { AgentProfile, ColumnAssignment } from "@/domain/column-agent";
+import { executorLabel, type AgentProfile, type ColumnAssignment } from "@/domain/column-agent";
 import { TaskEditor } from "./task-editor";
 
 export function TaskBoard({
@@ -171,7 +171,7 @@ export function TaskBoard({
               <TaskColumn
                 key={column}
                 status={column}
-                agentName={agent?.name}
+                agentName={agent ? `${agent.name} · ${executorLabel(agent.tool)}` : undefined}
                 onEditAgent={agent ? () => setEditingAgent(agent) : undefined}
                 onConfigureAgent={() => setConfiguringColumn(column)}
                 isEmpty={columnTasks.length === 0}

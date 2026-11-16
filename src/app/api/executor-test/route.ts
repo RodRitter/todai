@@ -1,18 +1,20 @@
-import { testExecutor } from "@/server/executor-test";
+import { testExecutorTool } from "@/server/executor-tools";
+import { AgentValidationError, parseExecutionTool } from "@/domain/column-agent";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 let active: Promise<{ message: string }> | undefined;
 
-export async function POST() {
+export async function POST(request: Request) {
   if (active)
     return Response.json(
       { error: "An executor test is already running. Wait for it to finish, then retry." },
       { status: 409 },
     );
   try {
-    active = testExecutor();
+    const tool = parseExecutionTool(new URL(request.url).searchParams.get("tool") ?? "codex");
+    active = testExecutorTool(tool);
     return Response.json(await active);
   } catch (error) {
     return Response.json(
@@ -21,7 +23,7 @@ export async function POST() {
           ? error.message
           : "Executor test failed unexpectedly. Check the app server logs and retry.",
       },
-      { status: 500 },
+      { status: error instanceof AgentValidationError ? 400 : 500 },
     );
   } finally {
     active = undefined;

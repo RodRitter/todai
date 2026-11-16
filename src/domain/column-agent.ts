@@ -4,6 +4,14 @@ export const executionTools = [
   {
     value: "codex",
     label: "Codex CLI",
+    efforts: ["low", "medium", "high", "xhigh"],
+    permissions: [
+      { value: "read-only", label: "Read only" },
+      { value: "workspace-write", label: "Write to workspace" },
+      { value: "danger-full-access", label: "Full access (no sandbox)" },
+    ],
+    defaultPermissions: "workspace-write",
+    permissionHelp: "Codex sandbox controls filesystem access. Interactive approvals are disabled.",
     // Suggestions from the local Codex catalog; custom model IDs are also accepted.
     models: [
       "gpt-6.1-sol",
@@ -16,23 +24,31 @@ export const executionTools = [
       "gpt-5.6-luna",
     ],
   },
+  {
+    value: "claude",
+    label: "Claude Code",
+    models: ["sonnet", "opus", "haiku"],
+    efforts: ["low", "medium", "high", "xhigh", "max"],
+    permissions: [
+      { value: "dontAsk", label: "Configured permissions (no prompts)" },
+      { value: "acceptEdits", label: "Accept file edits" },
+      { value: "auto", label: "Automatic permission review" },
+      { value: "bypassPermissions", label: "Bypass permission checks" },
+    ],
+    defaultPermissions: "dontAsk",
+    permissionHelp: "Claude permission modes are not a filesystem sandbox. Accept edits permits file changes; other commands need configured permissions. Unresolved approval requests are denied.",
+  },
 ] as const;
 export type ExecutionTool = (typeof executionTools)[number]["value"];
 
-export const effortLevels = ["low", "medium", "high", "xhigh"] as const;
-export const permissionModes = [
-  "read-only",
-  "workspace-write",
-  "danger-full-access",
-] as const;
 export type AgentProfile = {
   id: string;
   name: string;
   tool: ExecutionTool;
   model: string;
-  effort: (typeof effortLevels)[number];
+  effort: (typeof executionTools)[number]["efforts"][number];
   instructions: string;
-  permissions: (typeof permissionModes)[number];
+  permissions: (typeof executionTools)[number]["permissions"][number]["value"];
 };
 
 export class AgentValidationError extends Error {
@@ -61,13 +77,13 @@ export function parseAgentProfile(input: unknown): AgentProfile {
       `Enter a model supported by your ${tool.label} account.`,
       "model",
     );
-  if (!effortLevels.includes(agent.effort))
+  if (!(tool.efforts as readonly string[]).includes(agent.effort))
     throw new AgentValidationError(
-      "Choose an effort level: low, medium, high, or xhigh.",
+      `Choose an effort level supported by ${tool.label}: ${tool.efforts.join(", ")}.`,
     );
-  if (!permissionModes.includes(agent.permissions))
+  if (!tool.permissions.some((mode) => mode.value === agent.permissions))
     throw new AgentValidationError(
-      "Choose permissions: read-only, workspace-write, or danger-full-access.",
+      `Choose permissions supported by ${tool.label}.`,
     );
   if (typeof agent.instructions !== "string")
     throw new AgentValidationError(
@@ -85,3 +101,24 @@ export function parseAgentProfile(input: unknown): AgentProfile {
 }
 
 export type ColumnAssignment = { column: Status; agentId: string };
+
+export function parseExecutionTool(value: unknown): ExecutionTool {
+  const tool = executionTools.find((tool) => tool.value === value);
+  if (!tool) throw new AgentValidationError("Choose a supported executor.");
+  return tool.value;
+}
+
+export function executorLabel(tool: ExecutionTool) {
+  return executionTools.find((entry) => entry.value === tool)!.label;
+}
+
+export type ExecutorStatus = {
+  tool: ExecutionTool;
+  installed: boolean;
+  signedIn: boolean | null;
+  message: string;
+};
+export type ExecutorSettingsData = {
+  defaultExecutor: ExecutionTool;
+  statuses?: ExecutorStatus[];
+};

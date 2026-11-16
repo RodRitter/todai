@@ -10,9 +10,10 @@ import { ExecutorSettings } from "./executor-settings";
 import { ColumnSettings } from "./column-settings";
 import { AgentLibrary } from "./agent-library";
 import { TaskBoard } from "./task-board";
-import type { AgentProfile } from "@/domain/column-agent";
+import type { AgentProfile, ExecutionTool, ExecutorStatus } from "@/domain/column-agent";
 import {
   agentApi,
+  executorApi,
   columnApi,
   taskApi,
   type BoardSnapshot,
@@ -25,15 +26,19 @@ export function PersistentWorkspace({
 }) {
   const [board, setBoard] = useState<BoardSnapshot | null>(null);
   const [agents, setAgents] = useState<AgentProfile[] | null>(null);
+  const [executorStatuses, setExecutorStatuses] = useState<ExecutorStatus[]>([]);
+  const [defaultExecutor, setDefaultExecutor] = useState<ExecutionTool>("codex");
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let active = true;
     const id = toast.loading("Loading workspace…");
-    Promise.all([taskApi.list(), agentApi.list()])
-      .then(([board, agents]) => {
+    Promise.all([taskApi.list(), agentApi.list(), executorApi.get(screen === "agents")])
+      .then(([board, agents, settings]) => {
         if (active) {
           setBoard(board);
+          setDefaultExecutor(settings.defaultExecutor);
+          setExecutorStatuses(settings.statuses ?? []);
           setAgents(agents);
           toast.dismiss(id);
         }
@@ -51,7 +56,7 @@ export function PersistentWorkspace({
       active = false;
       toast.dismiss(id);
     };
-  }, [attempt]);
+  }, [attempt, screen]);
   if (!board || !agents)
     return (
       <main className="p-8" aria-busy={!failed}>
@@ -79,10 +84,10 @@ export function PersistentWorkspace({
             tasks.filter((task) => task.status === column).length,
           ]),
         )}
+        executorSettings={<ExecutorSettings />}
         workspaceSettings={
           <>
             <WorkspaceSettings />
-            <ExecutorSettings />
             <ConfigurationTransfer onImported={() => setAttempt((value) => value + 1)} />
           </>
         }
@@ -92,6 +97,8 @@ export function PersistentWorkspace({
   if (screen === "agents")
     return (
       <AgentLibrary
+        defaultExecutor={defaultExecutor}
+        executorStatuses={executorStatuses}
         initialAgents={agents}
         initialAssignments={assignments}
         persistence={agentApi}
@@ -112,7 +119,8 @@ export function PersistentWorkspace({
 
 function UrlColumnSettings(props: ComponentProps<typeof ColumnSettings>) {
   const searchParams = useSearchParams();
-  const tab = searchParams.get("tab") === "board" ? "board" : "general";
+  const requestedTab = searchParams.get("tab");
+  const tab = requestedTab === "board" || requestedTab === "executors" ? requestedTab : "general";
 
   return (
     <ColumnSettings

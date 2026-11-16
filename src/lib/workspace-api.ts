@@ -1,4 +1,4 @@
-import type { AgentProfile, ColumnAssignment } from "@/domain/column-agent";
+import type { AgentProfile, ColumnAssignment, ExecutionTool, ExecutorSettingsData } from "@/domain/column-agent";
 import type { Task } from "@/domain/task";
 
 export type BoardSnapshot = {
@@ -70,10 +70,12 @@ export const columnApi = {
 
 const settingsError = "Could not load workspace settings.";
 export const executorApi = {
-  test: async () => {
+  get: (status = false) => request<ExecutorSettingsData>(`/api/executors?status=${status}`),
+  save: (defaultExecutor: ExecutionTool) => request<ExecutorSettingsData>("/api/executors", { method: "PUT", body: { defaultExecutor } }),
+  test: async (tool: ExecutionTool = "codex") => {
     try {
       return await request<{ message: string }>(
-        "/api/executor-test",
+        `/api/executor-test?tool=${tool}`,
         { method: "POST" },
         "Executor test failed. Check the app server logs and retry.",
       );

@@ -176,3 +176,28 @@ export const KeyboardRowEditing: Story = {
     await expect(body.queryByRole("dialog")).not.toBeInTheDocument();
   },
 };
+
+export const DefaultExecutorAndToolSettings: Story = {
+  args: { defaultExecutor: "claude", initialAgents: [reviewer] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole("button", { name: "New agent" }));
+    let dialog = within(await body.findByRole("dialog"));
+    await expect(dialog.getByLabelText("Execution tool")).toHaveValue("claude");
+    await expect(dialog.getByLabelText("Permissions")).toHaveValue("dontAsk");
+    await userEvent.type(dialog.getByLabelText("Model"), "sonnet");
+    await userEvent.selectOptions(dialog.getByLabelText("Effort"), "max");
+    await userEvent.selectOptions(dialog.getByLabelText("Permissions"), "acceptEdits");
+    await userEvent.selectOptions(dialog.getByLabelText("Execution tool"), "codex");
+    await expect(dialog.getByLabelText("Model")).toHaveValue("");
+    await expect(dialog.getByLabelText("Effort")).toHaveValue("medium");
+    await expect(dialog.getByLabelText("Permissions")).toHaveValue("workspace-write");
+    await userEvent.click(dialog.getByRole("button", { name: "Cancel" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Edit Reviewer" }));
+    dialog = within(await body.findByRole("dialog"));
+    await expect(dialog.getByLabelText("Execution tool")).toHaveValue("codex");
+    await expect(dialog.getByLabelText("Permissions")).toHaveValue("read-only");
+    await userEvent.click(dialog.getByRole("button", { name: "Cancel" }));
+  },
+};

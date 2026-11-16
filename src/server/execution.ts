@@ -1,7 +1,7 @@
 import { executionWorkspace } from "./workspace-settings";
 import { openTaskStore } from "./database";
 import { ExecutionService } from "./execution-service";
-import { createCodexRunner } from "./codex-runner";
+import { createExecutorRunner } from "./executor-runner";
 
 type Scheduler = { run: () => Promise<void>; tick: () => void };
 const state = globalThis as typeof globalThis & {
@@ -12,7 +12,7 @@ const state = globalThis as typeof globalThis & {
 async function drainWorkspace() {
   const store = openTaskStore();
   try {
-    await new ExecutionService(store, createCodexRunner(), () =>
+    await new ExecutionService(store, createExecutorRunner(), () =>
       executionWorkspace(store),
     ).drain();
   } finally {
