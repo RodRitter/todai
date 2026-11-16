@@ -38,13 +38,12 @@ export function AgentLibrary({ initialAgents = [], initialAssignments = [], pers
 
   return <AppShell screen="agents" headerActions={<Button size="sm" disabled={busy} onClick={() => setEditing(null)}><Plus /> New agent</Button>}>
     <main className="p-4 md:p-8" aria-label="Agents">
-      <p className="mb-6 text-sm text-muted-foreground">Reusable agents for your board columns.</p>
       {agents.length ? <ul className="divide-y border-y">
         {agents.map(agent => {
           const columns = assignments.filter(item => item.agentId === agent.id).map(item => item.column);
           return <li key={agent.id}><section aria-label={agent.name} className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 py-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1fr)_auto]">
             <h2 className="col-start-1 min-w-0 break-words text-sm font-medium">{agent.name}</h2>
-            <p className="col-start-1 min-w-0 break-words text-xs text-muted-foreground md:col-start-auto">Codex CLI · {agent.model} · {agent.effort}</p>
+            <p className="col-start-1 min-w-0 break-words text-xs text-muted-foreground md:col-start-auto">{agent.model} · {agent.effort}</p>
             <p className="col-start-1 text-xs text-muted-foreground md:col-start-auto">{columns.length ? columns.join(', ') : 'Unassigned'}</p>
             <div className="col-start-2 row-start-1 row-span-3 flex gap-1 md:col-start-auto md:row-auto md:row-span-1">
               <Button size="sm" variant="ghost" aria-label="Edit agent" disabled={busy} onClick={() => setEditing(agent)}>Edit</Button>
@@ -53,7 +52,6 @@ export function AgentLibrary({ initialAgents = [], initialAssignments = [], pers
           </section></li>;
         })}
       </ul> : <div className="border-y py-6 text-sm text-muted-foreground">No agents yet. Create an agent to get started.</div>}
-      {agents.length > 0 && <p className="mt-3 text-xs text-muted-foreground">Deleting an agent also removes its column assignments.</p>}
       {editing !== undefined && <AgentEditor agent={editing ?? undefined} onClose={() => setEditing(undefined)} onSave={async agent => {
         const saved = persistence ? await persistence.save(agent) : agent;
         setAgents(current => current.some(item => item.id === saved.id)
