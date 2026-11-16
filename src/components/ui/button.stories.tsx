@@ -3,6 +3,8 @@ import { Button } from "./button";
 import { PlusIcon, Loader2Icon } from "lucide-react";
 import { fn } from "storybook/test";
 const meta = {
+  tags: ["autodocs"],
+  parameters: { layout: "centered" },
   title: "Actions/Button",
   component: Button,
   args: { children: "Button", onClick: fn() },
@@ -50,7 +52,7 @@ export const Loading: Story = {
     "aria-busy": true,
     children: (
       <>
-        <Loader2Icon className="animate-spin" /> Please wait
+        <Loader2Icon className="animate-spin motion-reduce:animate-none" /> Please wait
       </>
     ),
   },

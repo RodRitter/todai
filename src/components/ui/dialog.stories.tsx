@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Dialog } from "./dialog";
 import {
+  DialogPortal,
+  DialogOverlay,
   DialogTrigger,
   DialogContent,
   DialogHeader,
@@ -12,8 +14,11 @@ import {
 import { Button } from "./button";
 import { fn } from "storybook/test";
 const meta = {
+  tags: ["autodocs"],
+  parameters: { layout: "centered" },
   title: "Overlays/Dialog",
   component: Dialog,
+  subcomponents: { DialogPortal, DialogOverlay, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose },
   args: { onOpenChange: fn() },
   render: (args) => (
     <Dialog {...args}>
@@ -24,7 +29,7 @@ const meta = {
         <DialogHeader>
           <DialogTitle>Example dialog</DialogTitle>
           <DialogDescription>
-            A basic dialog with the default shadcn styling.
+            Review your changes before continuing.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

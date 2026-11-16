@@ -2,6 +2,8 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Label } from "./label";
 import { Input } from "./input";
 const meta = {
+  tags: ["autodocs"],
+  parameters: { layout: "centered" },
   title: "Forms/Label",
   component: Label,
   args: { children: "Label", htmlFor: "label-example" },
@@ -18,7 +20,7 @@ export const Default: Story = {
 };
 export const Disabled: Story = {
   render: (args) => (
-    <div className="grid w-80 max-w-full gap-2" data-disabled="true">
+    <div className="group grid w-80 max-w-full gap-2" data-disabled="true">
       <Label {...args} />
       <Input id={args.htmlFor} disabled />
     </div>
