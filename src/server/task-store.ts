@@ -11,6 +11,7 @@ export class PendingRunError extends Error {}
 export type AgentRun = {
   id: string; taskId: string; column: Task['status']; profile: AgentProfile;
   status: 'Queued' | 'Running' | 'Complete' | 'Failed' | 'Interrupted';
+  interruptionColumn?: Task['status'] | null;
   createdAt: string; startedAt: string | null; finishedAt: string | null;
   summary: string | null; ownerPid: number | null; runnerPid: number | null; ownerIdentity?: string | null; runnerIdentity?: string | null;
 };
@@ -60,7 +61,7 @@ export class TaskStore {
         `);
       }
       const runColumns = this.db.prepare('PRAGMA table_info(runs)').all();
-      for (const column of ['ownerIdentity', 'runnerIdentity']) {
+      for (const column of ['ownerIdentity', 'runnerIdentity', 'interruptionColumn']) {
         if (!runColumns.some(item => item.name === column)) this.db.exec(`ALTER TABLE runs ADD COLUMN ${column} TEXT`);
       }
       const columns = this.db.prepare('PRAGMA table_info(tasks)').all();
@@ -98,7 +99,14 @@ export class TaskStore {
     }
     return this.transaction(() => {
       const previous = this.list().find(item => item.id === task.id);
-      if (previous && previous.status !== task.status) this.assertIdle(task.id);
+      if (previous && previous.status !== task.status) {
+        this.db.prepare(`UPDATE runs SET status = 'Interrupted', finishedAt = ?, summary = ?
+          WHERE taskId = ? AND status = 'Queued'`).run(new Date().toISOString(), `Queued run cancelled because the task moved to ${task.status}.`, task.id);
+        this.db.prepare("UPDATE runs SET interruptionColumn = ? WHERE taskId = ? AND status = 'Running'").run(task.status, task.id);
+        this.db.prepare(`UPDATE tasks SET agentStatus = CASE
+          WHEN EXISTS (SELECT 1 FROM runs WHERE taskId = ? AND status = 'Running') THEN 'Running'
+          ELSE 'Not started' END WHERE id = ?`).run(task.id, task.id);
+      }
       this.db.prepare(`INSERT INTO tasks (id, title, description, status) VALUES (?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET title=excluded.title, description=excluded.description,
         status=excluded.status`).run(task.id, task.title.trim(), task.description, task.status);
@@ -144,6 +152,10 @@ export class TaskStore {
     });
   }
 
+  interruptionRequested(runId: string): boolean {
+    return Boolean(this.db.prepare('SELECT interruptionColumn FROM runs WHERE id = ?').get(runId)?.interruptionColumn);
+  }
+
   recordRunner(runId: string, pid: number) {
     this.db.prepare("UPDATE runs SET runnerPid = ?, runnerIdentity = ? WHERE id = ? AND status = 'Running'").run(pid, processIdentity(pid), runId);
   }
@@ -152,9 +164,15 @@ export class TaskStore {
     this.transaction(() => {
       const run = this.history().find(run => run.id === runId && run.status === 'Running');
       if (!run) return;
+      if (run.interruptionColumn) {
+        status = 'Interrupted';
+        summary = `Agent run interrupted because the task moved to ${run.interruptionColumn}. Workspace changes were preserved.`;
+      }
       const finishedAt = new Date().toISOString();
       this.db.prepare('UPDATE runs SET status = ?, finishedAt = ?, summary = ? WHERE id = ?').run(status, finishedAt, summary, runId);
-      this.db.prepare('UPDATE tasks SET agentStatus = ? WHERE id = ?').run(status, run.taskId);
+      this.db.prepare(`UPDATE tasks SET agentStatus = CASE
+        WHEN EXISTS (SELECT 1 FROM runs WHERE taskId = ? AND status = 'Queued') THEN 'Queued'
+        ELSE ? END WHERE id = ?`).run(run.taskId, status, run.taskId);
       this.addComment({ id: randomUUID(), taskId: run.taskId, body: summary, createdAt: finishedAt, authorName: run.profile.name });
     });
   }
@@ -168,7 +186,7 @@ export class TaskStore {
 
   private assertIdle(taskId: string) {
     if (this.db.prepare("SELECT id FROM runs WHERE taskId = ? AND status IN ('Queued', 'Running')").get(taskId)) {
-      throw new PendingRunError('Wait for this agent run to finish before moving or deleting the task.');
+      throw new PendingRunError('Wait for this agent run to finish before deleting the task.');
     }
   }
 

@@ -87,14 +87,19 @@ test('failed launches release the queue and later loops receive earlier handover
   } finally { f.cleanup(); }
 });
 
-test('pending tasks cannot move or disappear until execution ends', async () => {
+test('pending tasks can move but cannot disappear until execution ends', async () => {
   const f = fixture(async () => 'Done');
   try {
     const task = f.service.save({ id: 'one', title: 'Build', description: '', status: 'To do' });
     const queued = f.service.save({ ...task, status: 'In progress' });
-    assert.throws(() => f.service.save({ ...queued, status: 'Done' }), /Wait for/);
+    f.store.assignColumnAgent({ column: 'In review', agentId: 'builder' });
+    f.service.save({ ...queued, status: 'In review' });
+    f.service.save({ ...queued, status: 'Done' });
+    f.service.save({ ...queued, status: 'In review' });
+    assert.equal(f.service.history('one').filter(run => run.status === 'Queued').length, 1);
+    assert.equal(f.service.history('one').find(run => run.status === 'Queued')?.column, 'In review');
     assert.throws(() => f.service.delete(task.id), /Wait for/);
-    assert.equal(f.service.list()[0].status, 'In progress');
+    assert.equal(f.service.list()[0].status, 'In review');
     await f.service.drain();
     f.service.save({ ...queued, status: 'Done' });
     f.service.delete(task.id);
@@ -193,5 +198,69 @@ test('older handovers recover their agent name while unmatched comments keep an 
       assert.equal(comments.find(comment => comment.body === 'A saved handover')?.authorName, 'Builder');
       assert.equal(comments.find(comment => comment.id === 'unknown')?.authorName, null);
     } finally { reopened.close(); }
+  } finally { f.cleanup(); }
+});
+
+test('redirecting active work waits for exit, keeps only the latest destination, and ignores late success', async () => {
+  const started: string[] = [];
+  let exit!: (summary: string) => void;
+  let stopped!: () => void;
+  const stopRequested = new Promise<void>(resolve => { stopped = resolve; });
+  const contexts: string[][] = [];
+  const f = fixture(({ run, task, signal }) => {
+    started.push(`${task.id}:${run.column}`);
+    contexts.push(task.comments?.map(comment => comment.body) ?? []);
+    if (started.length === 1) {
+      signal.addEventListener('abort', stopped, { once: true });
+      return new Promise(resolve => { exit = resolve; });
+    }
+    return Promise.resolve('Replacement finished');
+  });
+  let draining: Promise<void> | undefined;
+  const otherStore = new TaskStore(join(f.directory, 'tasks.sqlite'));
+  try {
+    f.store.assignColumnAgent({ column: 'In review', agentId: 'builder' });
+    const task = f.service.save({ id: 'redirect', title: 'Build', description: '', status: 'In progress' });
+    draining = f.service.drain();
+    f.service.save({ ...task, status: 'In progress' });
+    assert.equal(f.service.history(task.id).length, 1);
+    // API requests use a separate connection from the scheduler.
+    otherStore.save({ ...task, status: 'In review' });
+    otherStore.save({ ...task, status: 'Done' });
+    otherStore.save({ ...task, status: 'In review' });
+    await Promise.race([stopRequested, new Promise((_, reject) => setTimeout(() => reject(new Error('Run was not stopped')), 1000).unref())]);
+    f.service.save({ id: 'waiting', title: 'Other work', description: '', status: 'In progress' });
+    await new ExecutionService(otherStore, async () => { throw new Error('overlap'); }, f.directory).drain();
+    assert.deepEqual(started, ['redirect:In progress']);
+    assert.equal(f.service.history(task.id).filter(run => run.status === 'Queued').length, 1);
+    exit('Late success must not become a handover');
+    await draining;
+    assert.deepEqual(started, ['redirect:In progress', 'redirect:In review', 'waiting:In progress']);
+    assert.equal(f.service.history(task.id)[0].status, 'Interrupted');
+    assert.match(contexts[1][0], /interrupted.*In review/);
+    assert.equal(f.service.list()[0].status, 'In review');
+    assert.equal(f.service.list()[0].agentStatus, 'Complete');
+    assert.equal(f.service.list()[0].comments?.some(comment => comment.body.includes('Late success')), false);
+    assert.equal(otherStore.list()[0].comments?.[0].body, contexts[1][0]);
+  } finally { exit?.('Cleanup'); await draining; otherStore.close(); f.cleanup(); }
+});
+
+test('moving away and back still interrupts, even when success arrives before cancellation polling', async () => {
+  let finish!: (summary: string) => void;
+  const f = fixture(() => new Promise(resolve => { finish = resolve; }));
+  try {
+    const task = f.service.save({ id: 'quick', title: 'Quick move', description: '', status: 'In progress' });
+    const draining = f.service.drain();
+    f.service.save({ ...task, status: 'Done' });
+    f.store.assignColumnAgent({ column: 'In progress', agentId: null });
+    f.service.save({ ...task, status: 'In progress' });
+    finish('Late result');
+    await draining;
+    assert.equal(f.service.list()[0].agentStatus, 'Interrupted');
+    assert.equal(f.service.history(task.id).length, 1);
+    assert.equal(f.service.history(task.id)[0].status, 'Interrupted');
+    assert.match(f.service.list()[0].comments![0].body, /moved to In progress/);
+    await f.service.drain();
+    assert.equal(f.service.history(task.id).length, 1);
   } finally { f.cleanup(); }
 });

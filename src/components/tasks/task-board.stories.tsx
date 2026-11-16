@@ -47,6 +47,7 @@ export const MoveCard: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const card = canvas.getByRole("button", { name: /^Edit Build the task board,/ });
+    await expect(card).toHaveAttribute('draggable', 'true');
     const target = canvas.getByRole("region", { name: "In review" });
     const dataTransfer = new DataTransfer();
     await fireEvent.dragStart(card, { dataTransfer });

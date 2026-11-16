@@ -3,7 +3,7 @@ import { setTimeout } from 'node:timers/promises';
 import type { TaskStore, AgentRun } from './task-store.ts';
 import type { Task } from '../components/tasks/task.ts';
 
-export type RunRequest = { run: AgentRun; task: Task; workspace: string; onStart: (pid: number) => void };
+export type RunRequest = { run: AgentRun; task: Task; workspace: string; signal: AbortSignal; onStart: (pid: number) => void };
 export type Runner = (request: RunRequest) => Promise<string>;
 
 export class ExecutionService {
@@ -35,14 +35,18 @@ export class ExecutionService {
       const run = this.store.claimRun();
       if (!run) return;
       const task = this.store.list().find(task => task.id === run.taskId)!;
+      const controller = new AbortController();
+      const checkInterruption = setInterval(() => {
+        if (this.store.interruptionRequested(run.id)) controller.abort();
+      }, 50);
       let summary: string;
       try {
-        summary = await this.runner({ run, task, workspace: this.workspace,
+        summary = await this.runner({ run, task, workspace: this.workspace, signal: controller.signal,
           onStart: pid => this.store.recordRunner(run.id, pid) });
       } catch (error) {
         this.store.finishRun(run.id, 'Failed', `Agent run failed: ${error instanceof Error ? error.message : 'Unknown execution error.'}`);
         continue;
-      }
+      } finally { clearInterval(checkInterruption); }
       this.store.finishRun(run.id, 'Complete', summary);
     }
   }

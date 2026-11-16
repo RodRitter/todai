@@ -109,11 +109,11 @@ export function TaskEditor({ open, task: editing = null, defaultStatus = "To do"
               <Label htmlFor="task-status" className="text-muted-foreground gap-2 leading-snug font-normal">
                 Status
               </Label>
-              <NativeSelect id="task-status" name="status" disabled={pendingRun} defaultValue={editing?.status ?? defaultStatus} className="bg-background dark:bg-background h-10 w-32 rounded-lg border-transparent shadow-none hover:bg-accent sm:w-40">
+              <NativeSelect id="task-status" name="status" defaultValue={editing?.status ?? defaultStatus} className="bg-background dark:bg-background h-10 w-32 rounded-lg border-transparent shadow-none hover:bg-accent sm:w-40">
                 {statuses.map((option) => <option key={option}>{option}</option>)}
               </NativeSelect>
             </div>
-            {pendingRun && <p className="px-1 text-xs text-muted-foreground">Wait for the agent run to finish before moving or deleting this task.</p>}
+            {pendingRun && <p className="px-1 text-xs text-muted-foreground">Moving this task stops its current run and queues work for the destination’s agent, if assigned. Deletion is available after execution stops.</p>}
           </div>
           {editing && <section aria-label="Comments" className="mt-8 space-y-5 border-t pt-6">
             <div className="flex items-center gap-2">

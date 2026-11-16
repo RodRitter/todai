@@ -81,9 +81,9 @@ Creating a task in a column with an assigned agent, or moving an existing task i
 
 Only one run executes at a time; later runs wait in queue order. The board polls for statuses and comments every second. Success records a **Complete** state and a handover, without moving the task. Failures record a **Failed** state with details in a comment and allow the next run to start. Run history, timestamps, profile snapshots, and outcomes persist in SQLite. A restart marks abandoned work **Interrupted**, stops any surviving Codex process group before continuing the queue, and preserves workspace files. Completed and interrupted runs are never retried automatically.
 
-Queued/running tasks can be edited, but moving or deleting them is disabled until execution finishes. Ticket 04 adds active interruption and redirection.
+Queued and running tasks can be moved by dragging their card or changing Status in the task editor. Moving a running task stops Codex and its child commands before any next run starts, preserves workspace files, and records an interruption comment naming the latest destination. Moving queued work replaces its pending run; rapid moves leave at most one queued run for the latest destination. A destination without an assigned agent starts no new work. Same-column drops leave execution unchanged. Deletion remains disabled while work is queued or running.
 
-`npm test` covers queue ordering, profile snapshots, handover context, restart recovery, and launch/exit failures using temporary databases and controllable runners. **Tasks / Task board / Live execution** checks live handovers without losing an open editor draft.
+`npm test` covers queue ordering, profile snapshots, handover context, restart recovery, interruption ordering, rapid redirection, late completion, preserved workspace files, and launch/exit failures using temporary databases and controllable runners. **Tasks / Task board / Live execution** checks live handovers without losing an open editor draft.
 
 ## Markdown content
 

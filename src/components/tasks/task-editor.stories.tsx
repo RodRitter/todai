@@ -182,3 +182,11 @@ export const FailedDescriptionSave: Story = {
     await expect(dialog.queryByRole('textbox', { name: 'Description' })).not.toBeInTheDocument();
   },
 };
+
+export const RedirectRunningTask: Story = {
+  args: { open: true, task: { ...exampleTasks[0], status: 'In progress', agentStatus: 'Running' } },
+};
+
+export const RedirectQueuedTask: Story = {
+  args: { open: true, task: { ...exampleTasks[0], status: 'In review', agentStatus: 'Queued' } },
+};
