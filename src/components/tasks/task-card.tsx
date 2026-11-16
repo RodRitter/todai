@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef } from "react";
-import { Bot } from "lucide-react";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { AgentStatus } from "./agent-status";
 import type { Task } from "./task";
@@ -24,7 +23,7 @@ export function TaskCard({ task, isDragging = false, onEdit, onDragStart, onDrag
       draggable
       role="button"
       tabIndex={0}
-      aria-label={`Edit ${task.title}, ${task.agentStatus}, ${task.owner}`}
+      aria-label={`Edit ${task.title}, ${task.agentStatus}`}
       aria-haspopup="dialog"
       className={`cursor-pointer outline-none transition-[box-shadow,border-color,opacity] duration-150 ease-out focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] active:cursor-grabbing motion-reduce:transition-none ${isDragging ? "opacity-40" : "hover:border-ring/40 hover:shadow-md"}`}
       onPointerDown={() => { didDrag.current = false; }}
@@ -51,12 +50,8 @@ export function TaskCard({ task, isDragging = false, onEdit, onDragStart, onDrag
           </CardDescription>
         )}
       </CardHeader>
-      <CardFooter className="grid grid-cols-2 gap-2 pt-3 text-xs">
+      <CardFooter className="pt-3 text-xs">
         <AgentStatus status={task.agentStatus} />
-        <span className="text-muted-foreground flex min-w-0 items-center justify-end gap-1.5">
-          <Bot className="size-3.5 shrink-0" aria-hidden="true" />
-          <span className="truncate">{task.owner}</span>
-        </span>
       </CardFooter>
     </Card>
   );

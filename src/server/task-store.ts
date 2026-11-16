@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { agentOwners, statuses, type Task, type TaskComment } from '../components/tasks/task.ts';
+import { statuses, type Task, type TaskComment } from '../components/tasks/task.ts';
 
 export class TaskStore {
   private db: DatabaseSync;
@@ -14,7 +14,7 @@ export class TaskStore {
       PRAGMA busy_timeout = 5000;
       CREATE TABLE IF NOT EXISTS tasks (
         id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL,
-        status TEXT NOT NULL, owner TEXT NOT NULL,
+        status TEXT NOT NULL,
         agentStatus TEXT NOT NULL DEFAULT 'Not started'
       );
       CREATE TABLE IF NOT EXISTS comments (
@@ -22,6 +22,17 @@ export class TaskStore {
         body TEXT NOT NULL, createdAt TEXT NOT NULL
       );
     `);
+    try {
+      this.db.exec('BEGIN IMMEDIATE');
+      const columns = this.db.prepare('PRAGMA table_info(tasks)').all();
+      if (columns.some(column => column.name === 'owner')) {
+        this.db.exec('ALTER TABLE tasks DROP COLUMN owner');
+      }
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.close();
+      throw error;
+    }
   }
 
   list(): Task[] {
@@ -33,12 +44,12 @@ export class TaskStore {
     if (!input || typeof input !== 'object') throw new Error('Invalid task.');
     const task = input as Task;
     if (typeof task.id !== 'string' || !task.id.trim() || typeof task.title !== 'string' || !task.title.trim() ||
-        typeof task.description !== 'string' || !statuses.includes(task.status) || !agentOwners.includes(task.owner)) {
+        typeof task.description !== 'string' || !statuses.includes(task.status)) {
       throw new Error('Enter a title and valid task properties.');
     }
-    this.db.prepare(`INSERT INTO tasks (id, title, description, status, owner) VALUES (?, ?, ?, ?, ?)
+    this.db.prepare(`INSERT INTO tasks (id, title, description, status) VALUES (?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET title=excluded.title, description=excluded.description,
-      status=excluded.status, owner=excluded.owner`).run(task.id, task.title.trim(), task.description, task.status, task.owner);
+      status=excluded.status`).run(task.id, task.title.trim(), task.description, task.status);
     return this.list().find(item => item.id === task.id)!;
   }
 

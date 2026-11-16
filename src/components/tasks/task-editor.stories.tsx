@@ -35,6 +35,7 @@ export const SaveNewTask: Story = {
   play: async ({ canvasElement, args }) => {
     await userEvent.click(within(canvasElement).getByRole("button", { name: "New task" }));
     const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await expect(dialog.queryByLabelText("Assignee")).not.toBeInTheDocument();
     await userEvent.type(dialog.getByLabelText("Title"), "Review the changes");
     await userEvent.selectOptions(dialog.getByLabelText("Status"), "In review");
     await userEvent.click(dialog.getByRole("button", { name: "Create task" }));

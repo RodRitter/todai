@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
-import { statuses, agentOwners, type Status, type Task } from "./task";
+import { statuses, type Status, type Task } from "./task";
 
 export type TaskEditorProps = {
   open: boolean;
@@ -43,14 +43,12 @@ export function TaskEditor({ open, task: editing = null, defaultStatus = "To do"
     }
     const status = statuses.find((value) => value === data.get("status")) ?? defaultStatus;
     const agentStatus = editing?.agentStatus ?? "Not started";
-    const owner = agentOwners.find((value) => value === data.get("owner")) ?? "Developer";
     void persist(() => onSave({
       id: editing?.id ?? (draftId.current ??= crypto.randomUUID()),
       title,
       description: String(data.get("description") ?? "").trim(),
       status,
       agentStatus,
-      owner,
       comments: editing?.comments ?? [],
     }));
   }
@@ -91,14 +89,6 @@ export function TaskEditor({ open, task: editing = null, defaultStatus = "To do"
               </Label>
               <NativeSelect id="task-status" name="status" defaultValue={editing?.status ?? defaultStatus} className="bg-background dark:bg-background h-10 w-32 rounded-lg border-transparent shadow-none hover:bg-accent sm:w-40">
                 {statuses.map((option) => <option key={option}>{option}</option>)}
-              </NativeSelect>
-            </div>
-            <div className="flex items-center justify-between gap-3 rounded-lg px-1 py-1.5">
-              <Label htmlFor="agent-owner" className="text-muted-foreground gap-2 leading-snug font-normal">
-                Assignee
-              </Label>
-              <NativeSelect id="agent-owner" name="owner" defaultValue={editing?.owner ?? "Developer"} className="bg-background dark:bg-background h-10 w-32 rounded-lg border-transparent shadow-none hover:bg-accent sm:w-40">
-                {agentOwners.map((option) => <option key={option}>{option}</option>)}
               </NativeSelect>
             </div>
           </div>
