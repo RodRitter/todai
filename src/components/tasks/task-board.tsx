@@ -65,11 +65,13 @@ export function TaskBoard({ initialTasks = [], persistence }: {
 
   return (
     <AppShell headerActions={
-      <Button size="sm" disabled={busy} onClick={() => openEditor()}><Plus /> New task</Button>
+      <div className="flex items-center gap-3">
+        {busy && <span role="status" className="sr-only text-muted-foreground text-sm sm:not-sr-only">Saving…</span>}
+        <Button size="sm" disabled={busy} onClick={() => openEditor()}><Plus /> New task</Button>
+      </div>
     }>
       <main id="task-board" className="p-4 md:p-8" aria-label="Task board" tabIndex={-1}>
         {error && <p role="alert" className="text-destructive mb-4">{error}</p>}
-        {busy && <p role="status" className="mb-4">Saving…</p>}
         <div ref={boardRef} className="grid items-start gap-6 md:grid-cols-2 xl:grid-cols-4">
           {statuses.map((column) => {
             const columnTasks = tasks.filter((task) => task.status === column);
