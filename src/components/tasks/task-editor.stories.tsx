@@ -52,8 +52,7 @@ export const InvalidTitle: Story = {
     await userEvent.click(within(canvasElement).getByRole("button", { name: "New task" }));
     const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
     await userEvent.type(dialog.getByLabelText("Title"), "   ");
-    await userEvent.click(dialog.getByRole("button", { name: "Create task" }));
-    await expect(dialog.getByText("Enter a task title.")).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Create task" })).toBeDisabled();
     await expect(args.onSave).not.toHaveBeenCalled();
   },
 };
@@ -146,8 +145,7 @@ export const MarkdownContent: Story = {
     await waitFor(() => expect(dialog.getByRole('heading', { name: 'Updated requirements' })).toBeVisible());
     await expect(dialog.queryByRole('textbox', { name: 'Description' })).not.toBeInTheDocument();
     await expect(args.onSave).toHaveBeenCalledWith(expect.objectContaining({ description: '## Updated requirements\n\n**Preserve** this source.' }));
-    await userEvent.click(dialog.getByRole('button', { name: 'Save changes' }));
-    await expect(args.onSave).toHaveBeenCalledWith(expect.objectContaining({ description: '## Updated requirements\n\n**Preserve** this source.' }));
+    await expect(dialog.getByRole('button', { name: 'Save changes' })).toBeDisabled();
   },
 };
 

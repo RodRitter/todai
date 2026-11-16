@@ -22,7 +22,11 @@ export type TaskEditorProps = {
   onDelete?: (id: string) => void | Promise<void>;
 };
 
-export function TaskEditor({ columns = statuses, open, task: editing = null, defaultStatus = "To do", onOpenChange, onSave, onDelete }: TaskEditorProps) {
+export function TaskEditor(props: TaskEditorProps) {
+  return <TaskEditorSession key={`${props.task?.id ?? 'new'}:${props.open}`} {...props} />;
+}
+
+function TaskEditorSession({ columns = statuses, open, task: editing = null, defaultStatus = "To do", onOpenChange, onSave, onDelete }: TaskEditorProps) {
   const pendingRun = editing?.agentStatus === "Queued" || editing?.agentStatus === "Running";
   const draftId = useRef<string | null>(null);
   const [titleError, setTitleError] = useState(false);
@@ -31,6 +35,13 @@ export function TaskEditor({ columns = statuses, open, task: editing = null, def
     ? selectedStatus : editing?.status ?? defaultStatus;
 
   const [busy, setBusy] = useState(false);
+  const [title, setTitle] = useState(editing?.title ?? '');
+  const [description, setDescription] = useState(editing?.description ?? '');
+  const [savedDescription, setSavedDescription] = useState(editing?.description ?? '');
+  const canSave = Boolean(title.trim()) && (!editing
+    || title.trim() !== editing.title.trim()
+    || description.trim() !== savedDescription.trim()
+    || currentStatus !== editing.status);
 
   async function persist(operation: () => void | Promise<void>, deleting = false) {
     setBusy(true);
@@ -50,6 +61,7 @@ export function TaskEditor({ columns = statuses, open, task: editing = null, def
 
   function saveTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy || !canSave) return;
     const data = new FormData(event.currentTarget);
     const title = String(data.get("title") ?? "").trim();
     if (!title) {
@@ -84,17 +96,17 @@ export function TaskEditor({ columns = statuses, open, task: editing = null, def
             <Input
               id="task-title"
               name="title"
-              defaultValue={editing?.title ?? ""}
+              value={title}
               required
               autoFocus
               aria-invalid={titleError}
               aria-describedby={titleError ? "title-error" : undefined}
-              onChange={() => setTitleError(false)}
+              onChange={event => { setTitle(event.target.value); setTitleError(false); }}
             />
             {titleError && <p id="title-error" className="text-destructive text-sm">Enter a task title.</p>}
           </div>
           <div className="space-y-2">
-            {editing ? <DescriptionField initialValue={editing.description} disabled={busy} onSave={async description => {
+            {editing ? <DescriptionField initialValue={editing.description} disabled={busy} onChange={setDescription} onSave={async description => {
               setBusy(true);
               try {
                 await notifyOperation(() => onSave({ ...editing, description }), {
@@ -102,10 +114,12 @@ export function TaskEditor({ columns = statuses, open, task: editing = null, def
                   success: 'Description saved.',
                   error: 'Could not save the description. Your draft is still open; try again.',
                 });
+                setSavedDescription(description);
+                setDescription(description);
               } finally { setBusy(false); }
             }} /> : <>
               <Label htmlFor="task-description">Description</Label>
-              <Textarea id="task-description" name="description" className="min-h-32 font-mono text-sm" aria-describedby="description-hint" />
+              <Textarea id="task-description" name="description" value={description} onChange={event => setDescription(event.target.value)} className="min-h-32 font-mono text-sm" aria-describedby="description-hint" />
               <p id="description-hint" className="text-muted-foreground text-xs">Markdown supported.</p>
             </>}
           </div>
@@ -126,7 +140,7 @@ export function TaskEditor({ columns = statuses, open, task: editing = null, def
               <h3 className="text-sm font-semibold">Comments</h3>
               <span className="text-muted-foreground text-xs tabular-nums">{editing.comments?.length ?? 0}</span>
             </div>
-            {editing.comments?.length ? <ol className="space-y-6">{editing.comments.map(comment => (
+            {editing.comments?.length ? <ol className="space-y-6">{[...editing.comments].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).map(comment => (
               <li key={comment.id} className="flex gap-3">
                 <div className="bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-full border text-xs font-semibold" aria-hidden="true">
                   {comment.authorName ? comment.authorName.trim().split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase() : <Bot className="size-4" />}
@@ -139,7 +153,7 @@ export function TaskEditor({ columns = statuses, open, task: editing = null, def
                     </time>
                   </div>
                   <div className="bg-muted/50 rounded-2xl rounded-tl-sm px-4 py-3">
-                    <Markdown>{comment.body}</Markdown>
+                    <CommentBody body={comment.body} />
                   </div>
                 </div>
               </li>
@@ -166,7 +180,7 @@ export function TaskEditor({ columns = statuses, open, task: editing = null, def
             )}
             <div className="flex items-center gap-1.5">
               <DialogClose asChild><Button type="button" variant="ghost" size="sm" className="text-muted-foreground px-2 text-xs">Cancel</Button></DialogClose>
-              <Button type="submit" size="sm" className="px-3 text-xs" aria-label={editing ? "Save changes" : "Create task"}>{editing ? "Save" : "Create task"}</Button>
+              <Button type="submit" size="sm" disabled={busy || !canSave} className="px-3 text-xs" aria-label={editing ? "Save changes" : "Create task"}>{editing ? "Save" : "Create task"}</Button>
             </div>
           </DialogFooter>
           </fieldset>
@@ -176,9 +190,32 @@ export function TaskEditor({ columns = statuses, open, task: editing = null, def
   );
 }
 
-function DescriptionField({ initialValue, disabled, onSave }: {
+function CommentBody({ body }: { body: string }) {
+  const isLong = body.length > 600 || body.split('\n').length > 8;
+
+  if (!isLong) return <Markdown>{body}</Markdown>;
+
+  return <div className="relative [&:has(details[open])>.comment-preview]:hidden [&:has(details[open])>.comment-fade]:hidden">
+    <div aria-hidden="true" className="comment-fade pointer-events-none absolute -inset-x-4 -bottom-3 h-12 rounded-b-2xl bg-linear-to-b from-transparent to-foreground/5" />
+    <div className="comment-preview mb-3 max-h-36 overflow-hidden">
+      <Markdown compact>{body.split('\n').slice(0, 6).join('\n')}</Markdown>
+    </div>
+    <details className="group/comment relative">
+    <summary className="w-fit cursor-pointer rounded-sm text-xs font-normal text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+      <span className="group-open/comment:hidden">Show full comment</span>
+      <span className="hidden group-open/comment:inline">Collapse comment</span>
+    </summary>
+    <div className="mt-3">
+      <Markdown>{body}</Markdown>
+    </div>
+    </details>
+  </div>;
+}
+
+function DescriptionField({ initialValue, disabled, onChange, onSave }: {
   initialValue: string;
   disabled: boolean;
+  onChange: (description: string) => void;
   onSave: (description: string) => Promise<void>;
 }) {
   const [description, setDescription] = useState(initialValue);
@@ -187,6 +224,7 @@ function DescriptionField({ initialValue, disabled, onSave }: {
 
   async function saveDescription() {
     const value = draft.trim();
+    if (disabled || value === description.trim()) return;
     try {
       await onSave(value);
       setDescription(value);
@@ -204,12 +242,12 @@ function DescriptionField({ initialValue, disabled, onSave }: {
     <Label htmlFor="task-description">Description</Label>
     <input type="hidden" name="description" value={isEditing ? draft : description} />
     {isEditing ? <div className="space-y-2">
-      <Textarea id="task-description" value={draft} onChange={event => setDraft(event.target.value)} autoFocus className="min-h-32 font-mono text-sm" aria-describedby="description-hint" />
+      <Textarea id="task-description" value={draft} onChange={event => { setDraft(event.target.value); onChange(event.target.value); }} autoFocus className="min-h-32 font-mono text-sm" aria-describedby="description-hint" />
       <div className="flex items-center justify-between gap-3">
         <p id="description-hint" className="text-muted-foreground text-xs">Markdown supported.</p>
         <div className="flex gap-1">
-          <Button type="button" size="sm" variant="ghost" aria-label="Cancel description edit" onClick={() => setIsEditing(false)}>Cancel</Button>
-          <Button type="button" size="sm" aria-label="Save description" onClick={() => { void saveDescription(); }}>Save</Button>
+          <Button type="button" size="sm" variant="ghost" aria-label="Cancel description edit" onClick={() => { setIsEditing(false); onChange(description); }}>Cancel</Button>
+          <Button type="button" size="sm" aria-label="Save description" disabled={disabled || draft.trim() === description.trim()} onClick={() => { void saveDescription(); }}>Save</Button>
         </div>
       </div>
     </div> : <div
