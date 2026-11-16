@@ -31,11 +31,21 @@ The shadcn configuration in `components.json`, theme tokens in `src/app/globals.
 
 ## Task components
 
-`src/components/tasks/` contains the shared task types, sample data, and reusable components. `TaskBoard` owns the session state and composes `TaskColumn`, `TaskCard`, and `TaskEditor` inside `AppShell`. Cards use `AgentStatus` for the color-coded status and running spinner.
+`src/components/tasks/` contains sample data and reusable components. Shared task and agent models live in `src/domain/`. `TaskBoard` owns the session state and composes `TaskColumn`, `TaskCard`, and `TaskEditor` inside `AppShell`. Cards use `AgentStatus` for the color-coded status and running spinner.
 
 `TaskCard` exposes edit and drag callbacks; `TaskColumn` exposes drop callbacks. `TaskEditor` is controlled through `open`, `onOpenChange`, `onSave`, and `onDelete`. `TaskBoard` accepts `initialTasks` to seed a new board instance.
 
 Use `npm run typecheck` to check both app and story types, and `npm run build-storybook` to generate the static component explorer. The Storybook build compiles interaction checks; it does not execute them.
+
+## Source organization
+
+- `src/app/`: pages, layout, styles, and HTTP route handlers.
+- `src/domain/`: task and agent types, defaults, and profile validation shared by the UI and server.
+- `src/components/tasks/`: board, editors, settings, and colocated stories. Description editing and comment rendering have their own components.
+- `src/components/ui/`: shared UI primitives and notification helpers.
+- `src/hooks/`: browser behavior such as board animations.
+- `src/lib/workspace-api.ts`: typed client requests for tasks, agents, columns, and workspace settings.
+- `src/server/`: SQLite persistence and agent execution. `schema.ts` owns schema initialization and legacy migrations; `task-store.ts` owns transactional operations.
 
 ## Local persistence
 

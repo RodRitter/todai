@@ -18,7 +18,17 @@ const meta = {
   parameters: { layout: "centered" },
   title: "Overlays/Dialog",
   component: Dialog,
-  subcomponents: { DialogPortal, DialogOverlay, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose },
+  subcomponents: {
+    DialogPortal,
+    DialogOverlay,
+    DialogTrigger,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+    DialogClose,
+  },
   args: { onOpenChange: fn() },
   render: (args) => (
     <Dialog {...args}>

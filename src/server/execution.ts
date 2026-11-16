@@ -1,8 +1,7 @@
-import { executionWorkspace } from './workspace-settings';
-import { resolve } from 'node:path';
-import { TaskStore } from './task-store';
-import { ExecutionService } from './execution-service';
-import { createCodexRunner } from './codex-runner';
+import { executionWorkspace } from "./workspace-settings";
+import { openTaskStore } from "./database";
+import { ExecutionService } from "./execution-service";
+import { createCodexRunner } from "./codex-runner";
 
 type Scheduler = { run: () => Promise<void>; tick: () => void };
 const state = globalThis as typeof globalThis & {
@@ -11,9 +10,14 @@ const state = globalThis as typeof globalThis & {
 };
 
 async function drainWorkspace() {
-  const store = new TaskStore(resolve(process.env.TODAI_DB_PATH ?? '.todai/tasks.sqlite'));
-  try { await new ExecutionService(store, createCodexRunner(), () => executionWorkspace(store)).drain(); }
-  finally { store.close(); }
+  const store = openTaskStore();
+  try {
+    await new ExecutionService(store, createCodexRunner(), () =>
+      executionWorkspace(store),
+    ).drain();
+  } finally {
+    store.close();
+  }
 }
 
 export function execution() {
@@ -29,9 +33,14 @@ export function execution() {
       tick: () => {
         if (draining) return;
         draining = true;
-        void Promise.resolve().then(() => scheduler.run())
-          .catch(error => console.error('Could not advance the agent queue:', error))
-          .finally(() => { draining = false; });
+        void Promise.resolve()
+          .then(() => scheduler.run())
+          .catch((error) =>
+            console.error("Could not advance the agent queue:", error),
+          )
+          .finally(() => {
+            draining = false;
+          });
       },
     };
     state.todaiScheduler = scheduler;

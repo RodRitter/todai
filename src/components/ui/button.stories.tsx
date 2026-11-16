@@ -52,7 +52,8 @@ export const Loading: Story = {
     "aria-busy": true,
     children: (
       <>
-        <Loader2Icon className="animate-spin motion-reduce:animate-none" /> Please wait
+        <Loader2Icon className="animate-spin motion-reduce:animate-none" />{" "}
+        Please wait
       </>
     ),
   },

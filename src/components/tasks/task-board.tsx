@@ -5,29 +5,47 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { notifyOperation, toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
+import type { BoardSnapshot } from "@/lib/workspace-api";
 import { useBoardMotion } from "@/hooks/use-board-motion";
-import { statuses, type Status, type Task } from "./task";
+import { statuses, type Status, type Task } from "@/domain/task";
 import { TaskCard } from "./task-card";
 import { TaskColumn } from "./task-column";
 import { ColumnAgentPicker } from "./column-agent-picker";
 import { AgentEditor } from "./agent-editor";
-import type { AgentProfile, ColumnAssignment } from "./column-agent";
+import type { AgentProfile, ColumnAssignment } from "@/domain/column-agent";
 import { TaskEditor } from "./task-editor";
 
-export function TaskBoard({ columns: initialColumns = statuses, initialTasks = [], initialAgents = [], initialAssignments = [], assignAgent, saveAgent, persistence }: {
+export function TaskBoard({
+  columns: initialColumns = statuses,
+  initialTasks = [],
+  initialAgents = [],
+  initialAssignments = [],
+  assignAgent,
+  saveAgent,
+  persistence,
+}: {
   columns?: readonly string[];
   initialTasks?: Task[];
   initialAgents?: AgentProfile[];
   initialAssignments?: ColumnAssignment[];
-  assignAgent?: (column: Status, agentId: string | null) => Promise<ColumnAssignment | null>;
+  assignAgent?: (
+    column: Status,
+    agentId: string | null,
+  ) => Promise<ColumnAssignment | null>;
   saveAgent?: (agent: AgentProfile) => Promise<AgentProfile>;
-  persistence?: { list?: () => Promise<Task[] | { tasks: Task[]; columns: string[]; assignments: ColumnAssignment[] }>; save: (task: Task) => Promise<Task>; delete: (id: string) => Promise<void> };
+  persistence?: {
+    list?: () => Promise<Task[] | BoardSnapshot>;
+    save: (task: Task) => Promise<Task>;
+    delete: (id: string) => Promise<void>;
+  };
 }) {
   const [agents, setAgents] = useState(initialAgents);
   const [editingAgent, setEditingAgent] = useState<AgentProfile | null>(null);
   const [columns, setColumns] = useState(initialColumns);
   const [assignments, setAssignments] = useState(initialAssignments);
-  const [configuringColumn, setConfiguringColumn] = useState<Status | null>(null);
+  const [configuringColumn, setConfiguringColumn] = useState<Status | null>(
+    null,
+  );
   const saving = useRef(false);
   const revision = useRef(0);
   const [busy, setBusy] = useState(false);
@@ -56,13 +74,26 @@ export function TaskBoard({ columns: initialColumns = statuses, initialTasks = [
             setAssignments(latest.assignments);
           }
         }
-        if (active && errorToast !== undefined) { toast.dismiss(errorToast); errorToast = undefined; }
+        if (active && errorToast !== undefined) {
+          toast.dismiss(errorToast);
+          errorToast = undefined;
+        }
       } catch {
-        if (active && errorToast === undefined) errorToast = toast.error('Live task updates are unavailable. Retrying…', { duration: Infinity });
-      } finally { if (active) timer = setTimeout(poll, 1000); }
+        if (active && errorToast === undefined)
+          errorToast = toast.error(
+            "Live task updates are unavailable. Retrying…",
+            { duration: Infinity },
+          );
+      } finally {
+        if (active) timer = setTimeout(poll, 1000);
+      }
     }
     timer = setTimeout(poll, 1000);
-    return () => { active = false; clearTimeout(timer); if (errorToast !== undefined) toast.dismiss(errorToast); };
+    return () => {
+      active = false;
+      clearTimeout(timer);
+      if (errorToast !== undefined) toast.dismiss(errorToast);
+    };
   }, [refresh]);
 
   function updateTasks(update: SetStateAction<Task[]>) {
@@ -71,26 +102,33 @@ export function TaskBoard({ columns: initialColumns = statuses, initialTasks = [
   }
 
   async function mutate(operation: () => Promise<void>) {
-    if (saving.current) throw new Error('Wait for the current save to finish.');
+    if (saving.current) throw new Error("Wait for the current save to finish.");
     revision.current++;
     saving.current = true;
     setBusy(true);
-    try { await operation(); }
-    finally { saving.current = false; setBusy(false); }
+    try {
+      await operation();
+    } finally {
+      saving.current = false;
+      setBusy(false);
+    }
   }
 
   function saveTask(task: Task) {
     return mutate(async () => {
       const saved = persistence ? await persistence.save(task) : task;
-      updateTasks(current => current.some(item => item.id === saved.id)
-        ? current.map(item => item.id === saved.id ? saved : item) : [...current, saved]);
+      updateTasks((current) =>
+        current.some((item) => item.id === saved.id)
+          ? current.map((item) => (item.id === saved.id ? saved : item))
+          : [...current, saved],
+      );
     });
   }
 
   function deleteTask(id: string) {
     return mutate(async () => {
       await persistence?.delete(id);
-      updateTasks(current => current.filter(task => task.id !== id));
+      updateTasks((current) => current.filter((task) => task.id !== id));
     });
   }
 
@@ -105,14 +143,30 @@ export function TaskBoard({ columns: initialColumns = statuses, initialTasks = [
   }
 
   return (
-    <AppShell headerActions={
-      <Button size="sm" disabled={busy} onClick={() => openEditor()}><Plus /> New task</Button>
-    }>
-      <main id="task-board" className="flex min-h-[calc(100dvh-3.5rem)] flex-col p-4 md:p-8" aria-label="Task board" tabIndex={-1}>
-        <div ref={boardRef} className="grid flex-1 grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] items-stretch gap-2">
+    <AppShell
+      headerActions={
+        <Button size="sm" disabled={busy} onClick={() => openEditor()}>
+          <Plus /> New task
+        </Button>
+      }
+    >
+      <main
+        id="task-board"
+        className="flex min-h-[calc(100dvh-3.5rem)] flex-col p-4 md:p-8"
+        aria-label="Task board"
+        tabIndex={-1}
+      >
+        <div
+          ref={boardRef}
+          className="grid flex-1 grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] items-stretch gap-2"
+        >
           {columns.map((column) => {
             const columnTasks = tasks.filter((task) => task.status === column);
-            const agent = agents.find(agent => agent.id === assignments.find(item => item.column === column)?.agentId);
+            const agent = agents.find(
+              (agent) =>
+                agent.id ===
+                assignments.find((item) => item.column === column)?.agentId,
+            );
             return (
               <TaskColumn
                 key={column}
@@ -126,12 +180,17 @@ export function TaskBoard({ columns: initialColumns = statuses, initialTasks = [
                 onDragOver={() => setDropColumn(column)}
                 onDragLeave={() => setDropColumn(null)}
                 onDrop={() => {
-                  const task = tasks.find(item => item.id === draggedTaskId);
-                  if (task && task.status !== column && !saving.current) void notifyOperation(() => saveTask({ ...task, status: column }), {
-                    loading: "Moving task…",
-                    success: `Task moved to ${column}.`,
-                    error: "Could not confirm the move was saved. Try again or reload to check its saved column.",
-                  }).catch(() => {});
+                  const task = tasks.find((item) => item.id === draggedTaskId);
+                  if (task && task.status !== column && !saving.current)
+                    void notifyOperation(
+                      () => saveTask({ ...task, status: column }),
+                      {
+                        loading: "Moving task…",
+                        success: `Task moved to ${column}.`,
+                        error:
+                          "Could not confirm the move was saved. Try again or reload to check its saved column.",
+                      },
+                    ).catch(() => {});
                   endDrag();
                 }}
               >
@@ -140,7 +199,9 @@ export function TaskBoard({ columns: initialColumns = statuses, initialTasks = [
                     key={task.id}
                     task={task}
                     isDragging={draggedTaskId === task.id}
-                    onEdit={(task) => { if (!busy) openEditor(task); }}
+                    onEdit={(task) => {
+                      if (!busy) openEditor(task);
+                    }}
                     onDragStart={(dragged) => setDraggedTaskId(dragged.id)}
                     onDragEnd={endDrag}
                   />
@@ -149,30 +210,56 @@ export function TaskBoard({ columns: initialColumns = statuses, initialTasks = [
             );
           })}
         </div>
-        {editingAgent && <AgentEditor
-          agent={editingAgent}
-          onClose={() => setEditingAgent(null)}
-          onSave={agent => mutate(async () => {
-            const saved = saveAgent ? await saveAgent(agent) : agent;
-            setAgents(current => current.map(item => item.id === saved.id ? saved : item));
-          })}
-        />}
-        {configuringColumn && <ColumnAgentPicker
-          column={configuringColumn}
-          agents={agents}
-          agentId={assignments.find(item => item.column === configuringColumn)?.agentId}
-          onClose={() => setConfiguringColumn(null)}
-          onSave={agentId => mutate(async () => {
-            const saved = assignAgent ? await assignAgent(configuringColumn, agentId) : agentId ? { column: configuringColumn, agentId } : null;
-            setAssignments(current => [...current.filter(item => item.column !== configuringColumn), ...(saved ? [saved] : [])]);
-          })}
-        />}
+        {editingAgent && (
+          <AgentEditor
+            agent={editingAgent}
+            onClose={() => setEditingAgent(null)}
+            onSave={(agent) =>
+              mutate(async () => {
+                const saved = saveAgent ? await saveAgent(agent) : agent;
+                setAgents((current) =>
+                  current.map((item) => (item.id === saved.id ? saved : item)),
+                );
+              })
+            }
+          />
+        )}
+        {configuringColumn && (
+          <ColumnAgentPicker
+            column={configuringColumn}
+            agents={agents}
+            agentId={
+              assignments.find((item) => item.column === configuringColumn)
+                ?.agentId
+            }
+            onClose={() => setConfiguringColumn(null)}
+            onSave={(agentId) =>
+              mutate(async () => {
+                const saved = assignAgent
+                  ? await assignAgent(configuringColumn, agentId)
+                  : agentId
+                    ? { column: configuringColumn, agentId }
+                    : null;
+                setAssignments((current) => [
+                  ...current.filter(
+                    (item) => item.column !== configuringColumn,
+                  ),
+                  ...(saved ? [saved] : []),
+                ]);
+              })
+            }
+          />
+        )}
         <TaskEditor
           key={editing?.id ?? "new"}
           columns={columns}
           defaultStatus={columns[0]}
           open={open}
-          task={editing ? tasks.find(task => task.id === editing.id) ?? editing : null}
+          task={
+            editing
+              ? (tasks.find((task) => task.id === editing.id) ?? editing)
+              : null
+          }
           onOpenChange={setOpen}
           onSave={saveTask}
           onDelete={deleteTask}

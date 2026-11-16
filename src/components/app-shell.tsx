@@ -5,7 +5,15 @@ import { useState, type ReactNode } from "react";
 import { Bot, LayoutGrid, PanelLeft, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export function AppShell({ children, headerActions, screen = "board" }: { children: ReactNode; headerActions?: ReactNode; screen?: "board" | "agents" | "settings" }) {
+export function AppShell({
+  children,
+  headerActions,
+  screen = "board",
+}: {
+  children: ReactNode;
+  headerActions?: ReactNode;
+  screen?: "board" | "agents" | "settings";
+}) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
@@ -17,26 +25,56 @@ export function AppShell({ children, headerActions, screen = "board" }: { childr
         inert={!sidebarOpen}
         className={`shrink-0 overflow-hidden transition-[width] duration-250 ease-in-out motion-reduce:transition-none ${sidebarOpen ? "w-16 md:w-48" : "w-0"}`}
       >
-        <div className={`h-full w-16 border-r bg-muted/40 transition-[transform,opacity] duration-250 ease-in-out motion-reduce:transition-none md:w-48 ${sidebarOpen ? "translate-x-0 opacity-100" : "-translate-x-4 opacity-0"}`}>
+        <div
+          className={`h-full w-16 border-r bg-muted/40 transition-[transform,opacity] duration-250 ease-in-out motion-reduce:transition-none md:w-48 ${sidebarOpen ? "translate-x-0 opacity-100" : "-translate-x-4 opacity-0"}`}
+        >
           <div className="flex h-14 items-center justify-center border-b px-4 md:justify-start">
-            <span className="font-semibold md:hidden" aria-label="Todai">T</span>
+            <span className="font-semibold md:hidden" aria-label="Todai">
+              T
+            </span>
             <span className="hidden font-semibold md:inline">Todai</span>
           </div>
           <nav className="p-3" aria-label="Main navigation">
-            <Button variant={screen === "board" ? "secondary" : "ghost"} className="w-full md:justify-start" asChild>
-              <Link href="/" aria-current={screen === "board" ? "page" : undefined} aria-label="Task board">
+            <Button
+              variant={screen === "board" ? "secondary" : "ghost"}
+              className="w-full md:justify-start"
+              asChild
+            >
+              <Link
+                href="/"
+                aria-current={screen === "board" ? "page" : undefined}
+                aria-label="Task board"
+              >
                 <LayoutGrid />
                 <span className="hidden md:inline">Board</span>
               </Link>
             </Button>
-            <Button variant={screen === "agents" ? "secondary" : "ghost"} className="mt-1 w-full md:justify-start" asChild>
-              <Link href="/agents" aria-current={screen === "agents" ? "page" : undefined} aria-label="Agents">
-                <Bot /><span className="hidden md:inline">Agents</span>
+            <Button
+              variant={screen === "agents" ? "secondary" : "ghost"}
+              className="mt-1 w-full md:justify-start"
+              asChild
+            >
+              <Link
+                href="/agents"
+                aria-current={screen === "agents" ? "page" : undefined}
+                aria-label="Agents"
+              >
+                <Bot />
+                <span className="hidden md:inline">Agents</span>
               </Link>
             </Button>
-            <Button variant={screen === "settings" ? "secondary" : "ghost"} className="mt-1 w-full md:justify-start" asChild>
-              <Link href="/settings" aria-current={screen === "settings" ? "page" : undefined} aria-label="Settings">
-                <Settings /><span className="hidden md:inline">Settings</span>
+            <Button
+              variant={screen === "settings" ? "secondary" : "ghost"}
+              className="mt-1 w-full md:justify-start"
+              asChild
+            >
+              <Link
+                href="/settings"
+                aria-current={screen === "settings" ? "page" : undefined}
+                aria-label="Settings"
+              >
+                <Settings />
+                <span className="hidden md:inline">Settings</span>
               </Link>
             </Button>
           </nav>
@@ -54,7 +92,13 @@ export function AppShell({ children, headerActions, screen = "board" }: { childr
           >
             <PanelLeft />
           </Button>
-          <h1 className="text-sm font-medium">{screen === "settings" ? "Settings" : screen === "agents" ? "Agents" : "Task board"}</h1>
+          <h1 className="text-sm font-medium">
+            {screen === "settings"
+              ? "Settings"
+              : screen === "agents"
+                ? "Agents"
+                : "Task board"}
+          </h1>
           <div className="ml-auto">{headerActions}</div>
         </header>
         {children}

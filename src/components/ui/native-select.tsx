@@ -13,7 +13,10 @@ function NativeSelect({ className, ...props }: React.ComponentProps<"select">) {
         )}
         {...props}
       />
-      <ChevronDownIcon className="text-muted-foreground pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 opacity-50" aria-hidden="true" />
+      <ChevronDownIcon
+        className="text-muted-foreground pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 opacity-50"
+        aria-hidden="true"
+      />
     </div>
   );
 }

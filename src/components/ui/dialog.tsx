@@ -58,14 +58,18 @@ function DialogContent({
         )}
         {...props}
         onInteractOutside={(event) => {
-          if (event.target instanceof Element && event.target.closest("[data-sonner-toaster]")) {
+          if (
+            event.target instanceof Element &&
+            event.target.closest("[data-sonner-toaster]")
+          ) {
             event.preventDefault();
           }
           onInteractOutside?.(event);
         }}
         onEscapeKeyDown={(event) => {
           onEscapeKeyDown?.(event);
-          if (!event.defaultPrevented && dismissLatestNotification()) event.preventDefault();
+          if (!event.defaultPrevented && dismissLatestNotification())
+            event.preventDefault();
         }}
       >
         {children}

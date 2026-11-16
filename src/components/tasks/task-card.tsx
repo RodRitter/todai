@@ -1,10 +1,16 @@
 "use client";
 
 import { useRef } from "react";
-import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Markdown } from "@/components/ui/markdown";
 import { AgentStatus } from "./agent-status";
-import type { Task } from "./task";
+import type { Task } from "@/domain/task";
 
 export type TaskCardProps = {
   task: Task;
@@ -14,7 +20,13 @@ export type TaskCardProps = {
   onDragEnd?: () => void;
 };
 
-export function TaskCard({ task, isDragging = false, onEdit, onDragStart, onDragEnd }: TaskCardProps) {
+export function TaskCard({
+  task,
+  isDragging = false,
+  onEdit,
+  onDragStart,
+  onDragEnd,
+}: TaskCardProps) {
   const didDrag = useRef(false);
 
   return (
@@ -27,8 +39,12 @@ export function TaskCard({ task, isDragging = false, onEdit, onDragStart, onDrag
       aria-label={`Edit ${task.title}, ${task.agentStatus}`}
       aria-haspopup="dialog"
       className={`cursor-pointer outline-none transition-[box-shadow,border-color,opacity] duration-150 ease-out focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] active:cursor-grabbing motion-reduce:transition-none ${isDragging ? "opacity-40" : "hover:border-ring/40 hover:shadow-md"}`}
-      onPointerDown={() => { didDrag.current = false; }}
-      onClick={() => { if (!isDragging && !didDrag.current) onEdit(task); }}
+      onPointerDown={() => {
+        didDrag.current = false;
+      }}
+      onClick={() => {
+        if (!isDragging && !didDrag.current) onEdit(task);
+      }}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();

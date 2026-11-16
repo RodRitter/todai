@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { AgentStatus } from "./agent-status";
-import { agentStatuses } from "./task";
+import { agentStatuses } from "@/domain/task";
 
 const meta = {
   title: "Tasks/Agent status",
