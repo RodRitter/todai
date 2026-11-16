@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, Plus } from 'lucide-react';
 import { AppShell } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { notifyOperation } from '@/components/ui/toast';
 import { Label } from '@/components/ui/label';
 
 export function ColumnSettings({ initialColumns, create, reorder }: {
@@ -16,20 +17,19 @@ export function ColumnSettings({ initialColumns, create, reorder }: {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const saving = useRef(false);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
 
   async function save(operation: () => Promise<string[]>, success: string, created = false) {
     if (saving.current) return;
     saving.current = true;
     setBusy(true);
-    setError('');
-    setMessage('');
     try {
-      setColumns(await operation());
+      setColumns(await notifyOperation(operation, {
+        loading: 'Saving columns…',
+        success,
+        error: 'Could not save columns. Use a unique name, or reload settings and try again.',
+      }));
       if (created) setName('');
-      setMessage(success);
-    } catch (error) { setError(error instanceof Error ? error.message : 'Could not save columns. Try again.'); }
+    } catch { /* Keep the draft and saved order; notifyOperation reports the failure. */ }
     finally { saving.current = false; setBusy(false); }
   }
 
@@ -66,8 +66,6 @@ export function ColumnSettings({ initialColumns, create, reorder }: {
             <Button type="submit" disabled={busy || !name.trim()}><Plus /> Add column</Button>
           </div>
         </form>
-        <p role="status" className="text-sm text-muted-foreground">{message}</p>
-        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       </section>
     </main>
   </AppShell>;
