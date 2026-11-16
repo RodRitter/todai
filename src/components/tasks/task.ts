@@ -23,4 +23,4 @@ export type Task = {
 };
 
 
-export type TaskComment = { id: string; taskId: string; body: string; createdAt: string };
+export type TaskComment = { id: string; taskId: string; body: string; createdAt: string; authorName?: string | null };

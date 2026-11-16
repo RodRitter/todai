@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, type FormEvent } from "react";
+import { Bot, MessageSquare } from "lucide-react";
 import { notifyOperation } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -63,7 +64,7 @@ export function TaskEditor({ open, task: editing = null, defaultStatus = "To do"
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!busy) { if (!nextOpen) draftId.current = null; setTitleError(false); onOpenChange(nextOpen); } }}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:p-6">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:max-w-3xl sm:p-8">
         <DialogHeader>
           <DialogTitle>{editing ? "Edit task" : "Create task"}</DialogTitle>
           <DialogDescription>
@@ -101,14 +102,33 @@ export function TaskEditor({ open, task: editing = null, defaultStatus = "To do"
             </div>
             {pendingRun && <p className="px-1 text-xs text-muted-foreground">Wait for the agent run to finish before moving or deleting this task.</p>}
           </div>
-          {editing && <section aria-label="Comments" className="space-y-2">
-            <h3 className="text-sm font-medium">Comments</h3>
-            {editing.comments?.length ? <ol className="space-y-3">{editing.comments.map(comment => (
-              <li key={comment.id} className="rounded-lg border p-3">
-                <time className="text-muted-foreground text-xs" dateTime={comment.createdAt}>{new Date(comment.createdAt).toLocaleString()}</time>
-                <p className="whitespace-pre-wrap break-words text-sm">{comment.body}</p>
+          {editing && <section aria-label="Comments" className="mt-8 space-y-5 border-t pt-6">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="text-muted-foreground size-4" aria-hidden="true" />
+              <h3 className="text-sm font-semibold">Comments</h3>
+              <span className="text-muted-foreground text-xs tabular-nums">{editing.comments?.length ?? 0}</span>
+            </div>
+            {editing.comments?.length ? <ol className="space-y-6">{editing.comments.map(comment => (
+              <li key={comment.id} className="flex gap-3">
+                <div className="bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-full border text-xs font-semibold" aria-hidden="true">
+                  {comment.authorName ? comment.authorName.trim().split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase() : <Bot className="size-4" />}
+                </div>
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="text-sm font-semibold wrap-anywhere">{comment.authorName || 'Agent'}</span>
+                    <time className="text-muted-foreground text-xs" dateTime={comment.createdAt} title={new Date(comment.createdAt).toLocaleString()}>
+                      {new Date(comment.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                    </time>
+                  </div>
+                  <div className="bg-muted/50 rounded-2xl rounded-tl-sm px-4 py-3">
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed wrap-anywhere">{comment.body}</p>
+                  </div>
+                </div>
               </li>
-            ))}</ol> : <p className="text-muted-foreground text-sm">No comments yet.</p>}
+            ))}</ol> : <div className="rounded-xl border border-dashed px-4 py-8 text-center">
+              <p className="text-muted-foreground text-sm">No comments yet.</p>
+              <p className="text-muted-foreground mt-1 text-xs">Agent updates and handovers will appear here.</p>
+            </div>}
           </section>}
           <DialogFooter className="flex-row flex-wrap items-center justify-end gap-2 pt-6">
             {editing && onDelete && (

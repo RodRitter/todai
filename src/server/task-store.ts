@@ -49,6 +49,16 @@ export class TaskStore {
     );`);
     try {
       this.db.exec('BEGIN IMMEDIATE');
+      const commentColumns = this.db.prepare('PRAGMA table_info(comments)').all();
+      if (!commentColumns.some(column => column.name === 'authorName')) {
+        this.db.exec(`ALTER TABLE comments ADD COLUMN authorName TEXT;
+          UPDATE comments SET authorName = (
+            SELECT json_extract(profile, '$.name') FROM runs
+            WHERE runs.taskId = comments.taskId AND runs.finishedAt = comments.createdAt AND runs.summary = comments.body
+          ) WHERE (SELECT COUNT(*) FROM runs
+            WHERE runs.taskId = comments.taskId AND runs.finishedAt = comments.createdAt AND runs.summary = comments.body) = 1;
+        `);
+      }
       const runColumns = this.db.prepare('PRAGMA table_info(runs)').all();
       for (const column of ['ownerIdentity', 'runnerIdentity']) {
         if (!runColumns.some(item => item.name === column)) this.db.exec(`ALTER TABLE runs ADD COLUMN ${column} TEXT`);
@@ -145,7 +155,7 @@ export class TaskStore {
       const finishedAt = new Date().toISOString();
       this.db.prepare('UPDATE runs SET status = ?, finishedAt = ?, summary = ? WHERE id = ?').run(status, finishedAt, summary, runId);
       this.db.prepare('UPDATE tasks SET agentStatus = ? WHERE id = ?').run(status, run.taskId);
-      this.addComment({ id: randomUUID(), taskId: run.taskId, body: summary, createdAt: finishedAt });
+      this.addComment({ id: randomUUID(), taskId: run.taskId, body: summary, createdAt: finishedAt, authorName: run.profile.name });
     });
   }
 
@@ -163,8 +173,8 @@ export class TaskStore {
   }
 
   addComment(comment: TaskComment) {
-    this.db.prepare('INSERT INTO comments (id, taskId, body, createdAt) VALUES (?, ?, ?, ?)')
-      .run(comment.id, comment.taskId, comment.body, new Date(comment.createdAt).toISOString());
+    this.db.prepare('INSERT INTO comments (id, taskId, body, createdAt, authorName) VALUES (?, ?, ?, ?, ?)')
+      .run(comment.id, comment.taskId, comment.body, new Date(comment.createdAt).toISOString(), comment.authorName ?? null);
   }
 
   listAgents(): AgentProfile[] {

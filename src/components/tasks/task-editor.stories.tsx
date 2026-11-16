@@ -55,13 +55,15 @@ export const InvalidTitle: Story = {
 
 export const PersistedComments: Story = {
   args: { open: true, task: { ...exampleTasks[0], comments: [
-    { id: 'comment-1', taskId: exampleTasks[0].id, body: 'Implemented the task board.', createdAt: '2026-11-16T10:00:00Z' },
-    { id: 'comment-2', taskId: exampleTasks[0].id, body: 'Verified persistence.', createdAt: '2026-11-16T11:00:00Z' },
+    { id: 'comment-1', taskId: exampleTasks[0].id, authorName: 'Builder', body: 'Implemented the task board.\n\nThe board now persists tasks and keeps their column placement after a restart.', createdAt: '2026-11-16T10:00:00Z' },
+    { id: 'comment-2', taskId: exampleTasks[0].id, authorName: 'Reviewer', body: 'Verified persistence.', createdAt: '2026-11-16T11:00:00Z' },
   ] } },
   play: async ({ canvasElement }) => {
     const dialog = within(await within(canvasElement.ownerDocument.body).findByRole('dialog'));
-    await waitFor(() => expect(dialog.getByText('Implemented the task board.')).toBeVisible());
+    await waitFor(() => expect(dialog.getByText(/Implemented the task board/)).toBeVisible());
     await expect(dialog.getByText('Verified persistence.')).toBeVisible();
+    await expect(dialog.getByText('Builder')).toBeVisible();
+    await expect(dialog.getByText('Reviewer')).toBeVisible();
   },
 };
 export const FailedSave: Story = {
@@ -115,4 +117,10 @@ export const CancelUnconfirmedCreate: Story = {
     await expect(args.onSave).toHaveBeenCalledTimes(2);
     await expect(args.onSave.mock.calls[0][0].id).not.toBe(args.onSave.mock.calls[1][0].id);
   },
+};
+
+export const LegacyComment: Story = {
+  args: { open: true, task: { ...exampleTasks[2], comments: [
+    { id: 'legacy', taskId: exampleTasks[2].id, body: 'An earlier update without saved author information.', createdAt: '2026-11-16T09:00:00Z' },
+  ] } },
 };

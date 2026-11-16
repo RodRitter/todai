@@ -47,6 +47,7 @@ test('runs are serialized across services and completion persists handovers with
     assert.deepEqual(f.service.list().map(task => task.agentStatus), ['Running', 'Queued']);
     const other = new ExecutionService(f.store, async () => { throw new Error('overlap'); }, f.directory);
     await other.drain();
+    f.store.saveAgent({ ...profile, name: 'Renamed builder' });
     finish('Implemented the board');
     await new Promise(resolve => setImmediate(resolve));
     assert.deepEqual(started, ['one', 'two']);
@@ -56,6 +57,7 @@ test('runs are serialized across services and completion persists handovers with
     try {
       assert.deepEqual(reopened.list().map(task => [task.status, task.agentStatus]), [['In progress', 'Complete'], ['In progress', 'Complete']]);
       assert.equal(reopened.list()[0].comments?.[0].body, 'Implemented the board');
+      assert.equal(reopened.list()[0].comments?.[0].authorName, 'Builder');
       assert.equal(reopened.history('one')[0].summary, 'Implemented the board');
     } finally { reopened.close(); }
   } finally { f.cleanup(); }
@@ -169,5 +171,26 @@ test('creating in an assigned column queues once, including when creation is ret
     await f.service.drain();
     assert.equal(f.service.history(input.id).length, 1);
     assert.deepEqual(executed, ['created']);
+  } finally { f.cleanup(); }
+});
+
+test('older handovers recover their agent name while unmatched comments keep an unknown author', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const f = fixture(async () => 'A saved handover');
+  try {
+    f.service.save({ id: 'old', title: 'Earlier work', description: '', status: 'In progress' });
+    await f.service.drain();
+    f.store.addComment({ id: 'unknown', taskId: 'old', body: 'Earlier note', createdAt: '2026-01-01T00:00:00Z' });
+    f.store.deleteAgent('builder');
+    // Recreate the pre-author schema while preserving its tasks, comments and run snapshots.
+    const legacy = new DatabaseSync(join(f.directory, 'tasks.sqlite'));
+    legacy.exec('ALTER TABLE comments DROP COLUMN authorName');
+    legacy.close();
+    const reopened = new TaskStore(join(f.directory, 'tasks.sqlite'));
+    try {
+      const comments = reopened.list()[0].comments!;
+      assert.equal(comments.find(comment => comment.body === 'A saved handover')?.authorName, 'Builder');
+      assert.equal(comments.find(comment => comment.id === 'unknown')?.authorName, null);
+    } finally { reopened.close(); }
   } finally { f.cleanup(); }
 });
