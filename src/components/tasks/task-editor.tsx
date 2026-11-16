@@ -8,6 +8,7 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
+import { Markdown } from "@/components/ui/markdown";
 import { Textarea } from "@/components/ui/textarea";
 import { statuses, type Status, type Task } from "./task";
 
@@ -88,8 +89,7 @@ export function TaskEditor({ open, task: editing = null, defaultStatus = "To do"
             {titleError && <p id="title-error" className="text-destructive text-sm">Enter a task title.</p>}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="task-description">Description</Label>
-            <Textarea id="task-description" name="description" defaultValue={editing?.description ?? ""} />
+            <DescriptionField initialValue={editing?.description ?? ""} />
           </div>
           <div role="group" aria-label="Task properties" className="bg-muted/50 mt-6 flex flex-col gap-1 rounded-xl p-3">
             <div className="flex items-center justify-between gap-3 rounded-lg px-1 py-1.5">
@@ -121,7 +121,7 @@ export function TaskEditor({ open, task: editing = null, defaultStatus = "To do"
                     </time>
                   </div>
                   <div className="bg-muted/50 rounded-2xl rounded-tl-sm px-4 py-3">
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed wrap-anywhere">{comment.body}</p>
+                    <Markdown>{comment.body}</Markdown>
                   </div>
                 </div>
               </li>
@@ -156,4 +156,25 @@ export function TaskEditor({ open, task: editing = null, defaultStatus = "To do"
       </DialogContent>
     </Dialog>
   );
+}
+
+function DescriptionField({ initialValue }: { initialValue: string }) {
+  const [description, setDescription] = useState(initialValue);
+  const [preview, setPreview] = useState(Boolean(initialValue));
+  return <>
+    <div className="flex items-center justify-between gap-3">
+      <Label htmlFor="task-description">Description</Label>
+      <div className="flex gap-1" role="group" aria-label="Description mode">
+        <Button type="button" size="sm" variant={preview ? 'ghost' : 'secondary'} aria-pressed={!preview} onClick={() => setPreview(false)}>Write</Button>
+        <Button type="button" size="sm" variant={preview ? 'secondary' : 'ghost'} aria-pressed={preview} onClick={() => setPreview(true)}>Preview</Button>
+      </div>
+    </div>
+    <div hidden={preview}>
+      <Textarea id="task-description" name="description" value={description} onChange={event => setDescription(event.target.value)} className="min-h-32 font-mono text-sm" aria-describedby="description-hint" />
+      <p id="description-hint" className="text-muted-foreground mt-2 text-xs">Markdown supported.</p>
+    </div>
+    {preview && <div role="region" aria-label="Description preview" className="min-h-24 rounded-lg border p-3">
+      {description.trim() ? <Markdown>{description}</Markdown> : <p className="text-muted-foreground text-sm">Nothing to preview yet.</p>}
+    </div>}
+  </>;
 }

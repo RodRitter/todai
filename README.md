@@ -84,3 +84,7 @@ Only one run executes at a time; later runs wait in queue order. The board polls
 Queued/running tasks can be edited, but moving or deleting them is disabled until execution finishes. Ticket 04 adds active interruption and redirection.
 
 `npm test` covers queue ordering, profile snapshots, handover context, restart recovery, and launch/exit failures using temporary databases and controllable runners. **Tasks / Task board / Live execution** checks live handovers without losing an open editor draft.
+
+## Markdown content
+
+Task descriptions and comments render Markdown, including headings, emphasis, lists, links, block quotes, fenced code, tables, and task lists. Existing descriptions open in **Preview**; choose **Write** to edit their Markdown source, then switch back to preview before saving. The original Markdown is stored and supplied to agents. Board cards show a compact formatted preview; open the task to follow links or read the full description.

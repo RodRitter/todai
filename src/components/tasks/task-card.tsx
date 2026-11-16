@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Markdown } from "@/components/ui/markdown";
 import { AgentStatus } from "./agent-status";
 import type { Task } from "./task";
 
@@ -45,8 +46,8 @@ export function TaskCard({ task, isDragging = false, onEdit, onDragStart, onDrag
       <CardHeader>
         <CardTitle className="break-words">{task.title}</CardTitle>
         {task.description && (
-          <CardDescription className="line-clamp-3 break-words whitespace-pre-wrap">
-            {task.description}
+          <CardDescription className="max-h-18 overflow-hidden">
+            <Markdown compact>{task.description}</Markdown>
           </CardDescription>
         )}
       </CardHeader>

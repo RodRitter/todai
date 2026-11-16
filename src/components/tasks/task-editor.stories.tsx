@@ -124,3 +124,22 @@ export const LegacyComment: Story = {
     { id: 'legacy', taskId: exampleTasks[2].id, body: 'An earlier update without saved author information.', createdAt: '2026-11-16T09:00:00Z' },
   ] } },
 };
+
+export const MarkdownContent: Story = {
+  args: { open: true, task: { ...exampleTasks[2], description: '## Requirements\n\n- **Keep** task history\n- Support `Markdown`', comments: [
+    { id: 'markdown', taskId: exampleTasks[2].id, authorName: 'Interpreter', body: '### Handover\n\n**Completed** the review.\n\n```sh\nnpm test\n```', createdAt: '2026-11-16T12:00:00Z' },
+  ] } },
+  play: async ({ canvasElement, args }) => {
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole('dialog'));
+    await expect(dialog.getByRole('heading', { name: 'Requirements' })).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'Handover' })).toBeVisible();
+    await userEvent.click(dialog.getByRole('button', { name: 'Write' }));
+    await expect(dialog.getByLabelText('Description')).toHaveValue(args.task!.description);
+    await userEvent.clear(dialog.getByLabelText('Description'));
+    await userEvent.type(dialog.getByLabelText('Description'), '## Updated requirements\n\n**Preserve** this source.');
+    await userEvent.click(dialog.getByRole('button', { name: 'Preview' }));
+    await expect(dialog.getByRole('heading', { name: 'Updated requirements' })).toBeVisible();
+    await userEvent.click(dialog.getByRole('button', { name: 'Save changes' }));
+    await expect(args.onSave).toHaveBeenCalledWith(expect.objectContaining({ description: '## Updated requirements\n\n**Preserve** this source.' }));
+  },
+};
