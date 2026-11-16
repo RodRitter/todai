@@ -59,7 +59,7 @@ While a dialog is open, notification close buttons remain clickable without dism
 
 ## Agents and column assignments
 
-Open **Agents** in the sidebar to create, edit, or delete reusable agent profiles. Each profile contains a name, execution tool (Codex CLI), model, effort, optional instructions, and sandbox permissions. The model input offers searchable suggestions and accepts custom IDs. Choose a model and effort supported by your Codex account.
+Open **Agents** in the sidebar to create, edit, or delete reusable agent profiles. Each profile contains a name, execution tool (Codex CLI), model, effort, optional instructions, and sandbox permissions. Model suggestions belong to the selected execution tool. The searchable input also accepts custom model IDs for that tool. Changing tools clears the model selection. Choose a model and effort supported by your Codex account.
 
 On the board, use a column's settings button to select a saved agent or **No agent**. An assigned agent appears as a badge below the column heading. One profile can serve multiple columns; editing it updates all of those assignments. Removing an assignment keeps the profile available in Agents. Deleting a profile removes its assignments.
 

@@ -8,13 +8,15 @@ import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
 import { notifyOperation } from '@/components/ui/toast';
-import { AgentValidationError, effortLevels, executionTools, suggestedModels, parseAgentProfile, type AgentProfile } from './column-agent';
+import { AgentValidationError, effortLevels, executionTools, parseAgentProfile, type AgentProfile } from './column-agent';
 
 export function AgentEditor({ agent, onClose, onSave }: {
   agent?: AgentProfile;
   onClose: () => void;
   onSave: (agent: AgentProfile) => Promise<void>;
 }) {
+  const [selectedTool, setSelectedTool] = useState(() => executionTools.find(tool => tool.value === agent?.tool) ?? executionTools[0]);
+  const [model, setModel] = useState(agent?.model ?? '');
   const draftId = useRef<string | null>(null);
   const saving = useRef(false);
   const [busy, setBusy] = useState(false);
@@ -47,7 +49,7 @@ export function AgentEditor({ agent, onClose, onSave }: {
     <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:p-6">
       <DialogHeader>
         <DialogTitle>{agent ? "Edit agent" : "Create agent"}</DialogTitle>
-        <DialogDescription>Save a reusable agent, then assign it to columns on the board. Changes apply to every column using this agent.</DialogDescription>
+        <DialogDescription className="sr-only">Configure this reusable agent.</DialogDescription>
       </DialogHeader>
       <form onSubmit={save} noValidate className="space-y-4">
         <fieldset disabled={busy} className="space-y-4">
@@ -58,22 +60,29 @@ export function AgentEditor({ agent, onClose, onSave }: {
               onChange={() => setError(null)} />
             {error?.field === 'name' && <p id="agent-name-error" role="alert" className="text-sm text-destructive">{error.message}</p>}
           </div>
+          <div role="group" aria-label="Execution settings" className="space-y-4 rounded-lg bg-muted/50 p-3">
           <div className="space-y-2">
             <Label htmlFor="agent-tool">Execution tool</Label>
-            <NativeSelect id="agent-tool" name="tool" defaultValue={agent?.tool ?? 'codex'}>
+            <NativeSelect id="agent-tool" name="tool" value={selectedTool.value} onChange={event => {
+              const nextTool = executionTools.find(tool => tool.value === event.target.value);
+              if (nextTool && nextTool.value !== selectedTool.value) {
+                setSelectedTool(nextTool);
+                setModel('');
+                setError(null);
+              }
+            }}>
               {executionTools.map(tool => <option key={tool.value} value={tool.value}>{tool.label}</option>)}
             </NativeSelect>
           </div>
           <div className="space-y-2">
             <Label htmlFor="agent-model">Model</Label>
-            <Input id="agent-model" name="model" list="agent-model-options" autoComplete="off" defaultValue={agent?.model ?? ''} required
-              aria-invalid={error?.field === 'model'} aria-describedby={error?.field === 'model' ? 'agent-model-help agent-model-error' : 'agent-model-help'}
-              onChange={() => setError(null)} />
+            <Input id="agent-model" name="model" list="agent-model-options" autoComplete="off" value={model} required
+              aria-invalid={error?.field === 'model'} aria-describedby={error?.field === 'model' ? 'agent-model-error' : undefined}
+              onChange={event => { setModel(event.target.value); setError(null); }} />
             <datalist id="agent-model-options">
-              {suggestedModels.map(model => <option key={model} value={model} />)}
+              {selectedTool.models.map(model => <option key={model} value={model} />)}
             </datalist>
             {error?.field === 'model' && <p id="agent-model-error" role="alert" className="text-sm text-destructive">{error.message}</p>}
-            <p id="agent-model-help" className="text-sm text-muted-foreground">Search suggested models or enter a custom model ID.</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="agent-effort">Effort</Label>
@@ -81,10 +90,10 @@ export function AgentEditor({ agent, onClose, onSave }: {
               {effortLevels.map(effort => <option key={effort}>{effort}</option>)}
             </NativeSelect>
           </div>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="agent-instructions">Instructions</Label>
-            <Textarea id="agent-instructions" name="instructions" defaultValue={agent?.instructions ?? ''} aria-describedby="agent-instructions-help" />
-            <p id="agent-instructions-help" className="text-sm text-muted-foreground">Optional instructions in addition to the task description and handovers.</p>
+            <Textarea id="agent-instructions" name="instructions" defaultValue={agent?.instructions ?? ''} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="agent-permissions">Permissions</Label>
