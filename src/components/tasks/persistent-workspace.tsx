@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ComponentProps } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
+import { ConfigurationTransfer } from "./configuration-transfer";
 import { WorkspaceSettings } from "./workspace-settings";
 import { ExecutorSettings } from "./executor-settings";
 import { ColumnSettings } from "./column-settings";
@@ -68,7 +70,8 @@ export function PersistentWorkspace({
   const { columns, tasks, assignments } = board;
   if (screen === "settings")
     return (
-      <ColumnSettings
+      <UrlColumnSettings
+        key={attempt}
         initialColumns={columns}
         initialTaskCounts={Object.fromEntries(
           columns.map((column) => [
@@ -80,6 +83,7 @@ export function PersistentWorkspace({
           <>
             <WorkspaceSettings />
             <ExecutorSettings />
+            <ConfigurationTransfer onImported={() => setAttempt((value) => value + 1)} />
           </>
         }
         {...columnApi}
@@ -102,6 +106,24 @@ export function PersistentWorkspace({
       saveAgent={agentApi.save}
       assignAgent={agentApi.assign}
       persistence={taskApi}
+    />
+  );
+}
+
+function UrlColumnSettings(props: ComponentProps<typeof ColumnSettings>) {
+  const searchParams = useSearchParams();
+  const tab = searchParams.get("tab") === "board" ? "board" : "general";
+
+  return (
+    <ColumnSettings
+      {...props}
+      tab={tab}
+      onTabChange={(value) => {
+        if (value === tab) return;
+        const url = new URL(window.location.href);
+        url.searchParams.set("tab", value);
+        window.history.pushState(null, "", url);
+      }}
     />
   );
 }

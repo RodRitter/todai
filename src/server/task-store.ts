@@ -1,3 +1,4 @@
+import { parseConfiguration, ConfigurationValidationError, type Configuration } from "../domain/configuration.ts";
 import { initializeSchema } from "./schema.ts";
 import {
   AgentValidationError,
@@ -64,6 +65,71 @@ export class TaskStore {
     }));
   }
 
+  exportConfiguration(): Configuration {
+    return this.transaction(() => {
+      const columns = this.db.prepare("SELECT id, name FROM board_columns ORDER BY position").all() as { id: string; name: string }[];
+      return {
+        format: "todai-configuration", version: 1,
+        agents: this.listAgents(), columns: columns.map((column) => ({ ...column })),
+        assignments: this.listColumnAgents().map((assignment) => ({
+          columnId: columns.find((column) => column.name === assignment.column)!.id,
+          agentId: assignment.agentId,
+        })),
+      };
+    });
+  }
+
+  importConfiguration(input: unknown, columnMode: unknown = "add", conflictMode: unknown = "copy") {
+    if (columnMode !== "add" && columnMode !== "replace")
+      throw new ConfigurationValidationError("Choose whether to add or replace columns.");
+    if (conflictMode !== "copy" && conflictMode !== "overwrite")
+      throw new ConfigurationValidationError("Choose whether to overwrite matching IDs or create copies.");
+    const data = parseConfiguration(input);
+    if (!data.agents.length && !data.columns.length)
+      throw new ConfigurationValidationError("Select at least one agent or column.");
+    return this.transaction(() => {
+      if ((columnMode === "replace" || conflictMode === "overwrite") && data.columns.length && this.db.prepare("SELECT id FROM runs WHERE status IN ('Queued', 'Running') LIMIT 1").get())
+        throw new ConfigurationValidationError("Wait for queued and active runs to finish before replacing or overwriting columns.");
+      if (columnMode === "replace" && data.columns.length) {
+        this.db.exec("DELETE FROM column_assignments; DELETE FROM board_columns;");
+      }
+      const agentIds = new Map<string, string>();
+      for (const agent of data.agents) {
+        const id = conflictMode === "overwrite" ? agent.id : randomUUID();
+        this.saveAgent({ ...agent, id });
+        agentIds.set(agent.id, id);
+      }
+      const columnNames = new Map<string, string>();
+      const existing = this.listColumns();
+      for (const column of data.columns) {
+        const previous = conflictMode === "overwrite" ? this.db.prepare("SELECT name FROM board_columns WHERE id = ?").get(column.id)?.name as string | undefined : undefined;
+        let name = column.name;
+        let suffix = 2;
+        while (existing.some((item) => item !== previous && item.toLowerCase() === name.toLowerCase())) {
+          const ending = ` (imported ${suffix++})`;
+          name = column.name.slice(0, 80 - ending.length) + ending;
+        }
+        if (previous !== undefined) {
+          this.db.prepare("DELETE FROM column_assignments WHERE column = ?").run(previous);
+          this.db.prepare("UPDATE board_columns SET name = ? WHERE id = ?").run(name, column.id);
+          this.db.prepare("UPDATE tasks SET status = ? WHERE status = ?").run(name, previous);
+          existing[existing.indexOf(previous)] = name;
+        } else {
+          this.db.prepare("INSERT INTO board_columns (id, name, position) VALUES (?, ?, ?)").run(conflictMode === "overwrite" ? column.id : randomUUID(), name, existing.length);
+          existing.push(name);
+        }
+        columnNames.set(column.id, name);
+      }
+      for (const assignment of data.assignments) {
+        this.assignColumnAgent({ column: columnNames.get(assignment.columnId)!, agentId: agentIds.get(assignment.agentId)! });
+      }
+      if (columnMode === "replace" && data.columns.length) {
+        this.db.prepare("UPDATE tasks SET status = ?, agentStatus = 'Not started'").run(columnNames.get(data.columns[0].id)!);
+      }
+      return { agents: data.agents.length, columns: data.columns.length, assignments: data.assignments.length };
+    });
+  }
+
   listColumns(): string[] {
     return this.db
       .prepare("SELECT name FROM board_columns ORDER BY position")
@@ -99,8 +165,8 @@ export class TaskStore {
     return this.transaction(() => {
       const name = this.columnName(input);
       this.db
-        .prepare("INSERT INTO board_columns (name, position) VALUES (?, ?)")
-        .run(name, this.listColumns().length);
+        .prepare("INSERT INTO board_columns (id, name, position) VALUES (?, ?, ?)")
+        .run(randomUUID(), name, this.listColumns().length);
       return this.listColumns();
     });
   }

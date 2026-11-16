@@ -43,6 +43,14 @@ export function initializeSchema(db: DatabaseSync) {
         ).run(name, position);
       }
     }
+    const boardColumnFields = db.prepare("PRAGMA table_info(board_columns)").all();
+    if (!boardColumnFields.some((column) => column.name === "id")) {
+      db.exec("ALTER TABLE board_columns ADD COLUMN id TEXT");
+    }
+    for (const column of db.prepare("SELECT name FROM board_columns WHERE id IS NULL").all()) {
+      db.prepare("UPDATE board_columns SET id = ? WHERE name = ?").run(randomUUID(), column.name);
+    }
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS board_columns_id ON board_columns(id)");
     const commentColumns = db.prepare("PRAGMA table_info(comments)").all();
     if (!commentColumns.some((column) => column.name === "authorName")) {
       db.exec(`ALTER TABLE comments ADD COLUMN authorName TEXT;

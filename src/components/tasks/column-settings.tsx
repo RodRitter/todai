@@ -37,7 +37,11 @@ export function ColumnSettings({
   rename,
   remove,
   workspaceSettings,
+  tab,
+  onTabChange,
 }: {
+  tab?: "general" | "board";
+  onTabChange?: (value: string) => void;
   workspaceSettings?: ReactNode;
   initialColumns: string[];
   initialTaskCounts?: Record<string, number>;
@@ -111,7 +115,7 @@ export function ColumnSettings({
 
   return (
     <AppShell screen="settings">
-      <Tabs defaultValue="general" asChild>
+      <Tabs defaultValue="general" value={tab} onValueChange={onTabChange} asChild>
         <main className="mx-auto max-w-2xl space-y-8 p-4 md:p-8">
           <TabsList aria-label="Settings sections">
             <TabsTrigger value="general">General</TabsTrigger>

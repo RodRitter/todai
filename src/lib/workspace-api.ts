@@ -99,3 +99,9 @@ export const workspaceApi = {
       settingsError,
     ),
 };
+
+export const configurationApi = {
+  get: () => request<import("@/domain/configuration").Configuration>("/api/configuration"),
+  import: (data: import("@/domain/configuration").Configuration, columnMode: "add" | "replace" = "add", conflictMode: "copy" | "overwrite" = "copy") =>
+    request<{ agents: number; columns: number; assignments: number }>(`/api/configuration?columns=${columnMode}&conflicts=${conflictMode}`, { method: "POST", body: data }),
+};
