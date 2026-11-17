@@ -1,3 +1,4 @@
+import { WorkspaceSelection } from "@/components/workspace-selection";
 import { openTaskStore } from "@/server/database";
 import type { Metadata } from "next";
 import "./globals.css";
@@ -14,12 +15,12 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const store = openTaskStore();
-  let workspaceId: string;
-  try { workspaceId = store.workspaceId; } finally { store.close(); }
+  let workspaces;
+  try { workspaces = store.listWorkspaces().map((workspace) => ({ ...workspace })); } finally { store.close(); }
   return (
-    <html lang="en" data-workspace-id={workspaceId}>
+    <html lang="en" data-workspace-id={workspaces[0].id}>
       <body className="font-sans antialiased">
-        {children}
+        <WorkspaceSelection workspaces={workspaces}>{children}</WorkspaceSelection>
         <Toaster />
       </body>
     </html>

@@ -1,3 +1,4 @@
+import type { Workspace } from "../domain/workspace.ts";
 import { workspaceFetch } from "./workspace-fetch.ts";
 import type { AgentProfile, ColumnAssignment, ExecutionTool, ExecutorSettingsData } from "@/domain/column-agent";
 import type { Task } from "@/domain/task";
@@ -94,6 +95,7 @@ export const executorApi = {
   },
 };
 export const workspaceApi = {
+  create: (name: string, path: string) => request<Workspace>("/api/workspaces", { method: "POST", body: { name, path } }),
   get: () => request<{ path: string }>("/api/workspace", {}, settingsError),
   save: (path: string) =>
     request<{ path: string }>(

@@ -6,6 +6,7 @@ import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { ConfigurationTransfer } from "./configuration-transfer";
 import { WorkspaceSettings } from "./workspace-settings";
+import { CreateWorkspace } from "./create-workspace";
 import { ExecutorSettings } from "./executor-settings";
 import { ColumnSettings } from "./column-settings";
 import { AgentLibrary } from "./agent-library";
@@ -88,6 +89,7 @@ export function PersistentWorkspace({
         workspaceSettings={
           <>
             <WorkspaceSettings />
+            <CreateWorkspace />
             <ConfigurationTransfer onImported={() => setAttempt((value) => value + 1)} />
           </>
         }

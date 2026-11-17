@@ -17,7 +17,8 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { statuses, type Task, type TaskComment } from "../domain/task.ts";
 
-export type Workspace = { id: string; name: string; path: string };
+import type { Workspace } from "../domain/workspace.ts";
+export type { Workspace } from "../domain/workspace.ts";
 export class WorkspaceOwnershipError extends Error {}
 
 export class ColumnValidationError extends Error {}

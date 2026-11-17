@@ -36,6 +36,9 @@ Open [localhost:3000](http://127.0.0.1:3000).
 3. In **Agents**, choose an executor, model, effort, and permissions.
 4. Assign an agent through a column’s settings, then create or move a task into that column. Open the saved task and press **Run** to queue its agent.
 
+
+Add another named workspace in **Settings → General → Add workspace**, then switch using the sidebar selector. Each workspace has its own tasks, agents, columns, assignments, and default executor. Selection lives in the browser URL, so separate tabs can work independently. Switching clears unsaved drafts and leaves queued and active runs in their original directories.
+
 Task automation is opt-in. Enable **Auto-run** to start the assigned agent when a task enters a column. Enable **Auto-workflow** to move to the next column after a successful run; the next agent waits for **Run** unless Auto-run is also enabled. Save task edits before pressing Run.
 
 New boards start with **To do**, **In progress**, **In review**, and **Done**. Customize them in **Settings → Board**.

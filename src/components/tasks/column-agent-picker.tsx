@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { WorkspaceLink as Link } from "@/components/workspace-selection";
 import { useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import {

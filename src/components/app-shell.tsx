@@ -1,8 +1,9 @@
 "use client";
 
-import Link from "next/link";
+import { WorkspaceLink as Link } from "@/components/workspace-selection";
 import { useState, type ReactNode } from "react";
 import { BookOpen, Bot, LayoutGrid, PanelLeft, Settings } from "lucide-react";
+import { WorkspaceSwitcher } from "@/components/workspace-selection";
 import { Button } from "@/components/ui/button";
 
 export function AppShell({
@@ -34,6 +35,7 @@ export function AppShell({
             </span>
             <span className="hidden font-semibold md:inline">Todai</span>
           </div>
+          <WorkspaceSwitcher />
           <nav className="p-3" aria-label="Main navigation">
             <Button
               variant={screen === "board" ? "secondary" : "ghost"}

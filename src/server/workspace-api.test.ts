@@ -75,3 +75,31 @@ test("directory suggestions preserve the request cancellation signal", async (co
     ["/home/me/My Projects/todai"],
   );
 });
+
+test("requests retain their document workspace even after URL changes and late responses", async (context) => {
+  const documentDescriptor = Object.getOwnPropertyDescriptor(globalThis, "document");
+  const windowDescriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const location = { href: "http://localhost/?workspace=second" };
+  Object.defineProperty(globalThis, "document", { configurable: true, value: { documentElement: { dataset: { workspaceId: "first" } } } });
+  Object.defineProperty(globalThis, "window", { configurable: true, value: { location } });
+  let release!: (response: Response) => void;
+  const owners: (string | null)[] = [];
+  context.mock.method(globalThis, "fetch", async (_url: string, options: RequestInit) => {
+    owners.push(new Headers(options.headers).get("X-Todai-Workspace"));
+    if (owners.length === 1) return new Promise<Response>((resolve) => { release = resolve; });
+    return Response.json({ path: "/second" });
+  });
+  try {
+    const pending = workspaceApi.get();
+    location.href = "http://localhost/settings?workspace=third";
+    await workspaceApi.save("/second");
+    release(Response.json({ path: "/second" }));
+    assert.deepEqual(await pending, { path: "/second" });
+    assert.deepEqual(owners, ["second", "second"]);
+  } finally {
+    if (documentDescriptor) Object.defineProperty(globalThis, "document", documentDescriptor);
+    else Reflect.deleteProperty(globalThis, "document");
+    if (windowDescriptor) Object.defineProperty(globalThis, "window", windowDescriptor);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
+});
