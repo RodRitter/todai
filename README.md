@@ -69,7 +69,11 @@ Changing the default executor only affects new agent forms. Existing profiles an
 
 Open **Artifacts** in the sidebar to publish text or Markdown, upload any file type, or register an HTTP/HTTPS link with a title, description, and creator name. Search the current workspace’s collection and filter by type or creator. Creator names are descriptive labels entered by the publisher.
 
-Stored content is limited to **20 MiB per artifact** and downloaded using its artifact ID. Content and metadata are published atomically in the application database alongside tasks, so backing up `.todai/tasks.sqlite` (or `TODAI_DB_PATH`) also preserves artifacts. Uploading copies the bytes: moving, editing, or deleting the original file does not affect the artifact. External links store only their URL and metadata; remote content can change.
+Stored content is limited to **20 MiB per revision** and downloaded using its artifact ID. Content and metadata are published atomically in the application database alongside tasks, so backing up `.todai/tasks.sqlite` (or `TODAI_DB_PATH`) also preserves artifacts. Uploading copies the bytes: moving, editing, or deleting the original file does not affect the artifact. External links store only their URL and metadata; remote content can change.
+
+Use **Publish revision** to update an artifact without changing its identity. Each publication retains its own author, timestamp, metadata, and stored bytes. **Revision history** lists earlier publications and downloads their exact content. External-link revisions preserve only the URL and metadata; upload a stored copy to preserve remote content.
+
+**Archive** removes an artifact from normal discovery. Select **Archived artifacts** to find it again; all revisions and downloads remain available. Archival does not delete content. Concurrent publications receive distinct revision identities and remain in history.
 
 ## Development
 

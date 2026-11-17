@@ -3,6 +3,9 @@ export type ArtifactType = (typeof artifactTypes)[number];
 export const MAX_ARTIFACT_BYTES = 20 * 1024 * 1024;
 export type Artifact = {
   id: string;
+  revisionId: string;
+  revisionNumber: number;
+  archived: boolean;
   workspaceId: string;
   title: string;
   description: string;
@@ -26,4 +29,4 @@ export type ArtifactInput = {
   mediaType?: string;
   url?: string;
 };
-export type ArtifactFilters = { search?: string; type?: string; creator?: string };
+export type ArtifactFilters = { archived?: boolean; search?: string; type?: string; creator?: string };

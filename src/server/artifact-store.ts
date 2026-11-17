@@ -26,6 +26,22 @@ export class ArtifactStore {
         filename TEXT, mediaType TEXT, byteSize INTEGER, url TEXT, content BLOB
       );
       CREATE INDEX IF NOT EXISTS artifacts_workspace ON artifacts(workspaceId);`);
+    this.transaction(() => {
+      const columns = this.db.prepare("PRAGMA table_info(artifacts)").all();
+      if (!columns.some((column) => column.name === "archived"))
+        this.db.exec("ALTER TABLE artifacts ADD COLUMN archived INTEGER NOT NULL DEFAULT 0");
+      this.db.exec(`CREATE TABLE IF NOT EXISTS artifact_revisions (
+        id TEXT NOT NULL REFERENCES artifacts(id), workspaceId TEXT NOT NULL REFERENCES workspaces(id),
+        title TEXT NOT NULL, description TEXT NOT NULL, type TEXT NOT NULL,
+        creator TEXT NOT NULL, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL,
+        filename TEXT, mediaType TEXT, byteSize INTEGER, url TEXT, content BLOB,
+        revisionId TEXT PRIMARY KEY, revisionNumber INTEGER NOT NULL,
+        UNIQUE(id, revisionNumber)
+      );
+      INSERT INTO artifact_revisions (${fields}, content, revisionId, revisionNumber)
+        SELECT ${fields}, content, id, 1 FROM artifacts a
+        WHERE NOT EXISTS (SELECT 1 FROM artifact_revisions r WHERE r.id = a.id);`);
+    });
   }
 
   private assertActive() {
@@ -33,7 +49,21 @@ export class ArtifactStore {
       throw new WorkspaceOwnershipError("This workspace is unavailable. Restore it first.");
   }
 
+  private transaction<T>(operation: () => T): T {
+    this.db.exec("BEGIN IMMEDIATE");
+    try { const result = operation(); this.db.exec("COMMIT"); return result; }
+    catch (error) { this.db.exec("ROLLBACK"); throw error; }
+  }
+
   create(input: ArtifactInput): Artifact {
+    return this.publish(input);
+  }
+
+  revise(id: string, input: ArtifactInput): Artifact {
+    return this.publish(input, id);
+  }
+
+  private publish(input: ArtifactInput, id?: string): Artifact {
     this.assertActive();
     const title = required(input.title, "Title", 300);
     const creator = required(input.creator, "Creator", 200);
@@ -63,40 +93,63 @@ export class ArtifactStore {
       mediaType = input.type === "markdown" ? "text/markdown" : "text/plain";
     } else { throw new ArtifactError("Choose a supported artifact type."); }
     if (bytes && bytes.length > MAX_ARTIFACT_BYTES) throw new ArtifactTooLargeError("Artifacts must be 20 MiB or smaller.");
-    const now = new Date().toISOString();
-    const artifact: Artifact = {
-      id: randomUUID(), workspaceId: this.workspaceId, title, description,
-      type: input.type, creator, createdAt: now, updatedAt: now,
-      filename, mediaType, byteSize: bytes?.length ?? null, url,
-    };
-    // Content and metadata publish together in one atomic SQLite statement.
-    this.db.prepare(`INSERT INTO artifacts (${fields}, content) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-      artifact.id, artifact.workspaceId, title, description, artifact.type, creator,
-      now, now, filename, mediaType, artifact.byteSize, url, bytes,
-    );
-    return artifact;
+    return this.transaction(() => {
+      const previous = id ? this.read(id) : undefined;
+      const now = new Date().toISOString();
+      const artifact: Artifact = {
+        id: id ?? randomUUID(), revisionId: randomUUID(), revisionNumber: (previous?.revisionNumber ?? 0) + 1, archived: previous?.archived ?? false, workspaceId: this.workspaceId, title, description,
+        type: input.type, creator, createdAt: previous?.createdAt ?? now, updatedAt: now,
+        filename, mediaType, byteSize: bytes?.length ?? null, url,
+      };
+      // The latest snapshot and immutable revision publish in one transaction.
+      this.db.prepare(`INSERT INTO artifacts (${fields}, content) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET title=excluded.title, description=excluded.description,
+        type=excluded.type, creator=excluded.creator, updatedAt=excluded.updatedAt, filename=excluded.filename,
+        mediaType=excluded.mediaType, byteSize=excluded.byteSize, url=excluded.url, content=excluded.content`).run(
+        artifact.id, artifact.workspaceId, title, description, artifact.type, creator,
+        artifact.createdAt, now, filename, mediaType, artifact.byteSize, url, bytes,
+      );
+      this.db.prepare(`INSERT INTO artifact_revisions (${fields}, content, revisionId, revisionNumber)
+        SELECT ${fields}, content, ?, ? FROM artifacts WHERE id = ?`).run(artifact.revisionId, artifact.revisionNumber, artifact.id);
+      return artifact;
+    });
   }
 
   list(filters: ArtifactFilters = {}): Artifact[] {
     this.assertActive();
-    return this.db.prepare(`SELECT ${fields} FROM artifacts WHERE workspaceId = ?
+    return this.db.prepare(`SELECT ${fields} FROM artifacts WHERE workspaceId = ? AND archived = ?
       AND (? = '' OR instr(lower(title || ' ' || description || ' ' || coalesce(filename, '') || ' ' || coalesce(url, '')), lower(?)) > 0)
       AND (? = '' OR type = ?) AND (? = '' OR creator = ?) ORDER BY createdAt DESC, id`).all(
-      this.workspaceId, filters.search ?? "", filters.search ?? "", filters.type ?? "", filters.type ?? "", filters.creator ?? "", filters.creator ?? "",
-    ).map((row) => ({ ...row })) as Artifact[];
+      this.workspaceId, filters.archived ? 1 : 0, filters.search ?? "", filters.search ?? "", filters.type ?? "", filters.type ?? "", filters.creator ?? "", filters.creator ?? "",
+    ).map((row) => this.read(row.id as string));
   }
 
-  read(id: string): Artifact {
+  read(id: string, revisionId?: string): Artifact {
     this.assertActive();
-    const artifact = this.db.prepare(`SELECT ${fields} FROM artifacts WHERE workspaceId = ? AND id = ?`).get(this.workspaceId, id) as Artifact | undefined;
+    const artifact = this.db.prepare(`SELECT ${fields}, revisionId, revisionNumber FROM artifact_revisions
+      WHERE workspaceId = ? AND id = ? AND (? IS NULL OR revisionId = ?)
+      ORDER BY revisionNumber DESC LIMIT 1`).get(this.workspaceId, id, revisionId ?? null, revisionId ?? null);
     if (!artifact) throw new ArtifactError("Artifact not found in this workspace.");
-    return { ...artifact };
+    const current = this.db.prepare("SELECT archived FROM artifacts WHERE id = ? AND workspaceId = ?").get(id, this.workspaceId)!;
+    return { ...artifact, archived: Boolean(current.archived) } as Artifact;
   }
 
-  download(id: string) {
-    const artifact = this.read(id);
+  archive(id: string): Artifact {
+    this.read(id);
+    this.db.prepare("UPDATE artifacts SET archived = 1 WHERE id = ? AND workspaceId = ?").run(id, this.workspaceId);
+    return this.read(id);
+  }
+
+  history(id: string): Artifact[] {
+    this.read(id);
+    return this.db.prepare("SELECT revisionId FROM artifact_revisions WHERE workspaceId = ? AND id = ? ORDER BY revisionNumber DESC")
+      .all(this.workspaceId, id).map((row) => this.read(id, row.revisionId as string));
+  }
+
+  download(id: string, revisionId?: string) {
+    const artifact = this.read(id, revisionId);
     if (artifact.type === "link") throw new ArtifactError("External links have no stored content.");
-    const row = this.db.prepare("SELECT content FROM artifacts WHERE workspaceId = ? AND id = ?").get(this.workspaceId, id)!;
+    const row = this.db.prepare("SELECT content FROM artifact_revisions WHERE workspaceId = ? AND id = ? AND revisionId = ?").get(this.workspaceId, id, artifact.revisionId)!;
     return { artifact, bytes: Buffer.from(row.content as Uint8Array) };
   }
 

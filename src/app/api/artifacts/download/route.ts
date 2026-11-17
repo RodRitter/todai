@@ -1,11 +1,12 @@
-import { artifactFailure, withArtifactStore } from "@/server/artifact-http";
+import { artifactFailure, withArtifactStore } from "../../../../server/artifact-http.ts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export function GET(request: Request) {
   try {
-    const { artifact, bytes } = withArtifactStore(request, (store) => store.download(new URL(request.url).searchParams.get("id") ?? ""));
+    const params = new URL(request.url).searchParams;
+    const { artifact, bytes } = withArtifactStore(request, (store) => store.download(params.get("id") ?? "", params.get("revision") ?? undefined));
     const filename = encodeURIComponent(artifact.filename!).replace(/['()*]/g, (character) => `%${character.charCodeAt(0).toString(16)}`);
     return new Response(new Uint8Array(bytes), { headers: {
       "Content-Type": artifact.mediaType!,
