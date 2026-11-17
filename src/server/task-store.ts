@@ -464,6 +464,24 @@ export class TaskStore {
     });
   }
 
+  stopTask(taskId: unknown): Task {
+    if (typeof taskId !== "string") throw new RunValidationError("Choose a task to stop.");
+    this.assertOwnership("tasks", taskId);
+    return this.transaction(() => {
+      const task = this.list().find((item) => item.id === taskId);
+      if (!task) throw new RunValidationError("This task no longer exists.");
+      if (!this.history(taskId).some((run) => run.status === "Queued" || run.status === "Running"))
+        throw new RunValidationError("This task no longer has a queued or running agent.");
+      const now = new Date().toISOString();
+      this.db.prepare(`UPDATE runs SET status = 'Stopped', finishedAt = ?, summary = 'Queued run cancelled by the user.'
+        WHERE workspaceId = workspace_id() AND taskId = ? AND status = 'Queued'`).run(now, taskId);
+      this.db.prepare(`UPDATE runs SET stopRequested = ?
+        WHERE workspaceId = workspace_id() AND taskId = ? AND status = 'Running'`).run(now, taskId);
+      this.db.prepare("UPDATE tasks SET agentStatus = 'Stopped' WHERE workspaceId = workspace_id() AND id = ?").run(taskId);
+      return this.list().find((item) => item.id === taskId)!;
+    });
+  }
+
   private queueAgent(taskId: string, column: string) {
     this.assertWorkspaceActive();
     const assignment = this.listColumnAgents().find(
@@ -637,7 +655,7 @@ export class TaskStore {
       }
       if (run.stopRequested) {
         status = "Stopped";
-        summary = "Agent run stopped by the user. Saved work and history were preserved. Run this task again to request a new run; resume the global queue separately.";
+        summary = "Agent run stopped by the user. Saved work and history were preserved. Run this task again to request a new run.";
       }
       if (status === "Waiting" && (!summary.trim() || !recommendation?.trim()))
         throw new FeedbackValidationError("Feedback requests require a question and recommendation.");
@@ -661,7 +679,8 @@ export class TaskStore {
         ELSE ? END WHERE tasks.workspaceId = workspace_id() AND id = ?`,
         )
         .run(status, run.taskId, status, run.taskId, status, run.taskId);
-      if (run.kind !== "intent") this.addComment({
+      // A stop notice is execution history, not an agent handover or evidence of saved work.
+      if (run.kind !== "intent" && status !== "Stopped") this.addComment({
         id: randomUUID(),
         taskId: run.taskId,
         body: summary,

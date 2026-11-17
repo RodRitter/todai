@@ -38,6 +38,7 @@ export function TaskBoard({
     save: (task: Task) => Promise<Task>;
     delete: (id: string) => Promise<void>;
     run?: (taskId: string) => Promise<Task>;
+    stop?: (taskId: string) => Promise<Task>;
     postComment?: (taskId: string, body: string) => Promise<Task>;
     answerFeedback?: (taskId: string, commentId: string, body: string) => Promise<Task>;
   };
@@ -276,6 +277,10 @@ export function TaskBoard({
           assignedColumns={assignments.map((assignment) => assignment.column)}
           onRun={persistence?.run ? () => mutate(async () => {
             const saved = await persistence.run!(editing!.id);
+            updateTasks((current) => current.map((task) => task.id === saved.id ? saved : task));
+          }) : undefined}
+          onStop={persistence?.stop ? () => mutate(async () => {
+            const saved = await persistence.stop!(editing!.id);
             updateTasks((current) => current.map((task) => task.id === saved.id ? saved : task));
           }) : undefined}
           onSave={async (task) => {

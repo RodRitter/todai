@@ -32,6 +32,8 @@ async function request<T>(
 }
 
 export const taskApi = {
+  stop: (taskId: string) =>
+    request<Task>("/api/tasks/stop", { method: "POST", body: { taskId } }),
   run: (taskId: string) =>
     request<Task>("/api/tasks/run", { method: "POST", body: { taskId } }),
   postComment: (taskId: string, body: string) =>

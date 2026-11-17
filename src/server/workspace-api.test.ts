@@ -103,3 +103,15 @@ test("requests retain their document workspace even after URL changes and late r
     else Reflect.deleteProperty(globalThis, "window");
   }
 });
+
+
+test("stopping a task uses its workspace-scoped endpoint and returns updated state", async (context) => {
+  const stopped = { id: "task-1", agentStatus: "Stopped" };
+  context.mock.method(globalThis, "fetch", async (url: string, options: RequestInit) => {
+    assert.equal(url, "/api/tasks/stop");
+    assert.equal(options.method, "POST");
+    assert.deepEqual(JSON.parse(options.body as string), { taskId: "task-1" });
+    return Response.json(stopped);
+  });
+  assert.deepEqual(await taskApi.stop("task-1"), stopped);
+});

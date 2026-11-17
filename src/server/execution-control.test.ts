@@ -128,3 +128,97 @@ test("stopping preserves other queued requests and moving the task cannot restar
     assert.ok(f.store.claimRun());
   } finally { f.cleanup(); }
 });
+
+test("task stop leaves the queue running and permits a fresh task run", () => {
+  const f = fixture();
+  try {
+    for (const id of ["active", "next"])
+      f.store.save({ id, title: id, description: "", status: "In progress", autoRun: true });
+    const active = f.store.claimRun()!;
+    f.store.postComment("active", "@Builder follow up later");
+    f.store.stopTask("active");
+    assert.equal(f.store.executionState().paused, false);
+    assert.equal(f.store.interruptionRequested(active.id), true);
+    assert.equal(f.store.claimRun(), undefined, "wait for termination before starting the next run");
+    f.store.finishRun(active.id, "Complete", "Late result");
+    assert.ok(f.store.history("active").every((run) => run.status === "Stopped"));
+    const next = f.store.claimRun()!;
+    assert.equal(next.taskId, "next");
+    f.store.finishRun(next.id, "Complete", "Done");
+    f.store.runTask("active");
+    assert.equal(f.store.claimRun()?.taskId, "active");
+  } finally { f.cleanup(); }
+});
+
+test("stopping a queued task cancels its pending runs without interrupting another task", () => {
+  const f = fixture();
+  try {
+    for (const id of ["active", "queued", "next"])
+      f.store.save({ id, title: id, description: "", status: "In progress", autoRun: true });
+    const active = f.store.claimRun()!;
+    f.store.stopTask("queued");
+    assert.equal(f.store.executionState().paused, false);
+    assert.equal(f.store.interruptionRequested(active.id), false);
+    assert.equal(f.store.history("queued")[0].status, "Stopped");
+    f.store.finishRun(active.id, "Complete", "Done");
+    assert.equal(f.store.claimRun()?.taskId, "next");
+    f.store.runTask("queued");
+    assert.deepEqual(f.store.history("queued").map((run) => run.status), ["Stopped", "Queued"]);
+  } finally { f.cleanup(); }
+});
+
+test("task stop respects workspace ownership and an intentionally paused queue", () => {
+  const f = fixture();
+  const second = f.store.createWorkspace("Second", tmpdir());
+  const other = new TaskStore(f.path, second.id);
+  try {
+    f.store.save({ id: "task", title: "Task", description: "", status: "In progress", autoRun: true });
+    assert.throws(() => other.stopTask("task"));
+    assert.equal(f.store.history("task")[0].status, "Queued");
+    f.store.pauseExecution();
+    f.store.stopTask("task");
+    assert.equal(f.store.executionState().paused, true);
+    assert.equal(f.store.list()[0].agentStatus, "Stopped");
+  } finally { other.close(); f.cleanup(); }
+});
+
+test("execution service continues to the next task after a task-specific stop", async () => {
+  const f = fixture();
+  const started: string[] = [];
+  const service = new ExecutionService(f.store, async ({ task, signal }) => {
+    started.push(task.id);
+    if (task.id === "active") {
+      await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }));
+      return "Stopped";
+    }
+    return "Completed next task";
+  });
+  try {
+    for (const id of ["active", "next"])
+      f.store.save({ id, title: id, description: "", status: "In progress", autoRun: true });
+    const draining = service.drain();
+    f.store.stopTask("active");
+    await draining;
+    assert.deepEqual(started, ["active", "next"]);
+    assert.deepEqual(f.store.history().map((run) => run.status), ["Stopped", "Complete"]);
+    assert.equal(f.store.executionState().paused, false);
+  } finally { f.cleanup(); }
+});
+
+for (const stop of ["task", "global"] as const) {
+  test(`${stop} stop before any work does not post an agent comment`, () => {
+    const f = fixture();
+    try {
+      f.store.save({ id: "task", title: "Task", description: "", status: "In progress", autoRun: true });
+      f.store.postComment("task", "Keep this existing comment");
+      const before = f.store.list()[0].comments;
+      const run = f.store.claimRun()!;
+      if (stop === "task") f.store.stopTask("task");
+      else f.store.stopExecution(run.id);
+      f.store.finishRun(run.id, "Failed", "Agent process aborted before doing any work.");
+      assert.deepEqual(f.store.list()[0].comments, before);
+      assert.equal(f.store.history("task")[0].status, "Stopped");
+      assert.match(f.store.history("task")[0].summary!, /stopped by the user/);
+    } finally { f.cleanup(); }
+  });
+}

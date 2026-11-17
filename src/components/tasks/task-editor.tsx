@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type FormEvent } from "react";
-import { Bot, CircleDot, Workflow, Zap } from "lucide-react";
+import { Bot, CircleDot, CirclePlay, CircleStop, Workflow, Zap } from "lucide-react";
 import { TaskComments } from "./task-comments";
 import { AgentStatus } from "./agent-status";
 import { DescriptionField } from "./description-field";
@@ -29,6 +29,7 @@ export type TaskEditorProps = {
   columns?: readonly string[];
   assignedColumns?: readonly string[];
   onRun?: () => Promise<void>;
+  onStop?: () => Promise<void>;
   agents?: AgentProfile[];
   onPostComment?: (body: string) => Promise<void>;
   open: boolean;
@@ -53,6 +54,7 @@ function TaskEditorSession({
   columns = statuses,
   assignedColumns = [],
   onRun,
+  onStop,
   open,
   task: editing = null,
   defaultStatus = "To do",
@@ -166,8 +168,63 @@ function TaskEditorSession({
       }}
     >
       <DialogContent closeDisabled={busy} aria-describedby={undefined} size="large" className="h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden pb-0">
-        <DialogHeader className="grid-cols-[minmax(0,1fr)_2.25rem] [&>button]:col-start-2 [&>button]:row-start-1">
+        <DialogHeader className="grid-cols-[minmax(0,1fr)_auto_2.25rem] [&>button]:col-start-3 [&>button]:row-start-1">
           <DialogTitle className="col-start-1 text-left">{editing ? "Task details" : "Create task"}</DialogTitle>
+
+          <div className="col-start-2 row-start-1 flex items-center gap-2">
+            {editing && onRun && !pendingRun && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button type="button" size="sm" variant="default" disabled={busy || canSave || editing.agentStatus === "Waiting" || !assignedColumns.includes(editing.status)} onClick={async () => {
+                        setBusy(true);
+                        try {
+                          await notifyOperation(onRun, { loading: "Queuing agent…", success: "Agent queued.", error: "Could not start the agent. Reload the task and try again." });
+                        } catch {
+                          /* The toast reports the failure; keep the task open. */
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}><CirclePlay className="size-4" aria-hidden="true" />{editing.agentStatus === "Stopped" ? "Run again" : "Run"}</Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {canSave ? "Save your changes before running the agent." : editing.agentStatus === "Waiting" ? "Answer the pending feedback first." : !assignedColumns.includes(editing.status) ? "Assign an agent to this column first." : editing.agentStatus === "Stopped" ? "Request a new run using saved work and history." : "Run the current column’s agent using the saved task details."}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            {editing && pendingRun && onStop && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button type="button" size="sm" disabled={busy} onClick={async () => {
+                      if (busy) return;
+                      setBusy(true);
+                      try {
+                        await notifyOperation(onStop, {
+                          loading: "Stopping task…",
+                          success: "Task stop requested.",
+                          error: "Could not update execution. Reload the task and try again.",
+                        });
+                      } catch {
+                        /* The toast reports the failure; keep the task open. */
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}>
+                      <CircleStop className="size-4" aria-hidden="true" />
+                      Stop
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Stop this task and preserve saved work. Other tasks will continue running.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
         </DialogHeader>
         <form
           onSubmit={saveTask}
@@ -182,7 +239,7 @@ function TaskEditorSession({
                 <Label htmlFor="task-title">Title</Label>
                 <Input
                   id="task-title"
-                  className="h-auto py-2 text-xl font-semibold tracking-tight md:text-2xl"
+                  className="h-auto py-2 text-lg font-semibold tracking-tight md:text-xl"
                   value={title}
                   required
                   autoFocus
@@ -207,7 +264,7 @@ function TaskEditorSession({
                   }}
                 />
                 </> : (
-                  <h2 className="text-2xl font-semibold leading-tight tracking-tight wrap-anywhere sm:text-3xl">
+                  <h2 className="text-xl font-semibold leading-tight tracking-tight wrap-anywhere sm:text-2xl">
                     <button type="button" aria-label="Edit title" className="w-full rounded-md text-left outline-none hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setIsEditingTitle(true)}>{title}</button>
                   </h2>
                 )}
@@ -360,29 +417,6 @@ function TaskEditorSession({
                 </Button>
               )}
               <div className="flex items-center gap-1.5">
-                {editing && onRun && (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span>
-                          <Button type="button" size="sm" variant="outline" disabled={busy || pendingRun || canSave || editing.agentStatus === "Waiting" || !assignedColumns.includes(editing.status)} onClick={async () => {
-                            setBusy(true);
-                            try {
-                              await notifyOperation(onRun, { loading: "Queuing agent…", success: "Agent queued.", error: "Could not start the agent. Reload the task and try again." });
-                            } catch {
-                              /* The toast reports the failure; keep the task open. */
-                            } finally {
-                              setBusy(false);
-                            }
-                          }}>{editing.agentStatus === "Stopped" ? "Run again" : "Run"}</Button>
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {canSave ? "Save your changes before running the agent." : pendingRun ? "An agent is already queued or running." : editing.agentStatus === "Waiting" ? "Answer the pending feedback first." : !assignedColumns.includes(editing.status) ? "Assign an agent to this column first." : editing.agentStatus === "Stopped" ? "Request a new run using saved work and history. Resume the global queue separately." : "Run the current column’s agent using the saved task details."}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
                 <DialogClose asChild>
                   <Button
                     type="button"
