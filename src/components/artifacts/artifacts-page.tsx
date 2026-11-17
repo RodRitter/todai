@@ -22,6 +22,10 @@ async function checked(response: Response) {
   return response;
 }
 
+async function fetchRevisionContent(artifact: Artifact) {
+  return checked(await workspaceFetch(`/api/artifacts/download?id=${encodeURIComponent(artifact.id)}&revision=${encodeURIComponent(artifact.revisionId)}`));
+}
+
 export function ArtifactsPage() {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [search, setSearch] = useState("");
@@ -77,7 +81,7 @@ export function ArtifactsPage() {
 
   async function download(artifact: Artifact) {
     try {
-      const response = await checked(await workspaceFetch(`/api/artifacts/download?id=${encodeURIComponent(artifact.id)}&revision=${encodeURIComponent(artifact.revisionId)}`));
+      const response = await fetchRevisionContent(artifact);
       const url = URL.createObjectURL(await response.blob());
       const anchor = document.createElement("a");
       anchor.href = url; anchor.download = artifact.filename ?? "artifact";
@@ -90,7 +94,7 @@ export function ArtifactsPage() {
     setSaving(true);
     try {
       const text = artifact.type === "text" || artifact.type === "markdown"
-        ? await (await checked(await workspaceFetch(`/api/artifacts/download?id=${encodeURIComponent(artifact.id)}&revision=${encodeURIComponent(artifact.revisionId)}`))).text()
+        ? await (await fetchRevisionContent(artifact)).text()
         : "";
       setEditing(artifact); setType(artifact.type); setContent(text); setCreating(true);
     } catch (error) { toast.error(error instanceof Error ? error.message : "Could not load revision."); }
