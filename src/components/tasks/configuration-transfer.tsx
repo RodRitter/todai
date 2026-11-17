@@ -134,7 +134,7 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
         </div>
       </div>
       {operation === "import" && selection}
-      <DialogContent className="max-h-[85svh] overflow-y-auto sm:max-w-2xl" showCloseButton={!busy} onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onInteractOutside={(event) => { if (busy) event.preventDefault(); }}>
+      <DialogContent size="wide" closeDisabled={busy} onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onInteractOutside={(event) => { if (busy) event.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle>Export configuration</DialogTitle>
           <DialogDescription>Choose the agents and columns to include in your JSON file.</DialogDescription>

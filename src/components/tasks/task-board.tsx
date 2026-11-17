@@ -155,7 +155,7 @@ export function TaskBoard({
     >
       <main
         id="task-board"
-        className="flex min-h-[calc(100dvh-3.5rem)] flex-col p-4 md:p-8"
+        className="flex min-h-[calc(100dvh-3.5rem)] flex-col bg-muted/40 p-4 md:p-8"
         aria-label="Task board"
         tabIndex={-1}
       >

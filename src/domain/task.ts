@@ -6,6 +6,7 @@ export const agentStatuses = [
   "Complete",
   "Failed",
   "Interrupted",
+  "Stopped",
   "Running",
   "Paused",
   "Waiting",

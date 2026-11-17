@@ -22,3 +22,5 @@ export const Queued: Story = { args: { status: "Queued" } };
 export const Complete: Story = { args: { status: "Complete" } };
 export const Failed: Story = { args: { status: "Failed" } };
 export const Interrupted: Story = { args: { status: "Interrupted" } };
+
+export const Stopped: Story = { args: { status: "Stopped" } };

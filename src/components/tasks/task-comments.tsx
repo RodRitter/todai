@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Bot, MessageSquare } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Bot, Minus, Plus } from "lucide-react";
 import { Markdown } from "@/components/ui/markdown";
 import { DescriptionEditor } from "./description-editor";
 import type { AgentProfile } from "@/domain/column-agent";
@@ -17,20 +18,23 @@ export function TaskComments({ comments = [], onAnswerFeedback, onPostComment, a
   onAnswerFeedback?: (commentId: string, body: string) => Promise<void>;
 }) {
   return (
-    <section aria-label="Comments" className="mt-8 space-y-5 border-t pt-6">
-      <div className="flex items-center gap-2">
-        <MessageSquare
-          className="text-muted-foreground size-4"
-          aria-hidden="true"
-        />
-        <h3 className="text-sm font-semibold">Comments</h3>
-        <span className="text-muted-foreground text-xs tabular-nums">
-          {comments.length}
-        </span>
-      </div>
+    <Tabs defaultValue="comments" asChild>
+    <section aria-label="Comments" className="mt-8 space-y-6">
+      <TabsList aria-label="Task discussion" className="flex h-auto justify-start gap-6 rounded-none border-b bg-transparent p-0">
+        <TabsTrigger value="comments" className="-mb-px gap-2.5 rounded-none border-b-2 border-transparent px-0 pt-0 pb-3 font-semibold data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none">
+          Comments
+          <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs font-medium tabular-nums">
+            {comments.length}
+          </span>
+        </TabsTrigger>
+        <TabsTrigger value="test" className="-mb-px gap-2.5 rounded-none border-b-2 border-transparent px-0 pt-0 pb-3 font-semibold data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none">
+          Test
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="comments" forceMount className="space-y-6">
       {onPostComment && <CommentInput agents={agents} onPost={onPostComment} agentStatus={agentStatus} />}
       {comments.length || agentStatus === "Running" ? (
-        <ol className="space-y-6">
+        <ol className="space-y-8">
           {agentStatus === "Running" && (
             <li className="flex gap-3">
               <div aria-hidden="true" className="bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-full border">
@@ -56,9 +60,9 @@ export function TaskComments({ comments = [], onAnswerFeedback, onPostComment, a
             .filter((comment) => !(comment.authorName === "Human" && comment.runId && comments.some((request) => request.runId === comment.runId && request.feedbackStatus)))
             .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
             .map((comment) => (
-              <li key={comment.id} className="flex gap-3">
+              <li key={comment.id} className="grid grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-x-3 gap-y-3">
                 <div
-                  className="bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-full border text-xs font-semibold"
+                  className="bg-primary/10 text-primary flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
                   aria-hidden="true"
                 >
                   {comment.authorName ? (
@@ -73,13 +77,13 @@ export function TaskComments({ comments = [], onAnswerFeedback, onPostComment, a
                     <Bot className="size-4" />
                   )}
                 </div>
-                <div className="min-w-0 flex-1 space-y-2">
+                <div className="contents">
                   <div className="flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1">
                     <span className="text-sm font-semibold wrap-anywhere">
                       {comment.authorName || "Agent"}
                     </span>
                     <time
-                      className="text-muted-foreground text-xs"
+                      className="text-muted-foreground inline-flex items-center gap-3 text-xs before:size-1 before:rounded-full before:bg-border"
                       dateTime={comment.createdAt}
                       title={new Date(comment.createdAt).toLocaleString()}
                     >
@@ -93,8 +97,8 @@ export function TaskComments({ comments = [], onAnswerFeedback, onPostComment, a
                     </time>
                   </div>
                   <div className={comment.feedbackStatus === "pending"
-                    ? "space-y-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-4"
-                    : "space-y-3 bg-muted/50 rounded-2xl rounded-tl-sm px-4 py-3"}>
+                    ? "col-span-2 min-w-0 space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4"
+                    : "col-span-2 min-w-0 space-y-3 text-muted-foreground"}>
                     {comment.feedbackStatus && (
                       <p className="text-sm font-semibold">
                         {comment.feedbackStatus === "pending" ? "Your feedback is needed" : comment.feedbackStatus === "cancelled" ? "Feedback request · Cancelled" : "Feedback request · Answered"}
@@ -112,7 +116,7 @@ export function TaskComments({ comments = [], onAnswerFeedback, onPostComment, a
                     )}
                   </div>
                   {comment.feedbackStatus === "answered" && comments.filter((reply) => reply.authorName === "Human" && reply.runId === comment.runId).map((reply) => (
-                    <div key={reply.id} className="space-y-2 rounded-xl border px-4 py-3">
+                    <div key={reply.id} className="col-span-2 ml-4 min-w-0 space-y-2 border-l-2 border-border pl-4 sm:ml-9 sm:pl-5">
                       <p className="text-sm font-semibold">Human</p>
                       <time className="text-xs text-muted-foreground" dateTime={reply.createdAt}>{new Date(reply.createdAt).toLocaleString()}</time>
                       <CommentBody body={reply.body} />
@@ -123,42 +127,71 @@ export function TaskComments({ comments = [], onAnswerFeedback, onPostComment, a
             ))}
         </ol>
       ) : (
-        <div className="rounded-xl border border-dashed px-4 py-8 text-center">
+        <div className="rounded-xl bg-muted/40 px-4 py-8 text-center">
           <p className="text-muted-foreground text-sm">No comments yet.</p>
           <p className="text-muted-foreground mt-1 text-xs">
             Agent updates and handovers will appear here.
           </p>
         </div>
       )}
+      </TabsContent>
+      <TabsContent value="test">
+        <p className="text-sm text-muted-foreground">Test tab content.</p>
+      </TabsContent>
     </section>
+    </Tabs>
   );
 }
 
 function CommentBody({ body }: { body: string }) {
-  const isLong = body.length > 600 || body.split("\n").length > 8;
+  const isLong = body.length > 600 || body.split("\n").length > 10;
 
   if (!isLong) return <Markdown>{body}</Markdown>;
 
+  return <ExpandableComment body={body} />;
+}
+
+function ExpandableComment({ body }: { body: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [contentHeight, setContentHeight] = useState<number>();
+  const contentRef = useRef<HTMLDivElement>(null);
+  const contentId = useId();
+
+  useEffect(() => {
+    const content = contentRef.current;
+    if (!content) return;
+    const measure = () => setContentHeight(content.getBoundingClientRect().height);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div className="relative [&:has(details[open])>.comment-preview]:hidden [&:has(details[open])>.comment-fade]:hidden">
+    <div>
       <div
-        aria-hidden="true"
-        className="comment-fade pointer-events-none absolute -inset-x-4 -bottom-3 h-12 rounded-b-2xl bg-linear-to-b from-transparent to-foreground/5"
-      />
-      <div className="comment-preview mb-3 max-h-36 overflow-hidden">
-        <Markdown compact>{body.split("\n").slice(0, 6).join("\n")}</Markdown>
-      </div>
-      <details className="group/comment relative">
-        <summary className="w-fit cursor-pointer rounded-sm text-xs font-normal text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
-          <span className="group-open/comment:hidden">Show full comment</span>
-          <span className="hidden group-open/comment:inline">
-            Collapse comment
-          </span>
-        </summary>
-        <div className="mt-3">
+        id={contentId}
+        className="relative overflow-hidden transition-[height] duration-300 ease-in-out motion-reduce:transition-none"
+        style={{ height: expanded ? contentHeight : Math.min(contentHeight ?? 240, 240) }}
+      >
+        <div ref={contentRef} className="flow-root" inert={!expanded}>
           <Markdown>{body}</Markdown>
         </div>
-      </details>
+        <div
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-linear-to-b from-transparent to-background transition-opacity duration-300 motion-reduce:transition-none ${expanded ? "opacity-0" : "opacity-100"}`}
+        />
+      </div>
+      <button
+        type="button"
+        aria-expanded={expanded}
+        aria-controls={contentId}
+        onClick={() => setExpanded((value) => !value)}
+        className="mt-3 inline-flex cursor-pointer items-center gap-1.5 rounded-sm text-xs font-normal text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {expanded ? <Minus aria-hidden="true" className="size-3.5" /> : <Plus aria-hidden="true" className="size-3.5" />}
+        {expanded ? "Show Less" : "Show More"}
+      </button>
     </div>
   );
 }
@@ -214,13 +247,24 @@ function CommentInput({ agents, onPost, agentStatus }: { agents: AgentProfile[];
       setError(error instanceof Error ? error.message : "Could not post comment.");
     } finally { submitting.current = false; setBusy(false); }
   }
-  return <div className="space-y-2">
-    <label htmlFor="task-comment" className="text-sm font-medium">Your comment</label>
-    <DescriptionEditor key={version} id="task-comment" label="Your comment" value={body} onChange={setBody} disabled={busy || pendingRun} agents={agents} />
-    {pendingRun && <p role="status" className="text-xs text-muted-foreground">{agentStatus === "Running" ? "The agent is working." : "The agent is queued to start."} You can comment when it finishes or asks for feedback.</p>}
-    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-    <Button type="button" size="sm" disabled={busy || pendingRun || !body.trim()} onClick={() => void submit()}>
-      {busy ? "Posting…" : "Post comment"}
-    </Button>
-  </div>;
+  return (
+    <DescriptionEditor
+      key={version}
+      id="task-comment"
+      label="Your comment"
+      value={body}
+      onChange={setBody}
+      disabled={busy || pendingRun}
+      agents={agents}
+      actions={
+        <Button type="button" size="sm" className="rounded-lg px-4" disabled={busy || pendingRun || !body.trim()} onClick={() => void submit()}>
+          {busy ? "Posting…" : "Post comment"}
+        </Button>
+      }
+      footer={pendingRun || error ? <>
+        {pendingRun && <p role="status" className="text-xs text-muted-foreground">{agentStatus === "Running" ? "The agent is working." : "The agent is queued to start."} You can comment when it finishes or asks for feedback.</p>}
+        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      </> : undefined}
+    />
+  );
 }

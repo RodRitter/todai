@@ -87,7 +87,10 @@ export class ExecutionService {
           task,
           workspace: executionWorkspacePath(run.workspacePath),
           signal: controller.signal,
-          onStart: (pid) => this.store.recordRunner(run.id, pid),
+          onStart: (pid) => {
+            this.store.recordRunner(run.id, pid);
+            if (this.store.interruptionRequested(run.id)) controller.abort();
+          },
         });
         if (run.kind === "intent") {
           const order = orderedReplies(summary, run.replyPlan ?? []);

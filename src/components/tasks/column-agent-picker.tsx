@@ -63,7 +63,7 @@ export function ColumnAgentPicker({
         if (!open && !saving.current) onClose();
       }}
     >
-      <DialogContent>
+      <DialogContent closeDisabled={busy}>
         <DialogHeader>
           <DialogTitle>Agent for {column}</DialogTitle>
           <DialogDescription>

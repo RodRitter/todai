@@ -1,7 +1,8 @@
 # TODO
 
-- Artifacts, documents and storage
-- Queries, feedback & answers in comments
+[ ] Add multi-workspace selector
+[ ] Artifacts, documents and storage
+[x] Queries, feedback & answers in comments
 
 # Todai
 
@@ -45,6 +46,8 @@ New boards start with **To do**, **In progress**, **In review**, and **Done**. C
 
 In a task’s Comments section, write a rich text comment and type **@** to select agents. Comments without mentions stay as context. A lightweight intent agent selects which tagged agents are being asked to respond and orders their replies; agents mentioned only as context do not respond. For example, “@Reviewer what do you think of @Implementor's comment?” asks only Reviewer to reply. Each responding agent sees earlier responses. The intent agent uses the default executor with `gpt-6-luna` (Codex) or `haiku` (Claude), at low effort. If intent detection fails, no replies start; post the comment again to retry. Comment replies keep the task in its current column.
 
+The header’s execution indicator shows the active agent, task, and workspace. **Stop current run** terminates the agent and its commands, preserves saved files and history, and pauses the queue across all workspaces. The pause survives app restarts. **Run again** on a stopped task requests a new run using saved work and history; **Resume queue** is a separate action. Other queued requests remain queued, and requests for a stopped task wait until you explicitly run it again.
+
 Agents run one at a time. Keep the server running while they work. Todai is designed for a persistent local Node.js process on macOS or Linux.
 
 ## Data and configuration
@@ -73,6 +76,8 @@ To run a production build locally:
 npm run build
 npm start
 ```
+
+Shared styling conventions and component usage are documented in Storybook under **Foundations → Component styling** ([source](src/components/ui/style-guide.mdx)). Use its light/dark theme toolbar when reviewing components and dialogs.
 
 ## Project structure
 

@@ -2,6 +2,7 @@
 
 import { AlertDialog } from "radix-ui";
 import { Button } from "./button";
+import { ModalHeader, ModalCloseButton, modalTitleClassName, modalContentClassName } from "./dialog";
 
 export function DeleteConfirmation({
   open,
@@ -25,11 +26,16 @@ export function DeleteConfirmation({
       <AlertDialog.Portal>
         <AlertDialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
         <AlertDialog.Content
-          className="bg-background fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border p-6 shadow-lg sm:max-w-lg"
+          className={modalContentClassName}
           onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }}
           aria-busy={busy}
         >
-          <AlertDialog.Title className="text-lg leading-none font-semibold">{title}</AlertDialog.Title>
+          <ModalHeader>
+            <AlertDialog.Cancel asChild>
+              <ModalCloseButton disabled={busy} />
+            </AlertDialog.Cancel>
+            <AlertDialog.Title className={modalTitleClassName}>{title}</AlertDialog.Title>
+          </ModalHeader>
           <AlertDialog.Description className="text-muted-foreground text-sm break-words">{description}</AlertDialog.Description>
           <div className="flex justify-end gap-2">
             <AlertDialog.Cancel asChild>

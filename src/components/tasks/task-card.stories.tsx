@@ -51,6 +51,19 @@ export const NoDescription: Story = {
   args: { task: { ...exampleTasks[0], description: "" } },
 };
 export const Dragging: Story = { args: { isDragging: true } };
+export const WithComments: Story = {
+  args: {
+    task: {
+      ...exampleTasks[3],
+      comments: [{
+        id: "comment-1",
+        taskId: exampleTasks[3].id,
+        body: "Ready for review.",
+        createdAt: "2026-11-17T08:00:00.000Z",
+      }],
+    },
+  },
+};
 export const KeyboardActivation: Story = {
   play: async ({ canvasElement, args }) => {
     const card = within(canvasElement).getByRole("button");

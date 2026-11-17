@@ -7,6 +7,10 @@ import { statuses } from "../domain/task.ts";
 export function initializeSchema(db: DatabaseSync) {
   db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
   db.exec(`
+      CREATE TABLE IF NOT EXISTS execution_control (
+        id INTEGER PRIMARY KEY CHECK (id = 1), paused INTEGER NOT NULL DEFAULT 0
+      );
+      INSERT OR IGNORE INTO execution_control (id) VALUES (1);
       CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       PRAGMA foreign_keys = ON;
       PRAGMA busy_timeout = 5000;
@@ -70,6 +74,7 @@ export function initializeSchema(db: DatabaseSync) {
     db.exec("CREATE UNIQUE INDEX IF NOT EXISTS one_pending_feedback ON comments(taskId) WHERE feedbackStatus = 'pending'");
     const runColumns = db.prepare("PRAGMA table_info(runs)").all();
     for (const column of [
+      "stopRequested",
       "ownerIdentity",
       "runnerIdentity",
       "interruptionColumn",

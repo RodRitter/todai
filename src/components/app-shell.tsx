@@ -3,8 +3,10 @@
 import { WorkspaceLink as Link } from "@/components/workspace-selection";
 import { useState, type ReactNode } from "react";
 import { BookOpen, Bot, LayoutGrid, PanelLeft, Settings } from "lucide-react";
-import { WorkspaceSwitcher } from "@/components/workspace-selection";
 import { Button } from "@/components/ui/button";
+import { WorkspaceSwitcher } from "@/components/workspace-selection";
+import { ExecutionActivity } from "@/components/execution-activity";
+import { ServerNotifications } from "@/components/server-notifications";
 
 export function AppShell({
   children,
@@ -113,7 +115,11 @@ export function AppShell({
                   ? "Skills"
                   : "Task board"}
           </h1>
-          <div className="ml-auto">{headerActions}</div>
+          <div className="ml-auto flex items-center gap-2">
+            {headerActions}
+            <ExecutionActivity />
+            <ServerNotifications />
+          </div>
         </header>
         {children}
       </div>

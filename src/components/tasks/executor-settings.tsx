@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FlaskConical, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { notifyOperation, toast } from "@/components/ui/toast";
@@ -18,7 +19,11 @@ export function ExecutorSettings({ test = executorApi.test, load = executorApi.g
   const [attempt, setAttempt] = useState(0);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<ExecutionTool | "save" | null>(null);
-  const [results, setResults] = useState<Partial<Record<ExecutionTool, string>>>({});
+  const [results, setResults] = useState<Partial<Record<ExecutionTool, {
+    variant: "info" | "success" | "error";
+    title: string;
+    message: string;
+  }>>>({});
   const pending = useRef(false);
   useEffect(() => {
     let active = true;
@@ -45,15 +50,26 @@ export function ExecutorSettings({ test = executorApi.test, load = executorApi.g
     if (pending.current) return;
     pending.current = true;
     setBusy(tool);
+    setResults((current) => ({ ...current, [tool]: {
+      variant: "info", title: "Testing connection…",
+      message: "Checking installation, sign-in, and tool access. This may take up to three minutes.",
+    } }));
     try {
       const result = await notifyOperation(() => test(tool), {
         loading: "Testing installation, sign-in, and tool access…",
         success: "Executor connection test passed.",
         error: (error) => error instanceof Error ? error.message : "Could not test the executor.",
       });
-      setResults((current) => ({ ...current, [tool]: "Connection test passed" }));
+      setResults((current) => ({ ...current, [tool]: {
+        variant: "success", title: "Connection test passed", message: result.message,
+      } }));
       setData((current) => current && ({ ...current, statuses: current.statuses?.map((status) => status.tool === tool ? { ...status, installed: true, signedIn: true, message: result.message } : status) }));
-    } catch { setResults((current) => ({ ...current, [tool]: "Connection test failed — see notification for details" })); }
+    } catch (error) {
+      setResults((current) => ({ ...current, [tool]: {
+        variant: "error", title: "Connection test failed",
+        message: error instanceof Error ? error.message : "Could not test the executor. Please try again.",
+      } }));
+    }
     finally { pending.current = false; setBusy(null); }
   }
 
@@ -75,6 +91,7 @@ export function ExecutorSettings({ test = executorApi.test, load = executorApi.g
       <div className="space-y-4">
         {executionTools.map((tool) => {
           const status = data?.statuses?.find((entry) => entry.tool === tool.value);
+          const result = results[tool.value];
           return <section key={tool.value} aria-label={tool.label} className="space-y-3 rounded-lg border p-4">
             <div className="flex items-center justify-between gap-2">
               <h3 className="font-medium">{tool.label}</h3>
@@ -86,7 +103,7 @@ export function ExecutorSettings({ test = executorApi.test, load = executorApi.g
               {busy === tool.value ? <LoaderCircle className="animate-spin" /> : <FlaskConical />}
               {busy === tool.value ? "Testing…" : `Test ${tool.label}`}
             </Button>
-            {results[tool.value] && <p role="status" className="text-xs text-muted-foreground">{results[tool.value]}</p>}
+            {result && <Alert variant={result.variant} title={result.title}>{result.message}</Alert>}
           </section>;
         })}
       </div>

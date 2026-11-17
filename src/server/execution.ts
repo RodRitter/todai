@@ -1,6 +1,6 @@
-import { openTaskStore } from "./database";
-import { ExecutionService } from "./execution-service";
-import { createExecutorRunner } from "./executor-runner";
+import { openTaskStore } from "./database.ts";
+import { ExecutionService } from "./execution-service.ts";
+import { createExecutorRunner } from "./executor-runner.ts";
 
 type Scheduler = { run: () => Promise<void>; tick: () => void };
 const state = globalThis as typeof globalThis & {

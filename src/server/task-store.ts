@@ -17,6 +17,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { statuses, type Task, type TaskComment } from "../domain/task.ts";
 
+import type { ExecutionState } from "../domain/execution.ts";
 import type { Workspace } from "../domain/workspace.ts";
 export type { Workspace } from "../domain/workspace.ts";
 export class WorkspaceOwnershipError extends Error {}
@@ -36,10 +37,11 @@ export type AgentRun = {
   taskId: string;
   column: Task["status"];
   profile: AgentProfile;
-  status: "Queued" | "Running" | "Complete" | "Failed" | "Interrupted" | "Waiting";
+  status: "Queued" | "Running" | "Complete" | "Failed" | "Interrupted" | "Stopped" | "Waiting";
   kind?: "intent" | "reply" | null;
   commentId?: string | null;
   replyPlan?: AgentProfile[] | null;
+  stopRequested?: string | null;
   interruptionColumn?: Task["status"] | null;
   createdAt: string;
   startedAt: string | null;
@@ -373,12 +375,13 @@ export class TaskStore {
         this.db
           .prepare(
             `UPDATE runs SET status = 'Interrupted', finishedAt = ?, summary = ?
-          WHERE runs.workspaceId = workspace_id() AND taskId = ? AND status = 'Queued'`,
+          WHERE runs.workspaceId = workspace_id() AND taskId = ? AND status = 'Queued' AND ? <> 'Stopped'`,
           )
           .run(
             new Date().toISOString(),
             `Queued run cancelled because the task moved to ${task.status}.`,
             task.id,
+            previous.agentStatus,
           );
         this.db
           .prepare(
@@ -388,6 +391,7 @@ export class TaskStore {
         this.db
           .prepare(
             `UPDATE tasks SET agentStatus = CASE
+          WHEN agentStatus = 'Stopped' THEN 'Stopped'
           WHEN EXISTS (SELECT 1 FROM runs WHERE runs.workspaceId = workspace_id() AND taskId = ? AND status = 'Running') THEN 'Running'
           WHEN agentStatus IN ('Complete', 'Failed', 'Interrupted') THEN agentStatus
           ELSE 'Not started' END WHERE tasks.workspaceId = workspace_id() AND id = ?`,
@@ -409,7 +413,7 @@ export class TaskStore {
           Number(task.autoWorkflow ?? previous?.autoWorkflow ?? false),
           Number(task.autoRun ?? previous?.autoRun ?? false),
         );
-      if ((!previous || previous.status !== task.status) && (task.autoRun ?? previous?.autoRun ?? false)) {
+      if (previous?.agentStatus !== "Stopped" && (!previous || previous.status !== task.status) && (task.autoRun ?? previous?.autoRun ?? false)) {
         this.queueAgent(task.id, task.status);
       }
       return this.list().find((item) => item.id === task.id)!;
@@ -422,7 +426,7 @@ export class TaskStore {
     return this.transaction(() => {
       const task = this.list().find((item) => item.id === taskId);
       if (!task) throw new RunValidationError("This task no longer exists.");
-      if (this.history(taskId).some((run) => run.status === "Queued" || run.status === "Running"))
+      if (this.history(taskId).some((run) => (run.status === "Queued" && task.agentStatus !== "Stopped") || run.status === "Running"))
         throw new RunValidationError("This task already has a queued or running agent.");
       if (task.comments?.some((comment) => comment.feedbackStatus === "pending"))
         throw new RunValidationError("Answer the pending feedback before starting another run.");
@@ -486,11 +490,39 @@ export class TaskStore {
     })) as AgentRun[];
   }
 
+  executionState(): ExecutionState {
+    const active = this.db.prepare(`SELECT runs.id AS runId, tasks.id AS taskId, tasks.title AS taskTitle,
+      json_extract(runs.profile, '$.name') AS agentName, workspaces.id AS workspaceId,
+      workspaces.name AS workspaceName, runs.workspacePath, runs.stopRequested
+      FROM runs JOIN tasks ON tasks.id = runs.taskId JOIN workspaces ON workspaces.id = runs.workspaceId
+      WHERE runs.status = 'Running' LIMIT 1`).get();
+    return {
+      paused: Boolean(this.db.prepare("SELECT paused FROM execution_control WHERE id = 1").get()?.paused),
+      active: active ? { ...active, stopping: Boolean(active.stopRequested) } as ExecutionState["active"] : null,
+    };
+  }
+
+  stopExecution(runId: string) {
+    return this.transaction(() => {
+      const active = this.db.prepare("SELECT * FROM runs WHERE status = 'Running'").get();
+      if (active && active.id !== runId) throw new RunValidationError("The active run changed. Refresh and try again.");
+      this.db.prepare("UPDATE execution_control SET paused = 1 WHERE id = 1").run();
+      if (!active) return;
+      this.db.prepare("UPDATE runs SET stopRequested = ? WHERE id = ?").run(new Date().toISOString(), runId);
+      this.db.prepare("UPDATE tasks SET agentStatus = 'Stopped' WHERE id = ?").run(active.taskId);
+    });
+  }
+
+  resumeExecution() {
+    this.db.prepare("UPDATE execution_control SET paused = 0 WHERE id = 1").run();
+  }
+
   claimRun(): AgentRun | undefined {
     return this.transaction(() => {
+      if (this.executionState().paused) return;
       if (this.db.prepare("SELECT id FROM runs WHERE status = 'Running'").get())
         return;
-      const waiting = new Set(this.list().filter((task) => task.comments?.some((comment) => comment.feedbackStatus === "pending")).map((task) => task.id));
+      const waiting = new Set(this.list().filter((task) => task.agentStatus === "Stopped" || task.comments?.some((comment) => comment.feedbackStatus === "pending")).map((task) => task.id));
       const run = this.history().sort((a, b) => a.createdAt.localeCompare(b.createdAt)).find((run) => run.status === "Queued" && !waiting.has(run.taskId));
       if (!run) return;
       const startedAt = new Date().toISOString();
@@ -519,7 +551,7 @@ export class TaskStore {
     this.assertOwnership("runs", runId);
     return Boolean(
       this.db
-        .prepare("SELECT interruptionColumn FROM runs WHERE runs.workspaceId = workspace_id() AND id = ?")
+        .prepare("SELECT COALESCE(stopRequested, interruptionColumn) AS interruptionColumn FROM runs WHERE runs.workspaceId = workspace_id() AND id = ?")
         .get(runId)?.interruptionColumn,
     );
   }
@@ -535,7 +567,7 @@ export class TaskStore {
 
   finishRun(
     runId: string,
-    status: "Complete" | "Failed" | "Interrupted" | "Waiting",
+    status: "Complete" | "Failed" | "Interrupted" | "Stopped" | "Waiting",
     summary: string,
     recommendation?: string,
     replyPlan?: AgentProfile[],
@@ -549,6 +581,10 @@ export class TaskStore {
       if (run.interruptionColumn) {
         status = "Interrupted";
         summary = `Agent run interrupted because the task moved to ${run.interruptionColumn}. Workspace changes were preserved.`;
+      }
+      if (run.stopRequested) {
+        status = "Stopped";
+        summary = "Agent run stopped by the user. Saved work and history were preserved. Run this task again to request a new run; resume the global queue separately.";
       }
       if (status === "Waiting" && (!summary.trim() || !recommendation?.trim()))
         throw new FeedbackValidationError("Feedback requests require a question and recommendation.");
@@ -566,11 +602,12 @@ export class TaskStore {
       this.db
         .prepare(
           `UPDATE tasks SET agentStatus = CASE
+        WHEN ? = 'Stopped' THEN 'Stopped'
         WHEN EXISTS (SELECT 1 FROM comments WHERE comments.workspaceId = workspace_id() AND taskId = ? AND feedbackStatus = 'pending') OR ? = 'Waiting' THEN 'Waiting'
         WHEN EXISTS (SELECT 1 FROM runs WHERE runs.workspaceId = workspace_id() AND taskId = ? AND status = 'Queued') THEN 'Queued'
         ELSE ? END WHERE tasks.workspaceId = workspace_id() AND id = ?`,
         )
-        .run(run.taskId, status, run.taskId, status, run.taskId);
+        .run(status, run.taskId, status, run.taskId, status, run.taskId);
       if (run.kind !== "intent") this.addComment({
         id: randomUUID(),
         taskId: run.taskId,

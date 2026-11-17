@@ -2,7 +2,7 @@
 
 import { workspaceFetch } from "@/lib/workspace-fetch";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "@tiptap/markdown";
@@ -10,6 +10,7 @@ import { TableKit } from "@tiptap/extension-table";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import Image from "@tiptap/extension-image";
+import { EditorSurface, editorLabelClassName } from "@/components/ui/editor-surface";
 import { richTextClassName } from "@/components/ui/rich-text-styles";
 import { agentMentionPath } from "@/domain/agent-mentions";
 import type { AgentProfile } from "@/domain/column-agent";
@@ -28,9 +29,9 @@ function referenceMatch(editor: Editor, allowAgents: boolean): Match | null {
   return { from: $from.pos - match[2].length - 1, to: $from.pos, kind: match[1] === "$" ? "skill" : match[1] === "@" ? "agent" : "file", query: match[2] };
 }
 
-export function DescriptionEditor({ value, onChange, disabled = false, autoFocus = false, agents, label = "Description", id = "task-description" }: {
+export function DescriptionEditor({ value, onChange, disabled = false, autoFocus = false, agents, label = "Description", id = "task-description", actions, footer }: {
   value: string; onChange: (value: string) => void; disabled?: boolean; autoFocus?: boolean;
-  agents?: AgentProfile[]; label?: string; id?: string;
+  agents?: AgentProfile[]; label?: string; id?: string; actions?: ReactNode; footer?: ReactNode;
 }) {
   const [match, setMatch] = useState<Match | null>(null);
   const [response, setResponse] = useState<{ key: string; items: TaskReference[] }>({ key: "", items: [] });
@@ -142,38 +143,52 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
   });
 
   return (
-    <div className="space-y-2">
-      <div className={`rounded-lg border ${disabled ? "cursor-not-allowed bg-muted/50 text-muted-foreground opacity-60" : "focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/50"}`}>
-        <TooltipProvider>
-          <div role="group" aria-label={`${label} formatting`} className="flex flex-wrap items-center gap-1 border-b p-1">
-            {formatGroups.map((group, index) => (
-              <ToggleGroup
-                key={group.label}
-                type="multiple"
-                value={activeFormats ?? []}
-                aria-label={group.label}
-                disabled={disabled || !editor}
-                className={index ? "border-l pl-1" : undefined}
-              >
-                {group.items.map(({ value, label, icon: Icon, action }) => (
-                  <Tooltip key={value}>
-                    <TooltipTrigger asChild>
-                      <ToggleGroupItem
-                        value={value}
-                        aria-label={label}
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={action}
-                      >
-                        <Icon aria-hidden="true" />
-                      </ToggleGroupItem>
-                    </TooltipTrigger>
-                    <TooltipContent>{label}</TooltipContent>
-                  </Tooltip>
-                ))}
-              </ToggleGroup>
-            ))}
-          </div>
-        </TooltipProvider>
+    <EditorSurface
+      disabled={disabled}
+      onClick={(event) => {
+        if (
+          !disabled &&
+          event.target instanceof Element &&
+          !event.target.closest("button, a, input, [role=button], [role=option], [contenteditable]")
+        ) editor?.chain().focus().run();
+      }}
+    >
+      <label htmlFor={id} className={editorLabelClassName}>{label}</label>
+      <div className="flex flex-col [&_.tiptap]:min-h-24 [&_.tiptap]:px-0 [&_.tiptap]:pt-0">
+        <div className="order-last mt-2 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+          <TooltipProvider>
+            <div role="group" aria-label={`${label} formatting`} className="flex flex-wrap items-center gap-1">
+              {formatGroups.map((group, index) => (
+                <ToggleGroup
+                  key={group.label}
+                  type="multiple"
+                  value={activeFormats ?? []}
+                  aria-label={group.label}
+                  disabled={disabled || !editor}
+                  className={index ? "border-l pl-1" : undefined}
+                >
+                  {group.items.map(({ value, label, icon: Icon, action }) => (
+                    <Tooltip key={value}>
+                      <TooltipTrigger asChild>
+                        <ToggleGroupItem
+                          value={value}
+                          aria-label={label}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={action}
+                        >
+                          <Icon aria-hidden="true" />
+                        </ToggleGroupItem>
+                      </TooltipTrigger>
+                      <TooltipContent>{label}</TooltipContent>
+                    </Tooltip>
+                  ))}
+                </ToggleGroup>
+              ))}
+            </div>
+          </TooltipProvider>
+          {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
+          {footer && <div className="w-full space-y-2">{footer}</div>}
+        </div>
         <EditorContent editor={editor} />
         {match && !disabled && (
           <div className="max-h-52 overflow-y-auto border-t p-1" role="listbox" aria-label={agentMode ? "Available agents" : match.kind === "skill" ? "Available skills" : "Workspace files"}>
@@ -188,6 +203,6 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
           </div>
         )}
       </div>
-    </div>
+    </EditorSurface>
   );
 }

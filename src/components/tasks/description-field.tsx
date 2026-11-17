@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import { EditorSurface, editorLabelClassName } from "@/components/ui/editor-surface";
 import { Markdown } from "@/components/ui/markdown";
 import { DescriptionEditor } from "./description-editor";
 
@@ -41,14 +41,12 @@ export function DescriptionField({
 
   return (
     <>
-      <Label htmlFor="task-description">Description</Label>
       <input
         type="hidden"
         name="description"
         value={isEditing ? draft : description}
       />
       {isEditing ? (
-        <div className="space-y-2">
           <DescriptionEditor
             value={draft}
             disabled={disabled}
@@ -57,10 +55,7 @@ export function DescriptionField({
               onChange(value);
             }}
             autoFocus
-          />
-          <div className="flex items-center justify-between gap-3">
-
-            <div className="flex gap-1">
+            actions={<>
               <Button
                 type="button"
                 size="sm"
@@ -84,16 +79,16 @@ export function DescriptionField({
               >
                 Save
               </Button>
-            </div>
-          </div>
-        </div>
+            </>}
+          />
       ) : (
-        <div
+        <EditorSurface
+          disabled={disabled}
           role="button"
           tabIndex={disabled ? -1 : 0}
           aria-label="Edit description"
           aria-disabled={disabled}
-          className="cursor-text border-l-2 border-border p-3 outline-none transition-colors hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring/50"
+          className="min-h-40 text-muted-foreground"
           onClick={(event) => {
             if (!(event.target as HTMLElement).closest("a")) startEditing();
           }}
@@ -107,6 +102,7 @@ export function DescriptionField({
             }
           }}
         >
+          <span className={editorLabelClassName}>Description</span>
           {description.trim() ? (
             <Markdown>{description}</Markdown>
           ) : (
@@ -114,7 +110,7 @@ export function DescriptionField({
               Click to add a description…
             </p>
           )}
-        </div>
+        </EditorSurface>
       )}
     </>
   );

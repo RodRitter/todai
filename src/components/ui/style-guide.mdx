@@ -1,0 +1,33 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Foundations/Component styling" />
+
+# Component styling
+
+Use the actual shared components in application screens and stories. Change their defaults when changing the visual system; avoid copying their classes into feature components.
+
+## Cards
+
+`Card` owns the rounded surface, subtle border, and soft shadow. `CardHeader`, `CardTitle`, `CardDescription`, and `CardFooter` own typography and horizontal spacing. Use `variant="task"` for task cards: 20px top and bottom padding, and 20px between content and metadata. Use `compact` only where a denser layout is needed. Keep task interactions and status accents in `TaskCard`.
+
+## Modals
+
+Compose `DialogContent`, `DialogHeader`, and `DialogTitle`. The header supplies the top-left close button, right-aligned title, divider, and sticky positioning. Do not add a second close button or override header padding or title typography. The default content gap provides 24px between the header and body; do not add top padding above the task title.
+
+Use `DialogContent`'s `size` prop (`default`, `wide`, or `large`) instead of local width and scrolling classes. Set `closeDisabled` during pending operations to keep the close button in place while blocking dismissal. Destructive confirmations use `DeleteConfirmation`, which shares the header layout while preserving alert-dialog semantics.
+
+## Rich text
+
+Use `DescriptionEditor` for editable rich text. It owns the label, gray `EditorSurface`, focus ring, content area, formatting toolbar, and action row. Pass buttons through `actions` and supporting messages through `footer`. Do not wrap it in another gray panel, border, or padded editor container.
+
+Use `DescriptionField` for descriptions with preview/edit modes. Both modes use `EditorSurface`; clicking its gray space opens or focuses editing. Markdown and editable content share `richTextClassName`. Plain text fields continue to use `Input` or `Textarea`.
+
+## Comments
+
+Use `TaskComments` for comment threads and feedback. It owns the heading, count, composer, author rows, timestamps, and reply indentation. Do not recreate comment markup in modal callers.
+
+## Storybook review
+
+Use the theme toolbar to inspect light and dark modes; the theme applies to modal portals too. Use the viewport toolbar for narrow layouts. Stories should render production components with representative content, not styled copies. Cover empty, long-content, disabled/busy, error, and interactive states when applicable. Update the relevant stories when changing component APIs.
+
+Run `npm run typecheck`, `npm run lint`, and `npm run build-storybook` after shared component changes. Browser interaction stories still need to be run in Storybook; a static build does not execute them.

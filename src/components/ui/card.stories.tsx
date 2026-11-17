@@ -33,7 +33,7 @@ const meta = {
     ),
   ],
   argTypes: {
-    variant: { control: "inline-radio", options: ["default", "compact"] },
+    variant: { control: "inline-radio", options: ["default", "compact", "task"] },
     actions: {
       control: "select",
       options: ["none", "primary", "confirm", "edit"],
@@ -62,15 +62,15 @@ const meta = {
   }) => (
     <Card {...args}>
       <CardHeader>
-        <CardTitle className="break-words leading-snug">{heading}</CardTitle>
+        <CardTitle>{heading}</CardTitle>
         {description && (
-          <CardDescription className="break-words">
+          <CardDescription>
             {description}
           </CardDescription>
         )}
       </CardHeader>
       {actions !== "none" && (
-        <CardFooter className="flex-wrap justify-end gap-2 pt-3">
+        <CardFooter className="justify-end">
           {actions === "edit" && (
             <Button
               size="sm"
@@ -121,3 +121,5 @@ export const LongContent: Story = {
     actions: "primary",
   },
 };
+
+export const Task: Story = { args: { variant: "task", actions: "edit" } };
