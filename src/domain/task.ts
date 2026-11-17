@@ -1,3 +1,4 @@
+import type { ArtifactReference } from "./artifact.ts";
 export const statuses = ["To do", "In progress", "In review", "Done"] as const;
 export type Status = string;
 export const agentStatuses = [
@@ -26,6 +27,7 @@ export type Task = {
 };
 
 export type TaskComment = {
+  artifacts?: ArtifactReference[];
   id: string;
   taskId: string;
   body: string;

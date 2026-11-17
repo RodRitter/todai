@@ -1,3 +1,4 @@
+import type { ArtifactReference } from "@/domain/artifact";
 import type { Workspace } from "../domain/workspace.ts";
 import { workspaceFetch } from "./workspace-fetch.ts";
 import type { AgentProfile, ColumnAssignment, ExecutionTool, ExecutorSettingsData } from "@/domain/column-agent";
@@ -36,8 +37,8 @@ export const taskApi = {
     request<Task>("/api/tasks/stop", { method: "POST", body: { taskId } }),
   run: (taskId: string) =>
     request<Task>("/api/tasks/run", { method: "POST", body: { taskId } }),
-  postComment: (taskId: string, body: string) =>
-    request<Task>("/api/tasks/comments", { method: "POST", body: { taskId, body } }),
+  postComment: (taskId: string, body: string, artifacts?: ArtifactReference[]) =>
+    request<Task>("/api/tasks/comments", { method: "POST", body: { taskId, body, artifacts } }),
   answerFeedback: (taskId: string, commentId: string, body: string) =>
     request<Task>("/api/tasks/feedback", { method: "POST", body: { taskId, commentId, body } }),
   list: () => request<BoardSnapshot>("/api/tasks?workspace=true"),

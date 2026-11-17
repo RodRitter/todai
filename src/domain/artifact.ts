@@ -29,4 +29,7 @@ export type ArtifactInput = {
   mediaType?: string;
   url?: string;
 };
-export type ArtifactFilters = { archived?: boolean; search?: string; type?: string; creator?: string };
+export type ArtifactFilters = { taskId?: string; archived?: boolean; search?: string; type?: string; creator?: string };
+
+export type ArtifactReference = { artifactId: string; revisionId: string };
+export type TaskArtifact = { artifact: Artifact; explicit: boolean; comments: { commentId: string; artifact: Artifact }[] };

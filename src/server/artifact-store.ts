@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { TaskStore, WorkspaceOwnershipError } from "./task-store.ts";
-import { MAX_ARTIFACT_BYTES, type Artifact, type ArtifactInput, type ArtifactFilters } from "../domain/artifact.ts";
+import { MAX_ARTIFACT_BYTES, type Artifact, type ArtifactInput, type ArtifactFilters, type TaskArtifact } from "../domain/artifact.ts";
 
 export class ArtifactError extends Error {}
 export class ArtifactTooLargeError extends ArtifactError {}
@@ -18,30 +18,7 @@ export class ArtifactStore {
     tasks.close();
     this.workspaceId = workspaceId;
     this.db = new DatabaseSync(path);
-    this.db.exec(`PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;
-      CREATE TABLE IF NOT EXISTS artifacts (
-        id TEXT PRIMARY KEY, workspaceId TEXT NOT NULL REFERENCES workspaces(id),
-        title TEXT NOT NULL, description TEXT NOT NULL, type TEXT NOT NULL,
-        creator TEXT NOT NULL, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL,
-        filename TEXT, mediaType TEXT, byteSize INTEGER, url TEXT, content BLOB
-      );
-      CREATE INDEX IF NOT EXISTS artifacts_workspace ON artifacts(workspaceId);`);
-    this.transaction(() => {
-      const columns = this.db.prepare("PRAGMA table_info(artifacts)").all();
-      if (!columns.some((column) => column.name === "archived"))
-        this.db.exec("ALTER TABLE artifacts ADD COLUMN archived INTEGER NOT NULL DEFAULT 0");
-      this.db.exec(`CREATE TABLE IF NOT EXISTS artifact_revisions (
-        id TEXT NOT NULL REFERENCES artifacts(id), workspaceId TEXT NOT NULL REFERENCES workspaces(id),
-        title TEXT NOT NULL, description TEXT NOT NULL, type TEXT NOT NULL,
-        creator TEXT NOT NULL, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL,
-        filename TEXT, mediaType TEXT, byteSize INTEGER, url TEXT, content BLOB,
-        revisionId TEXT PRIMARY KEY, revisionNumber INTEGER NOT NULL,
-        UNIQUE(id, revisionNumber)
-      );
-      INSERT INTO artifact_revisions (${fields}, content, revisionId, revisionNumber)
-        SELECT ${fields}, content, id, 1 FROM artifacts a
-        WHERE NOT EXISTS (SELECT 1 FROM artifact_revisions r WHERE r.id = a.id);`);
-    });
+    this.db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
   }
 
   private assertActive() {
@@ -115,12 +92,48 @@ export class ArtifactStore {
     });
   }
 
+  private assertTask(taskId: string) {
+    this.assertActive();
+    if (typeof taskId !== "string" || !this.db.prepare("SELECT id FROM tasks WHERE id = ? AND workspaceId = ?").get(taskId, this.workspaceId))
+      throw new ArtifactError("Task not found in this workspace.");
+  }
+
+  linkTask(taskId: string, artifactId: string) {
+    return this.transaction(() => {
+      this.assertTask(taskId);
+      this.read(artifactId);
+      this.db.prepare("INSERT OR IGNORE INTO task_artifacts (taskId, artifactId) VALUES (?, ?)").run(taskId, artifactId);
+    });
+  }
+
+  unlinkTask(taskId: string, artifactId: string) {
+    this.assertTask(taskId);
+    this.db.prepare("DELETE FROM task_artifacts WHERE taskId = ? AND artifactId = ?").run(taskId, artifactId);
+  }
+
+  forTask(taskId: string): TaskArtifact[] {
+    this.assertTask(taskId);
+    const links = this.db.prepare("SELECT artifactId FROM task_artifacts WHERE taskId = ? ORDER BY artifactId").all(taskId);
+    const citations = this.db.prepare(`SELECT ca.artifactId, ca.revisionId, ca.commentId FROM comment_artifacts ca
+      JOIN comments c ON c.id = ca.commentId WHERE c.taskId = ? AND c.workspaceId = ? ORDER BY c.createdAt, c.id, ca.revisionId`).all(taskId, this.workspaceId);
+    const ids = new Set([...links, ...citations].map((row) => row.artifactId as string));
+    return [...ids].map((id) => ({
+      artifact: this.read(id), explicit: links.some((row) => row.artifactId === id),
+      comments: citations.filter((row) => row.artifactId === id).map((row) => ({
+        commentId: row.commentId as string, artifact: this.read(id, row.revisionId as string),
+      })),
+    }));
+  }
+
   list(filters: ArtifactFilters = {}): Artifact[] {
     this.assertActive();
+    if (filters.taskId) this.assertTask(filters.taskId);
     return this.db.prepare(`SELECT ${fields} FROM artifacts WHERE workspaceId = ? AND archived = ?
       AND (? = '' OR instr(lower(title || ' ' || description || ' ' || coalesce(filename, '') || ' ' || coalesce(url, '')), lower(?)) > 0)
-      AND (? = '' OR type = ?) AND (? = '' OR creator = ?) ORDER BY createdAt DESC, id`).all(
-      this.workspaceId, filters.archived ? 1 : 0, filters.search ?? "", filters.search ?? "", filters.type ?? "", filters.type ?? "", filters.creator ?? "", filters.creator ?? "",
+      AND (? = '' OR type = ?) AND (? = '' OR creator = ?)
+      AND (? = '' OR id IN (SELECT artifactId FROM task_artifacts WHERE taskId = ?
+        UNION SELECT ca.artifactId FROM comment_artifacts ca JOIN comments c ON c.id = ca.commentId WHERE c.taskId = ? AND c.workspaceId = ?)) ORDER BY createdAt DESC, id`).all(
+      this.workspaceId, filters.archived ? 1 : 0, filters.search ?? "", filters.search ?? "", filters.type ?? "", filters.type ?? "", filters.creator ?? "", filters.creator ?? "", filters.taskId ?? "", filters.taskId ?? "", filters.taskId ?? "", this.workspaceId,
     ).map((row) => this.read(row.id as string));
   }
 

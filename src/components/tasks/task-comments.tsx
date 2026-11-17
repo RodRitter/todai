@@ -1,5 +1,7 @@
 "use client";
 
+import { ArtifactPicker, CommentAttachments } from "@/components/artifacts/artifact-attachments";
+import type { Artifact, ArtifactReference } from "@/domain/artifact";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,7 +16,7 @@ export function TaskComments({ comments = [], onAnswerFeedback, onPostComment, a
   comments?: TaskComment[];
   agentStatus?: AgentStatus;
   agents?: AgentProfile[];
-  onPostComment?: (body: string) => Promise<void>;
+  onPostComment?: (body: string, artifacts?: ArtifactReference[]) => Promise<void>;
   onAnswerFeedback?: (commentId: string, body: string) => Promise<void>;
 }) {
   return (
@@ -60,7 +62,7 @@ export function TaskComments({ comments = [], onAnswerFeedback, onPostComment, a
             .filter((comment) => !(comment.authorName === "Human" && comment.runId && comments.some((request) => request.runId === comment.runId && request.feedbackStatus)))
             .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
             .map((comment) => (
-              <li key={comment.id} className="grid grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-x-3 gap-y-3">
+              <li key={comment.id} id={`comment-${comment.id}`} className="grid grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-x-3 gap-y-3">
                 <div
                   className="bg-primary/10 text-primary flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
                   aria-hidden="true"
@@ -105,6 +107,7 @@ export function TaskComments({ comments = [], onAnswerFeedback, onPostComment, a
                       </p>
                     )}
                     {comment.feedbackStatus ? <Markdown>{comment.body}</Markdown> : <CommentBody body={comment.body} />}
+                    {!!comment.artifacts?.length && <CommentAttachments references={comment.artifacts} />}
                     {comment.recommendation && (
                       <div className="space-y-1">
                         <p className="text-xs font-semibold">Recommendation</p>
@@ -227,7 +230,8 @@ function FeedbackInput({ commentId, onAnswer }: {
   );
 }
 
-function CommentInput({ agents, onPost, agentStatus }: { agents: AgentProfile[]; onPost: (body: string) => Promise<void>; agentStatus?: AgentStatus }) {
+function CommentInput({ agents, onPost, agentStatus }: { agents: AgentProfile[]; onPost: (body: string, artifacts?: ArtifactReference[]) => Promise<void>; agentStatus?: AgentStatus }) {
+  const [attachments, setAttachments] = useState<Artifact[]>([]);
   const pendingRun = agentStatus === "Running" || agentStatus === "Queued";
   const [body, setBody] = useState("");
   const [version, setVersion] = useState(0);
@@ -240,7 +244,8 @@ function CommentInput({ agents, onPost, agentStatus }: { agents: AgentProfile[];
     setBusy(true);
     setError("");
     try {
-      await onPost(body.trim());
+      await onPost(body.trim(), attachments.map((artifact) => ({ artifactId: artifact.id, revisionId: artifact.revisionId })));
+      setAttachments([]);
       setBody("");
       setVersion((value) => value + 1);
     } catch (error) {
@@ -261,10 +266,12 @@ function CommentInput({ agents, onPost, agentStatus }: { agents: AgentProfile[];
           {busy ? "Posting…" : "Post comment"}
         </Button>
       }
-      footer={pendingRun || error ? <>
+      footer={<>
+        <ArtifactPicker disabled={busy || pendingRun} onSelect={(artifact) => setAttachments((items) => [...items.filter((item) => item.id !== artifact.id), artifact])} />
+        {attachments.map((artifact) => <div key={artifact.id} className="flex flex-wrap items-center gap-2 text-sm"><span>{artifact.title} · Pinned revision {artifact.revisionNumber}</span><Button type="button" size="sm" variant="ghost" disabled={busy || pendingRun} onClick={() => setAttachments((items) => items.filter((item) => item.id !== artifact.id))}>Remove attachment</Button></div>)}
         {pendingRun && <p role="status" className="text-xs text-muted-foreground">{agentStatus === "Running" ? "The agent is working." : "The agent is queued to start."} You can comment when it finishes or asks for feedback.</p>}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-      </> : undefined}
+      </>}
     />
   );
 }

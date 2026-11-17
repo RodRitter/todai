@@ -68,8 +68,8 @@ const commentAgents = ["Refiner", "Implementor", "Reviewer"].map((name) => ({
 }));
 function CommentExample() {
   const [comments, setComments] = useState<TaskComment[]>([]);
-  return <TaskComments agents={commentAgents} comments={comments} onPostComment={async (body) => {
-    setComments((current) => [...current, { id: crypto.randomUUID(), taskId: "task", body, authorName: "Human", createdAt: new Date().toISOString() }]);
+  return <TaskComments agents={commentAgents} comments={comments} onPostComment={async (body, artifacts) => {
+    setComments((current) => [...current, { id: crypto.randomUUID(), taskId: "task", body, artifacts, authorName: "Human", createdAt: new Date().toISOString() }]);
   }} />;
 }
 export const HumanComment: Story = {

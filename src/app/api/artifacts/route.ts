@@ -10,7 +10,7 @@ export function GET(request: Request) {
     const params = new URL(request.url).searchParams;
     return Response.json(withArtifactStore(request, (store) => params.has("id")
       ? params.get("history") === "true" ? store.history(params.get("id")!) : store.read(params.get("id")!, params.get("revision") ?? undefined)
-      : store.list({ archived: params.get("archived") === "true", search: params.get("search") ?? "", type: params.get("type") ?? "", creator: params.get("creator") ?? "" })));
+      : store.list({ taskId: params.get("taskId") ?? "", archived: params.get("archived") === "true", search: params.get("search") ?? "", type: params.get("type") ?? "", creator: params.get("creator") ?? "" })));
   } catch (error) { return artifactFailure(error); }
 }
 

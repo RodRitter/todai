@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import { ArtifactOpenButton } from "./artifact-attachments";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { toast } from "@/components/ui/toast";
 import { artifactTypes, MAX_ARTIFACT_BYTES, type Artifact, type ArtifactType } from "@/domain/artifact";
+import type { Task } from "@/domain/task";
 import { workspaceFetch } from "@/lib/workspace-fetch";
 
 const typeLabels = { text: "Text", markdown: "Markdown", file: "File", link: "External link" };
@@ -27,6 +29,8 @@ async function fetchRevisionContent(artifact: Artifact) {
 }
 
 export function ArtifactsPage() {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [taskId, setTaskId] = useState("");
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("");
@@ -44,7 +48,7 @@ export function ArtifactsPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    workspaceFetch(`/api/artifacts?archived=${archived}`, { signal: controller.signal }).then(checked)
+    workspaceFetch(`/api/artifacts?${new URLSearchParams({ archived: String(archived), taskId })}`, { signal: controller.signal }).then(checked)
       .then((response) => response.json()).then((items: Artifact[]) => {
         setArtifacts(items);
         setError("");
@@ -53,7 +57,14 @@ export function ArtifactsPage() {
         if (!controller.signal.aborted) { setError(error.message); setLoading(false); }
       });
     return () => controller.abort();
-  }, [attempt, archived]);
+  }, [attempt, archived, taskId]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    workspaceFetch("/api/tasks", { signal: controller.signal }).then(checked).then((response) => response.json()).then(setTasks)
+      .catch((error: Error) => { if (!controller.signal.aborted) setError(error.message); });
+    return () => controller.abort();
+  }, [attempt]);
 
   async function publish(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -72,22 +83,11 @@ export function ArtifactsPage() {
       setArtifacts((items) => [artifact, ...items.filter((item) => item.id !== artifact.id)]);
       setHistory([]);
       if (!artifact.archived) setArchived(false);
-      setSearch(""); setFilterType(""); setCreator("");
+      setTaskId(""); setSearch(""); setFilterType(""); setCreator("");
       setCreating(false);
       toast.success("Artifact published.");
     } catch (error) { toast.error(error instanceof Error ? error.message : "Could not publish artifact."); }
     finally { setSaving(false); }
-  }
-
-  async function download(artifact: Artifact) {
-    try {
-      const response = await fetchRevisionContent(artifact);
-      const url = URL.createObjectURL(await response.blob());
-      const anchor = document.createElement("a");
-      anchor.href = url; anchor.download = artifact.filename ?? "artifact";
-      document.body.append(anchor); anchor.click(); anchor.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (error) { toast.error(error instanceof Error ? error.message : "Could not download artifact."); }
   }
 
   async function edit(artifact: Artifact) {
@@ -140,6 +140,7 @@ export function ArtifactsPage() {
       <Button type="submit" disabled={saving}>{saving ? "Publishing…" : editing ? "Publish revision" : "Publish artifact"}</Button>
     </form></Card>}
     <div className="flex flex-wrap items-end gap-4">
+      <div className="space-y-2"><Label htmlFor="artifact-task">Linked task</Label><NativeSelect id="artifact-task" value={taskId} onChange={(event) => { setTaskId(event.target.value); setLoading(true); setArtifacts([]); }}><option value="">All tasks</option>{tasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}</NativeSelect></div>
       <div className="space-y-2"><Label htmlFor="artifact-view">View</Label><NativeSelect id="artifact-view" value={archived ? "archived" : "active"} disabled={saving} onChange={(event) => { setArchived(event.target.value === "archived"); setLoading(true); setArtifacts([]); setHistory([]); setCreating(false); }}><option value="active">Active artifacts</option><option value="archived">Archived artifacts</option></NativeSelect></div>
       <div className="min-w-48 flex-1 space-y-2"><Label htmlFor="artifact-search">Search artifacts</Label><Input id="artifact-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search titles, descriptions, filenames, or URLs" /></div>
       <div className="space-y-2"><Label htmlFor="artifact-filter-type">Type</Label><NativeSelect id="artifact-filter-type" value={filterType} onChange={(event) => setFilterType(event.target.value)}><option value="">All types</option>{artifactTypes.map((value) => <option key={value} value={value}>{typeLabels[value]}</option>)}</NativeSelect></div>
@@ -154,7 +155,7 @@ export function ArtifactsPage() {
         {artifact.filename && <p className="break-words text-xs text-muted-foreground">{artifact.filename} · {artifact.mediaType} · {artifact.byteSize?.toLocaleString()} bytes</p>}
         {artifact.url && <p className="break-all text-sm text-muted-foreground">{artifact.url}</p>}
       </CardHeader><CardFooter className="flex-wrap gap-2">
-      {artifact.url ? <Button variant="outline" asChild><a href={artifact.url} target="_blank" rel="noopener noreferrer">Open external link ↗</a></Button> : <Button variant="outline" onClick={() => download(artifact)}>Download</Button>}
+      <ArtifactOpenButton artifact={artifact} />
       <Button variant="outline" disabled={saving} onClick={() => edit(artifact)}>Publish revision</Button>
       <Button variant="outline" onClick={() => showHistory(artifact)}>Revision history</Button>
       {!artifact.archived && <Button variant="outline" disabled={saving} onClick={() => archive(artifact)}>Archive</Button>}
@@ -167,7 +168,7 @@ export function ArtifactsPage() {
         <p className="text-sm text-muted-foreground">{typeLabels[revision.type]} · By {revision.creator} · Published {new Date(revision.updatedAt).toLocaleString()}</p>
         {revision.filename && <p className="break-words text-sm text-muted-foreground">{revision.filename} · {revision.mediaType} · {revision.byteSize} bytes</p>}
         {revision.url && <p className="break-all text-sm text-muted-foreground">{revision.url} — URL and metadata only; remote content may change. Upload a copy to preserve it.</p>}
-      </CardHeader><CardFooter>{revision.url ? <Button variant="outline" asChild><a href={revision.url} target="_blank" rel="noopener noreferrer">Open external link ↗</a></Button> : <Button variant="outline" onClick={() => download(revision)}>Download revision {revision.revisionNumber}</Button>}</CardFooter></Card>)}
+      </CardHeader><CardFooter><ArtifactOpenButton artifact={revision} /></CardFooter></Card>)}
     </section>}
   </main></AppShell>;
 }

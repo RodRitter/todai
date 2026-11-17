@@ -13,6 +13,7 @@ export function withArtifactStore<T>(request: Request, operation: (store: Artifa
 export function artifactFailure(error: unknown) {
   if (error instanceof WorkspaceOwnershipError)
     return Response.json({ error: error.message }, { status: 403 });
+  if (error instanceof SyntaxError) return Response.json({ error: "Send valid JSON." }, { status: 400 });
   if (error instanceof ArtifactError)
     return Response.json({ error: error.message }, { status: error instanceof ArtifactTooLargeError ? 413 : 400 });
   return Response.json({ error: "Could not access artifact storage. Check available disk space and database access, then retry." }, { status: 500 });

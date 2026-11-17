@@ -1,3 +1,4 @@
+import { initializeArtifactSchema } from "./artifact-schema.ts";
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { migrateWorkspaceOwnership } from "./workspace-schema.ts";
@@ -125,6 +126,7 @@ export function initializeSchema(db: DatabaseSync) {
       db.exec("DROP TABLE column_agents");
     }
     migrateWorkspaceOwnership(db);
+    initializeArtifactSchema(db);
     db.exec("COMMIT");
   } catch (error) {
     db.close();

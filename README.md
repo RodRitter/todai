@@ -75,6 +75,8 @@ Use **Publish revision** to update an artifact without changing its identity. Ea
 
 **Archive** removes an artifact from normal discovery. Select **Archived artifacts** to find it again; all revisions and downloads remain available. Archival does not delete content. Concurrent publications receive distinct revision identities and remain in history.
 
+In saved task details, use **Link artifact to task** to reuse a workspace artifact. Task links follow its latest revision. Choose **Attach artifact** while composing a comment to pin the selected revision. Removing a task link keeps comment attachments intact; deleting a task preserves the artifacts. Task details group all references into one card per artifact and identify each comment source. Use **Linked task** in the library to filter by either kind of reference, including the archived view.
+
 ## Development
 
 ```sh

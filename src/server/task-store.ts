@@ -373,7 +373,10 @@ export class TaskStore {
               ))
           ) ORDER BY createdAt, rowid`,
         )
-        .all(task.id) as unknown as NonNullable<Task["comments"]>,
+        .all(task.id).map((row) => {
+          const artifacts = this.db.prepare("SELECT artifactId, revisionId FROM comment_artifacts WHERE commentId = ? ORDER BY artifactId, revisionId").all(row.id).map((ref) => ({ ...ref }));
+          return { ...row, ...(artifacts.length ? { artifacts } : {}) } as TaskComment;
+        }),
     }));
   }
 
@@ -732,7 +735,8 @@ export class TaskStore {
     });
   }
 
-  postComment(taskId: unknown, body: unknown): Task {
+  postComment(taskId: unknown, body: unknown, attachments: unknown = []): Task {
+    this.assertWorkspaceActive();
     if (typeof taskId !== "string" || typeof body !== "string" || !body.trim())
       throw new CommentValidationError("Enter a comment.");
     this.assertOwnership("tasks", taskId);
@@ -748,6 +752,15 @@ export class TaskStore {
       });
       const commentId = randomUUID();
       this.addComment({ id: commentId, taskId, body: body.trim(), createdAt: new Date().toISOString(), authorName: "Human" });
+      if (!Array.isArray(attachments)) throw new CommentValidationError("Choose valid artifact attachments.");
+      for (const ref of attachments) {
+        if (!ref || typeof ref.artifactId !== "string" || typeof ref.revisionId !== "string" ||
+            !this.db.prepare("SELECT revisionId FROM artifact_revisions WHERE id = ? AND revisionId = ? AND workspaceId = workspace_id()")
+              .get(ref.artifactId, ref.revisionId))
+          throw new CommentValidationError("Artifact revision not found in this workspace.");
+        this.db.prepare("INSERT OR IGNORE INTO comment_artifacts (commentId, artifactId, revisionId) VALUES (?, ?, ?)")
+          .run(commentId, ref.artifactId, ref.revisionId);
+      }
       if (profiles.length) {
         this.queueCommentRun(taskId, task.status, intentProfile(this.getDefaultExecutor()), "intent", commentId, profiles);
         if (task.agentStatus !== "Running" && task.agentStatus !== "Waiting")

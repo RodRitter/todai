@@ -1,5 +1,7 @@
 "use client";
 
+import { TaskArtifacts } from "@/components/artifacts/artifact-attachments";
+import type { ArtifactReference } from "@/domain/artifact";
 import { useRef, useState, type FormEvent } from "react";
 import { Bot, CircleDot, CirclePlay, CircleStop, Workflow, Zap } from "lucide-react";
 import { TaskComments } from "./task-comments";
@@ -31,7 +33,7 @@ export type TaskEditorProps = {
   onRun?: () => Promise<void>;
   onStop?: () => Promise<void>;
   agents?: AgentProfile[];
-  onPostComment?: (body: string) => Promise<void>;
+  onPostComment?: (body: string, artifacts?: ArtifactReference[]) => Promise<void>;
   open: boolean;
   task?: Task | null;
   defaultStatus?: Status;
@@ -398,6 +400,7 @@ function TaskEditorSession({
                   </>
                 )}
               </div>
+              {editing && onPostComment && <TaskArtifacts taskId={editing.id} commentsKey={JSON.stringify(editing.comments?.map((comment) => comment.id))} />}
               {editing && <TaskComments comments={editing.comments} agentStatus={editing.agentStatus} onAnswerFeedback={onAnswerFeedback} agents={agents} onPostComment={onPostComment} />}
             </div>
             <DialogFooter className="z-10 shrink-0 flex-row flex-wrap items-center justify-end gap-2 border-t bg-background px-6 py-4">

@@ -167,6 +167,7 @@ test("existing artifact storage migrates into a retained first revision", () => 
   tasks.close();
   // Fixture represents the schema shipped before revision support.
   const legacy = new DatabaseSync(path);
+  legacy.exec("DROP TABLE comment_artifacts; DROP TABLE task_artifacts; DROP TABLE artifact_revisions; DROP TABLE artifacts;");
   legacy.exec(`CREATE TABLE artifacts (
     id TEXT PRIMARY KEY, workspaceId TEXT NOT NULL, title TEXT NOT NULL, description TEXT NOT NULL,
     type TEXT NOT NULL, creator TEXT NOT NULL, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL,
