@@ -6,12 +6,22 @@ import { workspaceFetch } from "@/lib/workspace-fetch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover } from "radix-ui";
-import { Download, ExternalLink, FileText, Link2, MessageSquare, Plus, Unlink } from "lucide-react";
+import { Download, ExternalLink, FileText, Link2, MessageSquare, Paperclip, Plus, Unlink } from "lucide-react";
 import { toast } from "@/components/ui/toast";
 
 async function checked(response: Response) {
   if (!response.ok) throw new Error((await response.json()).error ?? "Could not load artifacts.");
   return response;
+}
+
+export async function openArtifact(selected: Artifact) {
+  if (selected.url) { window.location.assign(selected.url); return; }
+  const response = await checked(await workspaceFetch(`/api/artifacts/download?${new URLSearchParams({ id: selected.id, revision: selected.revisionId })}`));
+  const url = URL.createObjectURL(await response.blob());
+  const anchor = document.createElement("a");
+  anchor.href = url; anchor.download = selected.filename ?? "artifact";
+  document.body.append(anchor); anchor.click(); anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function ArtifactOpenButton({ artifact, latest = false, compact = false }: { artifact: Artifact; latest?: boolean; compact?: boolean }) {
@@ -20,13 +30,7 @@ export function ArtifactOpenButton({ artifact, latest = false, compact = false }
       const selected: Artifact = latest
         ? await (await checked(await workspaceFetch(`/api/artifacts?${new URLSearchParams({ id: artifact.id })}`))).json()
         : artifact;
-      if (selected.url) { window.location.assign(selected.url); return; }
-      const response = await checked(await workspaceFetch(`/api/artifacts/download?${new URLSearchParams({ id: selected.id, revision: selected.revisionId })}`));
-      const url = URL.createObjectURL(await response.blob());
-      const anchor = document.createElement("a");
-      anchor.href = url; anchor.download = selected.filename ?? "artifact";
-      document.body.append(anchor); anchor.click(); anchor.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      await openArtifact(selected);
     } catch (error) { toast.error(error instanceof Error ? error.message : "Could not download artifact."); }
   }
   if (compact) {
@@ -42,8 +46,8 @@ export function ArtifactOpenButton({ artifact, latest = false, compact = false }
     : <Button type="button" size="sm" variant="outline" onClick={() => void download()}>Download · r{artifact.revisionNumber}</Button>;
 }
 
-export function ArtifactPicker({ onSelect, disabled, label = "Attach artifact", compact = false }: {
-  onSelect: (artifact: Artifact) => void; disabled?: boolean; label?: string; compact?: boolean;
+export function ArtifactPicker({ onSelect, disabled, label = "Attach artifact", compact = false, attachmentIcon = false }: {
+  onSelect: (artifact: Artifact) => void; disabled?: boolean; label?: string; compact?: boolean; attachmentIcon?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -57,16 +61,23 @@ export function ArtifactPicker({ onSelect, disabled, label = "Attach artifact", 
     finally { setLoading(false); }
   }
   const visible = items.filter((item) => `${item.title} ${item.description}`.toLowerCase().includes(search.toLowerCase()));
-  return <div className={compact ? "contents" : "space-y-2"}>
-    <Button type="button" variant={compact ? "ghost" : "outline"} size={compact ? "icon" : "sm"} className={compact ? "size-7 text-muted-foreground" : undefined} disabled={disabled} aria-label={open ? "Close artifact picker" : label} title={open ? "Close artifact picker" : label} aria-expanded={open} onClick={() => open ? setOpen(false) : void load()}>{compact ? <Plus aria-hidden="true" className={open ? "rotate-45 transition-transform" : "transition-transform"} /> : open ? "Close artifact picker" : label}</Button>
-    {open && <div className={compact ? "col-span-2 space-y-2" : "space-y-2"}>
+  const trigger = (
+    <Button type="button" variant={compact || attachmentIcon ? "ghost" : "outline"} size={compact || attachmentIcon ? "icon" : "sm"} className={compact ? "size-7 text-muted-foreground" : undefined} disabled={disabled} aria-label={open ? "Close artifact picker" : label} title={open ? "Close artifact picker" : label} aria-expanded={open} onClick={() => open ? setOpen(false) : void load()}>{attachmentIcon ? <Paperclip aria-hidden="true" /> : compact ? <Plus aria-hidden="true" className={open ? "rotate-45 transition-transform" : "transition-transform"} /> : open ? "Close artifact picker" : label}</Button>
+  );
+  const panel = (
+<div className={compact ? "col-span-2 space-y-2" : "space-y-2"}>
       <Input aria-label="Search workspace artifacts" placeholder="Search artifacts" value={search} onChange={(event) => setSearch(event.target.value)} disabled={disabled} />
       {loading ? <p role="status" className="text-sm">Loading artifacts…</p> : error ? <div role="alert"><p>{error}</p><Button type="button" variant="outline" onClick={() => void load()}>Retry</Button></div> : <ul className="max-h-48 space-y-1 overflow-y-auto">
         {visible.map((artifact) => <li key={artifact.id}><Button type="button" variant="ghost" className="h-auto whitespace-normal text-left" disabled={disabled} onClick={() => { onSelect(artifact); setOpen(false); }}>{artifact.title} · r{artifact.revisionNumber} · {artifact.type}</Button></li>)}
         {!visible.length && <li className="text-sm text-muted-foreground">No matching artifacts.</li>}
       </ul>}
-    </div>}
-  </div>;
+    </div>
+  );
+  if (attachmentIcon) return <Popover.Root open={open} onOpenChange={setOpen}>
+    <Popover.Trigger asChild>{trigger}</Popover.Trigger>
+    <Popover.Portal><Popover.Content sideOffset={6} align="start" className="z-50 w-80 max-w-[calc(100vw-2rem)] rounded-md border bg-popover p-3 text-popover-foreground shadow-md">{panel}</Popover.Content></Popover.Portal>
+  </Popover.Root>;
+  return <div className={compact ? "contents" : "space-y-2"}>{trigger}{open && panel}</div>;
 }
 
 export function CommentAttachments({ references }: { references: ArtifactReference[] }) {

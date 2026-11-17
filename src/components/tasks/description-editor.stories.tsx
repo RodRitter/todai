@@ -32,7 +32,7 @@ export const WithContent: Story = {
 export const Disabled: Story = { args: { value: "An agent is currently working.", disabled: true } };
 export const Comment: Story = {
   args: {
-    id: "example-comment", label: "Your comment", agents: [],
+    id: "example-comment", label: "Your comment", agents: [], artifacts: true,
     actions: <Button size="sm" disabled>Post comment</Button>,
   },
 };
@@ -51,3 +51,5 @@ export const SurfaceFocus: Story = {
     await expect(editor).toHaveTextContent("A focused editor");
   },
 };
+
+export const PinnedCitation: Story = { args: { artifacts: true, value: "See [Design evidence](#artifact/evidence/r1) alongside [@Reviewer](#agent/reviewer)." } };

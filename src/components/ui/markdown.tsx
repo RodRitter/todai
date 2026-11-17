@@ -1,3 +1,5 @@
+import { parseArtifactMention } from "@/domain/artifact-mentions";
+import { ArtifactMention } from "@/components/artifacts/artifact-mention";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { richTextClassName } from "./rich-text-styles";
@@ -18,6 +20,8 @@ export function Markdown({
           a: ({ href, children }) =>
             compact ? (
               <span>{children}</span>
+            ) : href && parseArtifactMention(href) ? (
+              <ArtifactMention reference={parseArtifactMention(href)!}>{children}</ArtifactMention>
             ) : typeof children === "string" && /^[$@/]/.test(children) && (href?.startsWith("/") || href?.startsWith("#agent/")) ? (
               <span title={href} className="rounded bg-accent px-1 py-0.5 font-medium text-accent-foreground">{children}</span>
             ) : (

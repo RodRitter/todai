@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { expect, userEvent, within } from "storybook/test";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import type { Artifact, TaskArtifact } from "@/domain/artifact";
 import type { TaskComment } from "@/domain/task";
@@ -52,7 +53,7 @@ export const CompactRows: Story = { parameters: { compactRows: true } };
 export const NarrowRows: Story = { parameters: { compactRows: true }, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
 export const Empty: Story = { parameters: { empty: true } };
 export const LoadError: Story = { parameters: { failure: true } };
-export const BusyPicker: Story = { render: () => <ArtifactPicker disabled onSelect={() => {}} /> };
+export const BusyPicker: Story = { render: () => <ArtifactPicker attachmentIcon disabled onSelect={() => {}} /> };
 
 function Composer() {
   const [comments, setComments] = useState<TaskComment[]>([]);
@@ -62,3 +63,26 @@ function Composer() {
 }
 export const ComposeWithAttachments: Story = { render: () => <Composer /> };
 export const ComposerError: Story = { render: () => <TaskComments onPostComment={async () => { throw new Error("Posting failed. Your draft and attachments are retained."); }} /> };
+
+export const InlineCitation: Story = {
+  render: () => <Composer />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const editor = await canvas.findByRole("textbox", { name: "Your comment" });
+    await userEvent.click(editor);
+    await userEvent.keyboard("#Revised");
+    await userEvent.click(await canvas.findByRole("option", { name: /Revised design evidence/ }));
+    await userEvent.click(canvas.getByRole("button", { name: "Post comment" }));
+    await expect(await canvas.findByRole("button", { name: "Revised design evidence" })).toBeVisible();
+    const toolbar = canvas.getByRole("group", { name: "Your comment formatting" });
+    await expect(within(toolbar).getByRole("button", { name: "Attach artifact" })).toBeVisible();
+  },
+};
+export const PaperclipLoadError: Story = {
+  parameters: { failure: true },
+  render: () => <Composer />,
+  play: async ({ canvasElement }) => {
+    await userEvent.click(within(canvasElement).getByRole("button", { name: "Attach artifact" }));
+    await expect(await within(document.body).findByRole("alert")).toHaveTextContent("Connection lost");
+  },
+};

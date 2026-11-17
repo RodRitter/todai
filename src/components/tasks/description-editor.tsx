@@ -12,6 +12,8 @@ import TaskItem from "@tiptap/extension-task-item";
 import Image from "@tiptap/extension-image";
 import { EditorSurface, editorLabelClassName } from "@/components/ui/editor-surface";
 import { richTextClassName } from "@/components/ui/rich-text-styles";
+import { artifactMentionPath } from "@/domain/artifact-mentions";
+import type { Artifact } from "@/domain/artifact";
 import { agentMentionPath } from "@/domain/agent-mentions";
 import type { AgentProfile } from "@/domain/column-agent";
 import type { TaskReference } from "@/domain/reference";
@@ -19,19 +21,19 @@ import { Bold, Italic, Heading2, List, ListOrdered, Code } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-type Match = { from: number; to: number; kind: "skill" | "file" | "agent"; query: string };
-function referenceMatch(editor: Editor, allowAgents: boolean): Match | null {
+type Match = { from: number; to: number; kind: "skill" | "file" | "agent" | "artifact"; query: string };
+function referenceMatch(editor: Editor, allowAgents: boolean, allowArtifacts: boolean): Match | null {
   const { $from, empty } = editor.state.selection;
   if (!empty || $from.parent.type.spec.code || editor.isActive("link")) return null;
   const before = $from.parent.textBetween(0, $from.parentOffset, "\n", "\ufffc");
-  const match = /(?:^|\s)([$@/])([^\s$@]*)$/.exec(before);
-  if (!match || (match[1] === "@" && !allowAgents)) return null;
-  return { from: $from.pos - match[2].length - 1, to: $from.pos, kind: match[1] === "$" ? "skill" : match[1] === "@" ? "agent" : "file", query: match[2] };
+  const match = /(?:^|\s)([$@/#])([^\s$@#]*)$/.exec(before);
+  if (!match || (match[1] === "@" && !allowAgents) || (match[1] === "#" && !allowArtifacts)) return null;
+  return { from: $from.pos - match[2].length - 1, to: $from.pos, kind: match[1] === "#" ? "artifact" : match[1] === "$" ? "skill" : match[1] === "@" ? "agent" : "file", query: match[2] };
 }
 
-export function DescriptionEditor({ value, onChange, disabled = false, autoFocus = false, agents, label = "Description", id = "task-description", actions, footer }: {
+export function DescriptionEditor({ value, onChange, disabled = false, autoFocus = false, agents, artifacts = false, label = "Description", id = "task-description", actions, footer, toolbarActions }: {
   value: string; onChange: (value: string) => void; disabled?: boolean; autoFocus?: boolean;
-  agents?: AgentProfile[]; label?: string; id?: string; actions?: ReactNode; footer?: ReactNode;
+  agents?: AgentProfile[]; artifacts?: boolean; label?: string; id?: string; actions?: ReactNode; footer?: ReactNode; toolbarActions?: ReactNode;
 }) {
   const [match, setMatch] = useState<Match | null>(null);
   const [response, setResponse] = useState<{ key: string; items: TaskReference[] }>({ key: "", items: [] });
@@ -59,7 +61,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
     },
     onUpdate: ({ editor }) => onChange(editor.getMarkdown()),
     onTransaction: ({ editor }) => {
-      const next = referenceMatch(editor, agents !== undefined);
+      const next = referenceMatch(editor, agents !== undefined, artifacts);
       setMatch((previous) => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
     },
     onBlur: () => setMatch(null),
@@ -105,9 +107,12 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
       setSelected(0);
       setStatus("Loading references…");
       try {
-        const response = await workspaceFetch(`/api/references?kind=${match.kind}&q=${encodeURIComponent(match.query)}`, { signal: abort.signal });
+        const response = await workspaceFetch(match.kind === "artifact" ? `/api/artifacts?search=${encodeURIComponent(match.query)}` : `/api/references?kind=${match.kind}&q=${encodeURIComponent(match.query)}`, { signal: abort.signal });
         if (!response.ok) throw new Error("References unavailable");
-        const data = await response.json() as { references: TaskReference[] };
+        const payload = await response.json();
+        const data: { references: TaskReference[] } = match.kind === "artifact"
+          ? { references: (payload as Artifact[]).map((artifact) => ({ kind: "artifact", label: artifact.title, path: artifactMentionPath({ artifactId: artifact.id, revisionId: artifact.revisionId }), detail: `Revision ${artifact.revisionNumber} · ${artifact.type}` })) }
+          : payload;
         if (abort.signal.aborted) return;
         setResponse({ key: JSON.stringify(match), items: data.references });
         setStatus(data.references.length ? "" : "No matching references.");
@@ -184,6 +189,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
                   ))}
                 </ToggleGroup>
               ))}
+              {toolbarActions}
             </div>
           </TooltipProvider>
           {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
@@ -191,7 +197,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
         </div>
         <EditorContent editor={editor} />
         {match && !disabled && (
-          <div className="max-h-52 overflow-y-auto border-t p-1" role="listbox" aria-label={agentMode ? "Available agents" : match.kind === "skill" ? "Available skills" : "Workspace files"}>
+          <div className="max-h-52 overflow-y-auto border-t p-1" role="listbox" aria-label={agentMode ? "Available agents" : match.kind === "artifact" ? "Workspace artifacts" : match.kind === "skill" ? "Available skills" : "Workspace files"}>
             {agentMode && !results.length && <p role="status" className="p-2 text-xs text-muted-foreground">No matching agents.</p>}
             {!agentMode && (response.key !== matchKey || status) && <p role="status" className="p-2 text-xs text-muted-foreground">{response.key !== matchKey && !status.startsWith("Could not") ? "Loading references…" : status}</p>}
             {results.map((reference, index) => (

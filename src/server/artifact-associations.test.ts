@@ -79,3 +79,44 @@ test("foreign tasks and revisions are rejected and failed comment publication le
     assert.throws(() => f.tasks.postComment("foreign", "Invalid", [{ artifactId: local.id, revisionId: local.revisionId }]), /workspace/);
   } finally { otherArtifacts.close(); otherTasks.close(); f.close(); }
 });
+
+test("inline citations retain the selected revision through composition, repetition and archival", () => {
+  const f = fixture();
+  try {
+    f.task("one");
+    const first = f.artifacts.create({ title: "Original", type: "text", content: "Original", creator: "Alice" });
+    const body = `See [Original](#artifact/${first.id}/${first.revisionId}) and [again](#artifact/${first.id}/${first.revisionId}).`;
+    f.artifacts.revise(first.id, { title: "Latest", type: "text", content: "Latest", creator: "Bob" });
+    const comment = f.tasks.postComment("one", body).comments![0];
+    assert.deepEqual(comment.artifacts, [{ artifactId: first.id, revisionId: first.revisionId }]);
+    f.artifacts.archive(first.id);
+    assert.equal(f.tasks.list()[0].comments![0].body, body);
+    assert.equal(f.artifacts.forTask("one")[0].comments[0].artifact.title, "Original");
+  } finally { f.close(); }
+});
+
+test("invalid inline citations roll back comments and attachments together", () => {
+  const f = fixture();
+  const other = f.tasks.createWorkspace("Other", f.directory);
+  const foreignStore = new ArtifactStore(f.path, other.id);
+  try {
+    f.task("one");
+    const local = f.artifacts.create({ title: "Local", type: "text", content: "Local", creator: "Alice" });
+    const foreign = foreignStore.create({ title: "Foreign", type: "text", content: "Foreign", creator: "Bob" });
+    for (const path of [`#artifact/${foreign.id}/${foreign.revisionId}`, `#artifact/${local.id}/${foreign.revisionId}`, "#artifact/broken"]) {
+      assert.throws(() => f.tasks.postComment("one", `[Invalid](${path})`, [{ artifactId: local.id, revisionId: local.revisionId }]), /revision/);
+      assert.deepEqual(f.tasks.list()[0].comments, []);
+      assert.deepEqual(f.artifacts.forTask("one"), []);
+    }
+  } finally { foreignStore.close(); f.close(); }
+});
+
+test("agent comments track canonical citations while code examples remain plain context", () => {
+  const f = fixture();
+  try {
+    f.task("one");
+    const artifact = f.artifacts.create({ title: "Evidence", type: "text", content: "Evidence", creator: "Agent" });
+    f.tasks.addComment({ id: "agent-comment", taskId: "one", authorName: "Agent", createdAt: new Date().toISOString(), body: `[Evidence](#artifact/${artifact.id}/${artifact.revisionId}) and \`[example](#artifact/invalid)\`` });
+    assert.deepEqual(f.tasks.list()[0].comments![0].artifacts, [{ artifactId: artifact.id, revisionId: artifact.revisionId }]);
+  } finally { f.close(); }
+});

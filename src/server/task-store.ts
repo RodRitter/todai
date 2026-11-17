@@ -1,3 +1,4 @@
+import { artifactMentions } from "./artifact-mentions.ts";
 import { mentionedAgentIds } from "../domain/agent-mentions.ts";
 import { intentProfile } from "./comment-intent.ts";
 import { parseConfiguration, ConfigurationValidationError, type Configuration } from "../domain/configuration.ts";
@@ -752,15 +753,7 @@ export class TaskStore {
       });
       const commentId = randomUUID();
       this.addComment({ id: commentId, taskId, body: body.trim(), createdAt: new Date().toISOString(), authorName: "Human" });
-      if (!Array.isArray(attachments)) throw new CommentValidationError("Choose valid artifact attachments.");
-      for (const ref of attachments) {
-        if (!ref || typeof ref.artifactId !== "string" || typeof ref.revisionId !== "string" ||
-            !this.db.prepare("SELECT revisionId FROM artifact_revisions WHERE id = ? AND revisionId = ? AND workspaceId = workspace_id()")
-              .get(ref.artifactId, ref.revisionId))
-          throw new CommentValidationError("Artifact revision not found in this workspace.");
-        this.db.prepare("INSERT OR IGNORE INTO comment_artifacts (commentId, artifactId, revisionId) VALUES (?, ?, ?)")
-          .run(commentId, ref.artifactId, ref.revisionId);
-      }
+      this.attachCommentArtifacts(commentId, attachments);
       if (profiles.length) {
         this.queueCommentRun(taskId, task.status, intentProfile(this.getDefaultExecutor()), "intent", commentId, profiles);
         if (task.agentStatus !== "Running" && task.agentStatus !== "Waiting")
@@ -768,6 +761,18 @@ export class TaskStore {
       }
       return this.list().find((item) => item.id === taskId)!;
     });
+  }
+
+  private attachCommentArtifacts(commentId: string, attachments: unknown) {
+    if (!Array.isArray(attachments)) throw new CommentValidationError("Choose valid artifact attachments.");
+    for (const ref of attachments) {
+      if (!ref || typeof ref.artifactId !== "string" || typeof ref.revisionId !== "string" ||
+          !this.db.prepare("SELECT revisionId FROM artifact_revisions WHERE id = ? AND revisionId = ? AND workspaceId = workspace_id()")
+            .get(ref.artifactId, ref.revisionId))
+        throw new CommentValidationError("Artifact revision not found in this workspace.");
+      this.db.prepare("INSERT OR IGNORE INTO comment_artifacts (commentId, artifactId, revisionId) VALUES (?, ?, ?)")
+        .run(commentId, ref.artifactId, ref.revisionId);
+    }
   }
 
   private queueCommentRun(taskId: string, column: string, profile: AgentProfile, kind: "intent" | "reply", commentId: string, replyPlan: AgentProfile[], createdAt = new Date().toISOString()) {
@@ -805,20 +810,31 @@ export class TaskStore {
       if (!this.history(comment.taskId).some((run) => run.id === comment.runId))
         throw new CommentValidationError("Choose a run belonging to this task.");
     }
-    this.db
-      .prepare(
-        "INSERT INTO comments (workspaceId, id, taskId, body, createdAt, authorName, recommendation, feedbackStatus, runId) VALUES (workspace_id(), ?, ?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        comment.id,
-        comment.taskId,
-        comment.body,
-        new Date(comment.createdAt).toISOString(),
-        comment.authorName ?? null,
-        comment.recommendation ?? null,
-        comment.feedbackStatus ?? null,
-        comment.runId ?? null,
-      );
+    this.db.exec("SAVEPOINT publish_comment");
+    try {
+      let references;
+      try { references = artifactMentions(comment.body); }
+      catch { throw new CommentValidationError("Choose a valid artifact revision reference."); }
+      this.db
+        .prepare(
+          "INSERT INTO comments (workspaceId, id, taskId, body, createdAt, authorName, recommendation, feedbackStatus, runId) VALUES (workspace_id(), ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .run(
+          comment.id,
+          comment.taskId,
+          comment.body,
+          new Date(comment.createdAt).toISOString(),
+          comment.authorName ?? null,
+          comment.recommendation ?? null,
+          comment.feedbackStatus ?? null,
+          comment.runId ?? null,
+        );
+      this.attachCommentArtifacts(comment.id, references);
+      this.db.exec("RELEASE publish_comment");
+    } catch (error) {
+      this.db.exec("ROLLBACK TO publish_comment; RELEASE publish_comment");
+      throw error;
+    }
   }
 
   listAgents(): AgentProfile[] {
