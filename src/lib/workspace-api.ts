@@ -1,3 +1,4 @@
+import { workspaceFetch } from "./workspace-fetch.ts";
 import type { AgentProfile, ColumnAssignment, ExecutionTool, ExecutorSettingsData } from "@/domain/column-agent";
 import type { Task } from "@/domain/task";
 
@@ -14,7 +15,7 @@ async function request<T>(
   { body, ...options }: RequestOptions = {},
   fallback = "Could not save changes. Try again.",
 ): Promise<T> {
-  const response = await fetch(url, {
+  const response = await workspaceFetch(url, {
     ...options,
     cache: "no-store",
     ...(body !== undefined && {

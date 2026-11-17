@@ -37,7 +37,7 @@ test("manual mode persists and prevents runs on creation and column entry", () =
 test("Run executes the assigned agent once and rejects duplicate or invalid requests", async () => {
   const f = fixture();
   let calls = 0;
-  const service = new ExecutionService(f.store, async () => { calls++; return "Finished"; }, "/tmp");
+  const service = new ExecutionService(f.store, async () => { calls++; return "Finished"; });
   try {
     f.store.save(draft);
     assert.equal(f.store.runTask(draft.id).agentStatus, "Queued");
@@ -54,7 +54,7 @@ test("Run executes the assigned agent once and rejects duplicate or invalid requ
 
 test("auto-workflow moves manual tasks without starting the next agent", async () => {
   const f = fixture();
-  const service = new ExecutionService(f.store, async () => "Finished", "/tmp");
+  const service = new ExecutionService(f.store, async () => "Finished");
   try {
     f.store.save({ ...draft, autoWorkflow: true });
     f.store.runTask(draft.id);

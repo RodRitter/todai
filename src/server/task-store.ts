@@ -9,12 +9,16 @@ import {
   type AgentProfile,
   type ColumnAssignment,
 } from "../domain/column-agent.ts";
+import { validateWorkspace } from "./workspace-settings.ts";
 import { processIdentity } from "./process-identity.ts";
 import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { type Task, type TaskComment } from "../domain/task.ts";
+import { statuses, type Task, type TaskComment } from "../domain/task.ts";
+
+export type Workspace = { id: string; name: string; path: string };
+export class WorkspaceOwnershipError extends Error {}
 
 export class ColumnValidationError extends Error {}
 
@@ -25,6 +29,8 @@ export class FeedbackValidationError extends Error {}
 export class CommentValidationError extends Error {}
 
 export type AgentRun = {
+  workspaceId: string;
+  workspacePath: string;
   id: string;
   taskId: string;
   column: Task["status"];
@@ -47,35 +53,69 @@ export type AgentRun = {
 export class TaskStore {
   private db: DatabaseSync;
 
-  constructor(path: string) {
+  readonly workspaceId: string;
+
+  constructor(path: string, workspaceId?: string) {
     mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
     initializeSchema(this.db);
+    this.workspaceId = workspaceId ?? this.listWorkspaces()[0].id;
+    if (!this.listWorkspaces().some((workspace) => workspace.id === this.workspaceId)) {
+      this.db.close();
+      throw new WorkspaceOwnershipError("Choose an existing workspace.");
+    }
+    // The SQL scope belongs to this connection and never follows a selected UI view.
+    this.db.function("workspace_id", () => this.workspaceId);
+  }
+
+  listWorkspaces(): Workspace[] {
+    return this.db.prepare("SELECT id, name, path FROM workspaces ORDER BY rowid").all() as Workspace[];
+  }
+
+  createWorkspace(name: string, path: string): Workspace {
+    if (!name.trim()) throw new WorkspaceOwnershipError("Enter a workspace name.");
+    const workspace = { id: randomUUID(), name: name.trim(), path: validateWorkspace(path) };
+    return this.transaction(() => {
+      this.db.prepare("INSERT INTO workspaces (id, name, path) VALUES (?, ?, ?)").run(workspace.id, workspace.name, workspace.path);
+      for (const [position, column] of statuses.entries()) {
+        this.db.prepare("INSERT INTO board_columns (id, name, position, workspaceId) VALUES (?, ?, ?, ?)").run(randomUUID(), column, position, workspace.id);
+      }
+      return workspace;
+    });
+  }
+
+  private assertOwnership(table: "tasks" | "agents" | "runs" | "board_columns", id: string) {
+    const row = this.db.prepare(`SELECT workspaceId FROM ${table} WHERE id = ?`).get(id);
+    if (row && row.workspaceId !== this.workspaceId)
+      throw new WorkspaceOwnershipError("This reference belongs to another workspace.");
+  }
+
+  private assertInputOwnership(input: unknown) {
+    if (input && typeof input === "object" && "workspaceId" in input && input.workspaceId !== this.workspaceId)
+      throw new WorkspaceOwnershipError("This data belongs to another workspace.");
+  }
+
+  getWorkspace(): Workspace {
+    return this.listWorkspaces().find((workspace) => workspace.id === this.workspaceId)!;
   }
 
   getDefaultExecutor() {
-    const value = this.db.prepare("SELECT value FROM settings WHERE key = 'defaultExecutor'").get()?.value;
+    const value = this.db.prepare("SELECT value FROM settings WHERE key = 'defaultExecutor' AND workspaceId = workspace_id()").get()?.value;
     return value === undefined ? "codex" as const : parseExecutionTool(value);
   }
 
   setDefaultExecutor(value: unknown) {
     const tool = parseExecutionTool(value);
-    this.db.prepare("INSERT INTO settings (key, value) VALUES ('defaultExecutor', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(tool);
+    this.db.prepare("INSERT INTO settings (key, value, workspaceId) VALUES ('defaultExecutor', ?, workspace_id()) ON CONFLICT(workspaceId, key) DO UPDATE SET value = excluded.value").run(tool);
     return tool;
   }
 
-  getWorkspacePath(): string | undefined {
-    return this.db
-      .prepare("SELECT value FROM settings WHERE key = 'workspacePath'")
-      .get()?.value as string | undefined;
+  getWorkspacePath(): string {
+    return this.getWorkspace().path;
   }
 
   setWorkspacePath(path: string) {
-    this.db
-      .prepare(
-        "INSERT INTO settings (key, value) VALUES ('workspacePath', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-      )
-      .run(path);
+    this.db.prepare("UPDATE workspaces SET path = ? WHERE id = workspace_id()").run(path);
   }
 
   boardSnapshot() {
@@ -88,7 +128,7 @@ export class TaskStore {
 
   exportConfiguration(): Configuration {
     return this.transaction(() => {
-      const columns = this.db.prepare("SELECT id, name FROM board_columns ORDER BY position").all() as { id: string; name: string }[];
+      const columns = this.db.prepare("SELECT id, name FROM board_columns WHERE board_columns.workspaceId = workspace_id() ORDER BY position").all() as { id: string; name: string }[];
       return {
         format: "todai-configuration", version: 1,
         agents: this.listAgents(), columns: columns.map((column) => ({ ...column })),
@@ -109,10 +149,14 @@ export class TaskStore {
     if (!data.agents.length && !data.columns.length)
       throw new ConfigurationValidationError("Select at least one agent or column.");
     return this.transaction(() => {
-      if ((columnMode === "replace" || conflictMode === "overwrite") && data.columns.length && this.db.prepare("SELECT id FROM runs WHERE status IN ('Queued', 'Running') LIMIT 1").get())
+      if ((columnMode === "replace" || conflictMode === "overwrite") && data.columns.length && this.db.prepare("SELECT id FROM runs WHERE runs.workspaceId = workspace_id() AND status IN ('Queued', 'Running') LIMIT 1").get())
         throw new ConfigurationValidationError("Wait for queued and active runs to finish before replacing or overwriting columns.");
       if (columnMode === "replace" && data.columns.length) {
-        this.db.exec("DELETE FROM column_assignments; DELETE FROM board_columns;");
+        this.db.exec("DELETE FROM column_assignments WHERE workspaceId = workspace_id(); DELETE FROM board_columns WHERE workspaceId = workspace_id();");
+      }
+      if (conflictMode === "overwrite") {
+        for (const agent of data.agents) this.assertOwnership("agents", agent.id);
+        for (const column of data.columns) this.assertOwnership("board_columns", column.id);
       }
       const agentIds = new Map<string, string>();
       for (const agent of data.agents) {
@@ -123,7 +167,7 @@ export class TaskStore {
       const columnNames = new Map<string, string>();
       const existing = this.listColumns();
       for (const column of data.columns) {
-        const previous = conflictMode === "overwrite" ? this.db.prepare("SELECT name FROM board_columns WHERE id = ?").get(column.id)?.name as string | undefined : undefined;
+        const previous = conflictMode === "overwrite" ? this.db.prepare("SELECT name FROM board_columns WHERE board_columns.workspaceId = workspace_id() AND id = ?").get(column.id)?.name as string | undefined : undefined;
         let name = column.name;
         let suffix = 2;
         while (existing.some((item) => item !== previous && item.toLowerCase() === name.toLowerCase())) {
@@ -131,12 +175,12 @@ export class TaskStore {
           name = column.name.slice(0, 80 - ending.length) + ending;
         }
         if (previous !== undefined) {
-          this.db.prepare("DELETE FROM column_assignments WHERE column = ?").run(previous);
-          this.db.prepare("UPDATE board_columns SET name = ? WHERE id = ?").run(name, column.id);
-          this.db.prepare("UPDATE tasks SET status = ? WHERE status = ?").run(name, previous);
+          this.db.prepare("DELETE FROM column_assignments WHERE column_assignments.workspaceId = workspace_id() AND column = ?").run(previous);
+          this.db.prepare("UPDATE board_columns SET name = ? WHERE board_columns.workspaceId = workspace_id() AND id = ?").run(name, column.id);
+          this.db.prepare("UPDATE tasks SET status = ? WHERE tasks.workspaceId = workspace_id() AND status = ?").run(name, previous);
           existing[existing.indexOf(previous)] = name;
         } else {
-          this.db.prepare("INSERT INTO board_columns (id, name, position) VALUES (?, ?, ?)").run(conflictMode === "overwrite" ? column.id : randomUUID(), name, existing.length);
+          this.db.prepare("INSERT INTO board_columns (workspaceId, id, name, position) VALUES (workspace_id(), ?, ?, ?)").run(conflictMode === "overwrite" ? column.id : randomUUID(), name, existing.length);
           existing.push(name);
         }
         columnNames.set(column.id, name);
@@ -145,8 +189,8 @@ export class TaskStore {
         this.assignColumnAgent({ column: columnNames.get(assignment.columnId)!, agentId: agentIds.get(assignment.agentId)! });
       }
       if (columnMode === "replace" && data.columns.length) {
-        this.db.prepare("UPDATE comments SET feedbackStatus = 'cancelled' WHERE feedbackStatus = 'pending'").run();
-        this.db.prepare("UPDATE tasks SET status = ?, agentStatus = 'Not started'").run(columnNames.get(data.columns[0].id)!);
+        this.db.prepare("UPDATE comments SET feedbackStatus = 'cancelled' WHERE comments.workspaceId = workspace_id() AND feedbackStatus = 'pending'").run();
+        this.db.prepare("UPDATE tasks SET status = ?, agentStatus = 'Not started' WHERE tasks.workspaceId = workspace_id()").run(columnNames.get(data.columns[0].id)!);
       }
       return { agents: data.agents.length, columns: data.columns.length, assignments: data.assignments.length };
     });
@@ -154,7 +198,7 @@ export class TaskStore {
 
   listColumns(): string[] {
     return this.db
-      .prepare("SELECT name FROM board_columns ORDER BY position")
+      .prepare("SELECT name FROM board_columns WHERE board_columns.workspaceId = workspace_id() ORDER BY position")
       .all()
       .map((row) => row.name as string);
   }
@@ -187,7 +231,7 @@ export class TaskStore {
     return this.transaction(() => {
       const name = this.columnName(input);
       this.db
-        .prepare("INSERT INTO board_columns (id, name, position) VALUES (?, ?, ?)")
+        .prepare("INSERT INTO board_columns (workspaceId, id, name, position) VALUES (workspace_id(), ?, ?, ?)")
         .run(randomUUID(), name, this.listColumns().length);
       return this.listColumns();
     });
@@ -202,22 +246,22 @@ export class TaskStore {
       }
       const name = this.columnName(input, column);
       this.db
-        .prepare("UPDATE board_columns SET name = ? WHERE name = ?")
+        .prepare("UPDATE board_columns SET name = ? WHERE board_columns.workspaceId = workspace_id() AND name = ?")
         .run(name, column);
       this.db
-        .prepare("UPDATE tasks SET status = ? WHERE status = ?")
+        .prepare("UPDATE tasks SET status = ? WHERE tasks.workspaceId = workspace_id() AND status = ?")
         .run(name, column);
       this.db
-        .prepare("UPDATE column_assignments SET column = ? WHERE column = ?")
+        .prepare("UPDATE column_assignments SET column = ? WHERE column_assignments.workspaceId = workspace_id() AND column = ?")
         .run(name, column);
       this.db
         .prepare(
-          "UPDATE runs SET column = ? WHERE column = ? AND status IN ('Queued', 'Running', 'Waiting')",
+          "UPDATE runs SET column = ? WHERE runs.workspaceId = workspace_id() AND column = ? AND status IN ('Queued', 'Running', 'Waiting')",
         )
         .run(name, column);
       this.db
         .prepare(
-          "UPDATE runs SET interruptionColumn = ? WHERE interruptionColumn = ? AND status = 'Running'",
+          "UPDATE runs SET interruptionColumn = ? WHERE runs.workspaceId = workspace_id() AND interruptionColumn = ? AND status = 'Running'",
         )
         .run(name, column);
       return this.listColumns();
@@ -236,7 +280,7 @@ export class TaskStore {
         throw new ColumnValidationError("Keep at least one board column.");
       if (
         this.db
-          .prepare("SELECT id FROM tasks WHERE status = ? LIMIT 1")
+          .prepare("SELECT id FROM tasks WHERE tasks.workspaceId = workspace_id() AND status = ? LIMIT 1")
           .get(column)
       ) {
         throw new ColumnValidationError(
@@ -244,12 +288,12 @@ export class TaskStore {
         );
       }
       this.db
-        .prepare("DELETE FROM column_assignments WHERE column = ?")
+        .prepare("DELETE FROM column_assignments WHERE column_assignments.workspaceId = workspace_id() AND column = ?")
         .run(column);
-      this.db.prepare("DELETE FROM board_columns WHERE name = ?").run(column);
+      this.db.prepare("DELETE FROM board_columns WHERE board_columns.workspaceId = workspace_id() AND name = ?").run(column);
       for (const [position, name] of this.listColumns().entries()) {
         this.db
-          .prepare("UPDATE board_columns SET position = ? WHERE name = ?")
+          .prepare("UPDATE board_columns SET position = ? WHERE board_columns.workspaceId = workspace_id() AND name = ?")
           .run(position, name);
       }
       return this.listColumns();
@@ -273,7 +317,7 @@ export class TaskStore {
       }
       for (const [position, name] of input.entries()) {
         this.db
-          .prepare("UPDATE board_columns SET position = ? WHERE name = ?")
+          .prepare("UPDATE board_columns SET position = ? WHERE board_columns.workspaceId = workspace_id() AND name = ?")
           .run(position, name);
       }
       return this.listColumns();
@@ -283,7 +327,7 @@ export class TaskStore {
   list(): Task[] {
     return (
       this.db
-        .prepare("SELECT * FROM tasks ORDER BY rowid")
+        .prepare("SELECT * FROM tasks WHERE tasks.workspaceId = workspace_id() ORDER BY rowid")
         .all() as unknown as Task[]
     ).map((task) => ({
       ...task,
@@ -291,8 +335,8 @@ export class TaskStore {
       autoRun: Boolean(task.autoRun),
       comments: this.db
         .prepare(
-          `SELECT comments.* FROM comments WHERE taskId = ? AND NOT EXISTS (
-            SELECT 1 FROM runs WHERE runs.kind = 'intent' AND runs.taskId = comments.taskId
+          `SELECT comments.* FROM comments WHERE comments.workspaceId = workspace_id() AND taskId = ? AND NOT EXISTS (
+            SELECT 1 FROM runs WHERE runs.workspaceId = workspace_id() AND runs.kind = 'intent' AND runs.taskId = comments.taskId
               AND (runs.id = comments.runId OR (
                 runs.finishedAt = comments.createdAt AND runs.summary = comments.body
                 AND json_extract(runs.profile, '$.name') = comments.authorName
@@ -305,6 +349,7 @@ export class TaskStore {
 
   save(input: unknown): Task {
     if (!input || typeof input !== "object") throw new Error("Invalid task.");
+    this.assertInputOwnership(input);
     const task = input as Task;
     if (
       typeof task.id !== "string" ||
@@ -320,13 +365,14 @@ export class TaskStore {
       throw new Error("Enter a title and valid task properties.");
     }
     return this.transaction(() => {
+      this.assertOwnership("tasks", task.id);
       const previous = this.list().find((item) => item.id === task.id);
       if (previous && previous.status !== task.status) {
-        this.db.prepare("UPDATE comments SET feedbackStatus = 'cancelled' WHERE taskId = ? AND feedbackStatus = 'pending'").run(task.id);
+        this.db.prepare("UPDATE comments SET feedbackStatus = 'cancelled' WHERE comments.workspaceId = workspace_id() AND taskId = ? AND feedbackStatus = 'pending'").run(task.id);
         this.db
           .prepare(
             `UPDATE runs SET status = 'Interrupted', finishedAt = ?, summary = ?
-          WHERE taskId = ? AND status = 'Queued'`,
+          WHERE runs.workspaceId = workspace_id() AND taskId = ? AND status = 'Queued'`,
           )
           .run(
             new Date().toISOString(),
@@ -335,23 +381,24 @@ export class TaskStore {
           );
         this.db
           .prepare(
-            "UPDATE runs SET interruptionColumn = ? WHERE taskId = ? AND status = 'Running'",
+            "UPDATE runs SET interruptionColumn = ? WHERE runs.workspaceId = workspace_id() AND taskId = ? AND status = 'Running'",
           )
           .run(task.status, task.id);
         this.db
           .prepare(
             `UPDATE tasks SET agentStatus = CASE
-          WHEN EXISTS (SELECT 1 FROM runs WHERE taskId = ? AND status = 'Running') THEN 'Running'
+          WHEN EXISTS (SELECT 1 FROM runs WHERE runs.workspaceId = workspace_id() AND taskId = ? AND status = 'Running') THEN 'Running'
           WHEN agentStatus IN ('Complete', 'Failed', 'Interrupted') THEN agentStatus
-          ELSE 'Not started' END WHERE id = ?`,
+          ELSE 'Not started' END WHERE tasks.workspaceId = workspace_id() AND id = ?`,
           )
           .run(task.id, task.id);
       }
       this.db
         .prepare(
-          `INSERT INTO tasks (id, title, description, status, autoWorkflow, autoRun) VALUES (?, ?, ?, ?, ?, ?)
+          `INSERT INTO tasks (workspaceId, id, title, description, status, autoWorkflow, autoRun) VALUES (workspace_id(), ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET title=excluded.title, description=excluded.description,
-        status=excluded.status, autoWorkflow=excluded.autoWorkflow, autoRun=excluded.autoRun`,
+        status=excluded.status, autoWorkflow=excluded.autoWorkflow, autoRun=excluded.autoRun
+        WHERE tasks.workspaceId = excluded.workspaceId`,
         )
         .run(
           task.id,
@@ -370,6 +417,7 @@ export class TaskStore {
 
   runTask(taskId: unknown): Task {
     if (typeof taskId !== "string") throw new RunValidationError("Choose a task to run.");
+    this.assertOwnership("tasks", taskId);
     return this.transaction(() => {
       const task = this.list().find((item) => item.id === taskId);
       if (!task) throw new RunValidationError("This task no longer exists.");
@@ -394,8 +442,8 @@ export class TaskStore {
     if (profile) {
       this.db
         .prepare(
-          `INSERT INTO runs (id, taskId, column, profile, status, createdAt)
-        VALUES (?, ?, ?, ?, 'Queued', ?)`,
+          `INSERT INTO runs (workspaceId, workspacePath, id, taskId, column, profile, status, createdAt)
+        VALUES (workspace_id(), (SELECT path FROM workspaces WHERE id = workspace_id()), ?, ?, ?, ?, 'Queued', ?)`,
         )
         .run(
           randomUUID(),
@@ -405,7 +453,7 @@ export class TaskStore {
           new Date().toISOString(),
         );
       this.db
-        .prepare("UPDATE tasks SET agentStatus = 'Queued' WHERE id = ?")
+        .prepare("UPDATE tasks SET agentStatus = 'Queued' WHERE tasks.workspaceId = workspace_id() AND id = ?")
         .run(taskId);
     }
   }
@@ -423,11 +471,12 @@ export class TaskStore {
   }
 
   history(taskId?: string): AgentRun[] {
+    if (taskId !== undefined) this.assertOwnership("tasks", taskId);
     const rows =
       taskId === undefined
-        ? this.db.prepare("SELECT * FROM runs ORDER BY rowid").all()
+        ? this.db.prepare("SELECT * FROM runs WHERE runs.workspaceId = workspace_id() ORDER BY rowid").all()
         : this.db
-            .prepare("SELECT * FROM runs WHERE taskId = ? ORDER BY rowid")
+            .prepare("SELECT * FROM runs WHERE runs.workspaceId = workspace_id() AND taskId = ? ORDER BY rowid")
             .all(taskId);
     return rows.map((row) => ({
       ...row,
@@ -449,11 +498,11 @@ export class TaskStore {
         throw new Error("Could not identify the app process.");
       this.db
         .prepare(
-          "UPDATE runs SET status = 'Running', startedAt = ?, ownerPid = ?, ownerIdentity = ? WHERE id = ?",
+          "UPDATE runs SET status = 'Running', startedAt = ?, ownerPid = ?, ownerIdentity = ? WHERE runs.workspaceId = workspace_id() AND id = ?",
         )
         .run(startedAt, process.pid, ownerIdentity, run.id);
       this.db
-        .prepare("UPDATE tasks SET agentStatus = 'Running' WHERE id = ?")
+        .prepare("UPDATE tasks SET agentStatus = 'Running' WHERE tasks.workspaceId = workspace_id() AND id = ?")
         .run(run.taskId);
       return {
         ...run,
@@ -466,17 +515,19 @@ export class TaskStore {
   }
 
   interruptionRequested(runId: string): boolean {
+    this.assertOwnership("runs", runId);
     return Boolean(
       this.db
-        .prepare("SELECT interruptionColumn FROM runs WHERE id = ?")
+        .prepare("SELECT interruptionColumn FROM runs WHERE runs.workspaceId = workspace_id() AND id = ?")
         .get(runId)?.interruptionColumn,
     );
   }
 
   recordRunner(runId: string, pid: number) {
+    this.assertOwnership("runs", runId);
     this.db
       .prepare(
-        "UPDATE runs SET runnerPid = ?, runnerIdentity = ? WHERE id = ? AND status = 'Running'",
+        "UPDATE runs SET runnerPid = ?, runnerIdentity = ? WHERE runs.workspaceId = workspace_id() AND id = ? AND status = 'Running'",
       )
       .run(pid, processIdentity(pid), runId);
   }
@@ -488,6 +539,7 @@ export class TaskStore {
     recommendation?: string,
     replyPlan?: AgentProfile[],
   ) {
+    this.assertOwnership("runs", runId);
     this.transaction(() => {
       const run = this.history().find(
         (run) => run.id === runId && run.status === "Running",
@@ -502,7 +554,7 @@ export class TaskStore {
       const finishedAt = new Date().toISOString();
       this.db
         .prepare(
-          "UPDATE runs SET status = ?, finishedAt = ?, summary = ? WHERE id = ?",
+          "UPDATE runs SET status = ?, finishedAt = ?, summary = ? WHERE runs.workspaceId = workspace_id() AND id = ?",
         )
         .run(status, finishedAt, summary, runId);
       if (run.kind && (status === "Complete" || (status === "Failed" && run.kind === "reply"))) {
@@ -513,9 +565,9 @@ export class TaskStore {
       this.db
         .prepare(
           `UPDATE tasks SET agentStatus = CASE
-        WHEN EXISTS (SELECT 1 FROM comments WHERE taskId = ? AND feedbackStatus = 'pending') OR ? = 'Waiting' THEN 'Waiting'
-        WHEN EXISTS (SELECT 1 FROM runs WHERE taskId = ? AND status = 'Queued') THEN 'Queued'
-        ELSE ? END WHERE id = ?`,
+        WHEN EXISTS (SELECT 1 FROM comments WHERE comments.workspaceId = workspace_id() AND taskId = ? AND feedbackStatus = 'pending') OR ? = 'Waiting' THEN 'Waiting'
+        WHEN EXISTS (SELECT 1 FROM runs WHERE runs.workspaceId = workspace_id() AND taskId = ? AND status = 'Queued') THEN 'Queued'
+        ELSE ? END WHERE tasks.workspaceId = workspace_id() AND id = ?`,
         )
         .run(run.taskId, status, run.taskId, status, run.taskId);
       if (run.kind !== "intent") this.addComment({
@@ -540,7 +592,7 @@ export class TaskStore {
         if (nextColumn) {
           this.db
             .prepare(
-              "UPDATE tasks SET status = ? WHERE id = ?",
+              "UPDATE tasks SET status = ? WHERE tasks.workspaceId = workspace_id() AND id = ?",
             )
             .run(nextColumn, task.id);
           if (task.autoRun) this.queueAgent(task.id, nextColumn);
@@ -553,17 +605,18 @@ export class TaskStore {
     if (typeof taskId !== "string" || typeof commentId !== "string" ||
         typeof body !== "string" || !body.trim())
       throw new FeedbackValidationError("Enter a feedback reply.");
+    this.assertOwnership("tasks", taskId);
     return this.transaction(() => {
       const task = this.list().find((item) => item.id === taskId);
       const request = task?.comments?.find((item) => item.id === commentId && item.feedbackStatus === "pending");
       const run = request && this.history(taskId).find((item) => item.id === request.runId);
       if (!task || task.agentStatus !== "Waiting" || !request || !run)
         throw new FeedbackValidationError("This feedback request is no longer pending. Reload the task.");
-      this.db.prepare("UPDATE comments SET feedbackStatus = 'answered' WHERE id = ?").run(commentId);
+      this.db.prepare("UPDATE comments SET feedbackStatus = 'answered' WHERE comments.workspaceId = workspace_id() AND id = ?").run(commentId);
       this.addComment({ id: randomUUID(), taskId, body: body.trim(), createdAt: new Date().toISOString(), authorName: "Human", runId: run.id });
-      this.db.prepare("INSERT INTO runs (id, taskId, column, profile, status, createdAt, kind, commentId, replyPlan) VALUES (?, ?, ?, ?, 'Queued', ?, ?, ?, ?)")
+      this.db.prepare("INSERT INTO runs (workspaceId, workspacePath, id, taskId, column, profile, status, createdAt, kind, commentId, replyPlan) VALUES (workspace_id(), (SELECT path FROM workspaces WHERE id = workspace_id()), ?, ?, ?, ?, 'Queued', ?, ?, ?, ?)")
         .run(randomUUID(), taskId, task.status, JSON.stringify(run.profile), run.createdAt, run.kind ?? null, run.commentId ?? null, run.replyPlan ? JSON.stringify(run.replyPlan) : null);
-      this.db.prepare("UPDATE tasks SET agentStatus = 'Queued' WHERE id = ?").run(taskId);
+      this.db.prepare("UPDATE tasks SET agentStatus = 'Queued' WHERE tasks.workspaceId = workspace_id() AND id = ?").run(taskId);
       return this.list().find((item) => item.id === taskId)!;
     });
   }
@@ -571,6 +624,7 @@ export class TaskStore {
   postComment(taskId: unknown, body: unknown): Task {
     if (typeof taskId !== "string" || typeof body !== "string" || !body.trim())
       throw new CommentValidationError("Enter a comment.");
+    this.assertOwnership("tasks", taskId);
     return this.transaction(() => {
       const task = this.list().find((item) => item.id === taskId);
       if (!task) throw new CommentValidationError("This task no longer exists.");
@@ -586,21 +640,22 @@ export class TaskStore {
       if (profiles.length) {
         this.queueCommentRun(taskId, task.status, intentProfile(this.getDefaultExecutor()), "intent", commentId, profiles);
         if (task.agentStatus !== "Running" && task.agentStatus !== "Waiting")
-          this.db.prepare("UPDATE tasks SET agentStatus = 'Queued' WHERE id = ?").run(taskId);
+          this.db.prepare("UPDATE tasks SET agentStatus = 'Queued' WHERE tasks.workspaceId = workspace_id() AND id = ?").run(taskId);
       }
       return this.list().find((item) => item.id === taskId)!;
     });
   }
 
   private queueCommentRun(taskId: string, column: string, profile: AgentProfile, kind: "intent" | "reply", commentId: string, replyPlan: AgentProfile[], createdAt = new Date().toISOString()) {
-    this.db.prepare("INSERT INTO runs (id, taskId, column, profile, status, createdAt, kind, commentId, replyPlan) VALUES (?, ?, ?, ?, 'Queued', ?, ?, ?, ?)")
+    this.db.prepare("INSERT INTO runs (workspaceId, workspacePath, id, taskId, column, profile, status, createdAt, kind, commentId, replyPlan) VALUES (workspace_id(), (SELECT path FROM workspaces WHERE id = workspace_id()), ?, ?, ?, ?, 'Queued', ?, ?, ?, ?)")
       .run(randomUUID(), taskId, column, JSON.stringify(profile), createdAt, kind, commentId, JSON.stringify(replyPlan));
   }
 
   delete(id: string) {
+    this.assertOwnership("tasks", id);
     this.transaction(() => {
       this.assertIdle(id);
-      this.db.prepare("DELETE FROM tasks WHERE id = ?").run(id);
+      this.db.prepare("DELETE FROM tasks WHERE tasks.workspaceId = workspace_id() AND id = ?").run(id);
     });
   }
 
@@ -608,7 +663,7 @@ export class TaskStore {
     if (
       this.db
         .prepare(
-          "SELECT id FROM runs WHERE taskId = ? AND status IN ('Queued', 'Running')",
+          "SELECT id FROM runs WHERE runs.workspaceId = workspace_id() AND taskId = ? AND status IN ('Queued', 'Running')",
         )
         .get(taskId)
     ) {
@@ -619,9 +674,15 @@ export class TaskStore {
   }
 
   addComment(comment: TaskComment) {
+    this.assertOwnership("tasks", comment.taskId);
+    if (comment.runId) {
+      this.assertOwnership("runs", comment.runId);
+      if (!this.history(comment.taskId).some((run) => run.id === comment.runId))
+        throw new CommentValidationError("Choose a run belonging to this task.");
+    }
     this.db
       .prepare(
-        "INSERT INTO comments (id, taskId, body, createdAt, authorName, recommendation, feedbackStatus, runId) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO comments (workspaceId, id, taskId, body, createdAt, authorName, recommendation, feedbackStatus, runId) VALUES (workspace_id(), ?, ?, ?, ?, ?, ?, ?, ?)",
       )
       .run(
         comment.id,
@@ -638,19 +699,22 @@ export class TaskStore {
   listAgents(): AgentProfile[] {
     return (
       this.db
-        .prepare("SELECT * FROM agents ORDER BY rowid")
+        .prepare("SELECT id, name, tool, model, effort, instructions, permissions FROM agents WHERE agents.workspaceId = workspace_id() ORDER BY rowid")
         .all() as unknown as AgentProfile[]
     ).map((agent) => ({ ...agent }));
   }
 
   saveAgent(input: unknown): AgentProfile {
+    this.assertInputOwnership(input);
     const agent = parseAgentProfile(input);
-    this.db
+    this.assertOwnership("agents", agent.id);
+    const result = this.db
       .prepare(
-        `INSERT INTO agents (id, name, tool, model, effort, instructions, permissions)
-      VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET
+        `INSERT INTO agents (workspaceId, id, name, tool, model, effort, instructions, permissions)
+      VALUES (workspace_id(), ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET
       name=excluded.name, tool=excluded.tool, model=excluded.model, effort=excluded.effort,
-      instructions=excluded.instructions, permissions=excluded.permissions`,
+      instructions=excluded.instructions, permissions=excluded.permissions
+      WHERE agents.workspaceId = excluded.workspaceId`,
       )
       .run(
         agent.id,
@@ -661,17 +725,19 @@ export class TaskStore {
         agent.instructions,
         agent.permissions,
       );
+    if (!result.changes) throw new WorkspaceOwnershipError("This agent belongs to another workspace.");
     return agent;
   }
 
   deleteAgent(id: string) {
-    this.db.prepare("DELETE FROM agents WHERE id = ?").run(id);
+    this.assertOwnership("agents", id);
+    this.db.prepare("DELETE FROM agents WHERE agents.workspaceId = workspace_id() AND id = ?").run(id);
   }
 
   listColumnAgents(): ColumnAssignment[] {
     return (
       this.db
-        .prepare("SELECT * FROM column_assignments ORDER BY rowid")
+        .prepare("SELECT column, agentId FROM column_assignments WHERE column_assignments.workspaceId = workspace_id() ORDER BY rowid")
         .all() as unknown as ColumnAssignment[]
     ).map((assignment) => ({ ...assignment }));
   }
@@ -679,6 +745,7 @@ export class TaskStore {
   assignColumnAgent(input: unknown): ColumnAssignment | null {
     if (!input || typeof input !== "object")
       throw new AgentValidationError("Choose a column and agent.");
+    this.assertInputOwnership(input);
     const { column, agentId } = input as {
       column: ColumnAssignment["column"];
       agentId: unknown;
@@ -687,13 +754,13 @@ export class TaskStore {
       throw new AgentValidationError("Choose an existing board column.");
     if (agentId === null) {
       this.db
-        .prepare("DELETE FROM column_assignments WHERE column = ?")
+        .prepare("DELETE FROM column_assignments WHERE column_assignments.workspaceId = workspace_id() AND column = ?")
         .run(column);
       return null;
     }
     if (
       typeof agentId !== "string" ||
-      !this.db.prepare("SELECT id FROM agents WHERE id = ?").get(agentId)
+      !this.db.prepare("SELECT id FROM agents WHERE agents.workspaceId = workspace_id() AND id = ?").get(agentId)
     ) {
       throw new AgentValidationError(
         "Choose a saved agent from the Agents screen.",
@@ -701,7 +768,7 @@ export class TaskStore {
     }
     this.db
       .prepare(
-        "INSERT INTO column_assignments (column, agentId) VALUES (?, ?) ON CONFLICT(column) DO UPDATE SET agentId=excluded.agentId",
+        "INSERT INTO column_assignments (workspaceId, column, agentId) VALUES (workspace_id(), ?, ?) ON CONFLICT(workspaceId, column) DO UPDATE SET agentId=excluded.agentId",
       )
       .run(column, agentId);
     return { column, agentId };

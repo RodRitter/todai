@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
+import { migrateWorkspaceOwnership } from "./workspace-schema.ts";
 import { statuses } from "../domain/task.ts";
 
 // Keep schema creation and legacy migrations together, in their original order.
 export function initializeSchema(db: DatabaseSync) {
+  db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
   db.exec(`
       CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       PRAGMA foreign_keys = ON;
@@ -117,6 +119,7 @@ export function initializeSchema(db: DatabaseSync) {
       }
       db.exec("DROP TABLE column_agents");
     }
+    migrateWorkspaceOwnership(db);
     db.exec("COMMIT");
   } catch (error) {
     db.close();

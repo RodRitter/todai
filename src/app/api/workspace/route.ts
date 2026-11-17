@@ -8,9 +8,9 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export function GET() {
+export function GET(request: Request) {
   try {
-    return Response.json({ path: withTaskStore(workspacePath) });
+    return Response.json({ path: withTaskStore(request, workspacePath) });
   } catch {
     return Response.json(
       { error: "Could not load workspace settings." },
@@ -31,7 +31,7 @@ export async function PUT(request: Request) {
   }
   try {
     const path = validateWorkspace(input);
-    withTaskStore((store) => store.setWorkspacePath(path));
+    withTaskStore(request, (store) => store.setWorkspacePath(path));
     return Response.json({ path });
   } catch (error) {
     return Response.json(

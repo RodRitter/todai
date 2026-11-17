@@ -20,7 +20,7 @@ function fixture(runner: Runner) {
   const store = new TaskStore(join(directory, "tasks.sqlite"));
   store.saveAgent(profile);
   store.assignColumnAgent({ column: "In progress", agentId: "builder" });
-  const service = new ExecutionService(store, runner, directory);
+  const service = new ExecutionService(store, runner);
   return {
     store,
     service,
@@ -88,7 +88,6 @@ test("runs are serialized across services and completion persists handovers with
       async () => {
         throw new Error("overlap");
       },
-      f.directory,
     );
     await other.drain();
     f.store.saveAgent({ ...profile, name: "Renamed builder" });
@@ -222,7 +221,7 @@ test("restart surfaces an abandoned run, resumes queued work, and never reruns c
         onStart(child.pid);
         child.unref();
         process.exit(0);
-      }, ${JSON.stringify(f.directory)});
+      });
       await service.drain();
     `,
     ]);
@@ -240,7 +239,6 @@ test("restart surfaces an abandoned run, resumes queued work, and never reruns c
       async () => {
         throw new Error("must not rerun");
       },
-      f.directory,
     );
     await restarted.drain();
     assert.equal(restarted.list()[1].agentStatus, "Complete");
@@ -410,7 +408,6 @@ test("redirecting active work waits for exit, keeps only the latest destination,
       async () => {
         throw new Error("overlap");
       },
-      f.directory,
     ).drain();
     assert.deepEqual(started, ["redirect:In progress"]);
     assert.equal(

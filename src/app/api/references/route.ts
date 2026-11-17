@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     return Response.json({ error: "Choose skills or files." }, { status: 400 });
   }
   try {
-    const workspace = withTaskStore(workspacePath);
+    const workspace = withTaskStore(request, workspacePath);
     const query = (params.get("q") ?? "").slice(0, 200);
     return Response.json({ references: kind === "skill"
       ? skillReferences(workspace, query)

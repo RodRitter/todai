@@ -1,4 +1,3 @@
-import { executionWorkspace } from "./workspace-settings";
 import { openTaskStore } from "./database";
 import { ExecutionService } from "./execution-service";
 import { createExecutorRunner } from "./executor-runner";
@@ -10,13 +9,17 @@ const state = globalThis as typeof globalThis & {
 };
 
 async function drainWorkspace() {
-  const store = openTaskStore();
-  try {
-    await new ExecutionService(store, createExecutorRunner(), () =>
-      executionWorkspace(store),
-    ).drain();
-  } finally {
-    store.close();
+  const registry = openTaskStore();
+  let workspaceIds: string[];
+  try { workspaceIds = registry.listWorkspaces().map((workspace) => workspace.id); }
+  finally { registry.close(); }
+  for (const workspaceId of workspaceIds) {
+    const store = openTaskStore(workspaceId);
+    try {
+      await new ExecutionService(store, createExecutorRunner()).drain();
+    } finally {
+      store.close();
+    }
   }
 }
 

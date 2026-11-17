@@ -63,7 +63,7 @@ test("mixed queue uses each snapshotted tool and continues after executor failur
     await new ExecutionService(store, createExecutorRunner({
       codex: async () => { calls.push("codex"); throw new Error("Executor unavailable"); },
       claude: async () => { calls.push("claude"); return "Reviewed"; },
-    }), tmpdir()).drain();
+    })).drain();
     assert.deepEqual(calls, ["codex", "claude"]);
     assert.equal(store.list().find((task) => task.id === "one")?.agentStatus, "Failed");
     assert.equal(store.list().find((task) => task.id === "two")?.comments?.[0].body, "Reviewed");

@@ -4,9 +4,9 @@ import { AgentValidationError } from "@/domain/column-agent";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export function GET() {
+export function GET(request: Request) {
   try {
-    return Response.json(withTaskStore((store) => store.listColumnAgents()));
+    return Response.json(withTaskStore(request, (store) => store.listColumnAgents()));
   } catch {
     return Response.json(
       {
@@ -30,7 +30,7 @@ export async function PUT(request: Request) {
   }
   try {
     return Response.json(
-      withTaskStore((store) => store.assignColumnAgent(input)),
+      withTaskStore(request, (store) => store.assignColumnAgent(input)),
     );
   } catch (error) {
     if (error instanceof AgentValidationError)

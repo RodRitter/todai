@@ -12,7 +12,7 @@ function failure(error: unknown) {
 export function GET(request: Request) {
   try {
     const scope = parseSkillScope(new URL(request.url).searchParams.get("scope"));
-    return Response.json(listSkills(scopeDirectory(scope, withTaskStore(workspacePath))));
+    return Response.json(listSkills(scopeDirectory(scope, withTaskStore(request, workspacePath))));
   } catch (error) { return failure(error); }
 }
 
@@ -22,6 +22,6 @@ export async function PUT(request: Request) {
   catch { return Response.json({ error: "Send skill changes as valid JSON." }, { status: 400 }); }
   try {
     const scope = parseSkillScope(new URL(request.url).searchParams.get("scope"));
-    return Response.json(saveScopedSkill(scope, input, withTaskStore(workspacePath)));
+    return Response.json(saveScopedSkill(scope, input, withTaskStore(request, workspacePath)));
   } catch (error) { return failure(error); }
 }

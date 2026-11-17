@@ -1,5 +1,7 @@
 "use client";
 
+import { workspaceFetch } from "@/lib/workspace-fetch";
+
 import { useEffect, useState } from "react";
 import { BookOpen, Lock, RefreshCw, Save, Search } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
@@ -13,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { LocalSkill, SkillScope, SkillsSnapshot } from "@/domain/skill";
 
 async function request<T>(scope: SkillScope, options?: RequestInit): Promise<T> {
-  const response = await fetch(`/api/skills?scope=${scope}`, { cache: "no-store", ...options });
+  const response = await workspaceFetch(`/api/skills?scope=${scope}`, { cache: "no-store", ...options });
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || "Could not access skills.");
   return result;

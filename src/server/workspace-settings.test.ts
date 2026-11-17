@@ -80,7 +80,7 @@ test("directory autocomplete filters files, handles spaces and symlinks, and bro
   }
 });
 
-test("workspace changes apply to queued runs without changing the active run directory", async () => {
+test("queued and active runs retain the directory captured when enqueued", async () => {
   const directory = mkdtempSync(join(tmpdir(), "todai-workspace-runs-"));
   const store = new TaskStore(join(directory, "tasks.sqlite"));
   let finish!: () => void;
@@ -113,14 +113,13 @@ test("workspace changes apply to queued runs without changing the active run dir
           });
         return "Finished";
       },
-      () => executionWorkspace(store),
     );
     draining = service.drain();
     store.setWorkspacePath(second);
     assert.deepEqual(seen, [first]);
     finish();
     await draining;
-    assert.deepEqual(seen, [first, second]);
+    assert.deepEqual(seen, [first, first]);
   } finally {
     finish?.();
     await draining;

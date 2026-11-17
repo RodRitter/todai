@@ -17,7 +17,7 @@ function fixture(runner: Runner) {
   const store = new TaskStore(join(directory, "tasks.sqlite"));
   for (const profile of profiles) store.saveAgent(profile);
   store.save({ id: "task", title: "Feature", description: "Details", status: "To do", autoWorkflow: true });
-  return { store, directory, service: new ExecutionService(store, runner, directory),
+  return { store, directory, service: new ExecutionService(store, runner),
     cleanup() { store.close(); rmSync(directory, { recursive: true, force: true }); } };
 }
 

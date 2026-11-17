@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   try {
     const { taskId, commentId, body } = await request.json();
-    const task = withTaskStore((store) => store.answerFeedback(taskId, commentId, body));
+    const task = withTaskStore(request, (store) => store.answerFeedback(taskId, commentId, body));
     execution();
     return Response.json(task);
   } catch (error) {

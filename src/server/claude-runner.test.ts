@@ -33,6 +33,8 @@ function request(workspace: string): RunRequest {
       ],
     },
     run: {
+      workspaceId: "workspace",
+      workspacePath: workspace,
       id: "run",
       taskId: "task",
       column: "In progress",

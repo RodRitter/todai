@@ -1,3 +1,4 @@
+import { executionWorkspacePath } from "./workspace-settings.ts";
 import { orderedReplies } from "./comment-intent.ts";
 import { parseFeedback } from "./feedback.ts";
 import { processIdentity } from "./process-identity.ts";
@@ -17,15 +18,12 @@ export type Runner = (request: RunRequest) => Promise<string>;
 export class ExecutionService {
   private store: TaskStore;
   private runner: Runner;
-  private workspace: string | (() => string);
   constructor(
     store: TaskStore,
     runner: Runner,
-    workspace: string | (() => string),
   ) {
     this.store = store;
     this.runner = runner;
-    this.workspace = workspace;
   }
   save(input: unknown) {
     return this.store.save(input);
@@ -87,10 +85,7 @@ export class ExecutionService {
         summary = await this.runner({
           run,
           task,
-          workspace:
-            typeof this.workspace === "function"
-              ? this.workspace()
-              : this.workspace,
+          workspace: executionWorkspacePath(run.workspacePath),
           signal: controller.signal,
           onStart: (pid) => this.store.recordRunner(run.id, pid),
         });

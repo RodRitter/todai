@@ -4,9 +4,9 @@ import { ColumnValidationError, type TaskStore } from "@/server/task-store";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export function GET() {
+export function GET(request: Request) {
   try {
-    return Response.json(withTaskStore((store) => store.listColumns()));
+    return Response.json(withTaskStore(request, (store) => store.listColumns()));
   } catch {
     return Response.json(
       { error: "Could not load columns. Try again." },
@@ -29,7 +29,7 @@ async function update(
     );
   }
   try {
-    return Response.json(withTaskStore((store) => operation(store, input)));
+    return Response.json(withTaskStore(request, (store) => operation(store, input)));
   } catch (error) {
     if (error instanceof ColumnValidationError)
       return Response.json({ error: error.message }, { status: 400 });

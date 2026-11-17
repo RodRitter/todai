@@ -9,7 +9,7 @@ export function GET(request: Request) {
   try {
     execution();
     return Response.json(
-      withTaskStore((store) =>
+      withTaskStore(request, (store) =>
         new URL(request.url).searchParams.get("workspace") === "true"
           ? store.boardSnapshot()
           : store.list(),
@@ -30,7 +30,7 @@ export function GET(request: Request) {
 export async function PUT(request: Request) {
   try {
     const input: unknown = await request.json();
-    const task = withTaskStore((store) => store.save(input));
+    const task = withTaskStore(request, (store) => store.save(input));
     execution();
     return Response.json(task);
   } catch (error) {
@@ -54,7 +54,7 @@ export async function DELETE(request: Request) {
         { error: "A task ID is required." },
         { status: 400 },
       );
-    withTaskStore((store) => store.delete(id));
+    withTaskStore(request, (store) => store.delete(id));
     return new Response(null, { status: 204 });
   } catch (error) {
     if (error instanceof PendingRunError)

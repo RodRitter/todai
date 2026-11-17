@@ -1,5 +1,7 @@
 "use client";
 
+import { workspaceFetch } from "@/lib/workspace-fetch";
+
 import { useEffect, useRef, useState } from "react";
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -102,7 +104,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
       setSelected(0);
       setStatus("Loading references…");
       try {
-        const response = await fetch(`/api/references?kind=${match.kind}&q=${encodeURIComponent(match.query)}`, { signal: abort.signal });
+        const response = await workspaceFetch(`/api/references?kind=${match.kind}&q=${encodeURIComponent(match.query)}`, { signal: abort.signal });
         if (!response.ok) throw new Error("References unavailable");
         const data = await response.json() as { references: TaskReference[] };
         if (abort.signal.aborted) return;

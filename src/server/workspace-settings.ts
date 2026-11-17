@@ -41,9 +41,12 @@ export function workspacePath(store: TaskStore) {
 }
 
 export function executionWorkspace(store: TaskStore) {
-  const path = workspacePath(store);
-  // Preserve the default for installations that have not selected a directory yet.
-  if (!store.getWorkspacePath()) mkdirSync(path, { recursive: true });
+  return executionWorkspacePath(workspacePath(store));
+}
+
+export function executionWorkspacePath(path: string) {
+  // Preserve the default directory for installations that have not configured one.
+  if (path === resolve("workspace")) mkdirSync(path, { recursive: true });
   return validateWorkspace(path);
 }
 

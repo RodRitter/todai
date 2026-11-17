@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    const defaultExecutor = withTaskStore((store) => store.getDefaultExecutor());
+    const defaultExecutor = withTaskStore(request, (store) => store.getDefaultExecutor());
     const statuses = new URL(request.url).searchParams.get("status") === "true" ? await inspectExecutors() : undefined;
     return Response.json({ defaultExecutor, statuses });
   } catch { return Response.json({ error: "Could not load executor settings." }, { status: 500 }); }
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const defaultExecutor = withTaskStore((store) => store.setDefaultExecutor(body?.defaultExecutor));
+    const defaultExecutor = withTaskStore(request, (store) => store.setDefaultExecutor(body?.defaultExecutor));
     return Response.json({ defaultExecutor });
   } catch (error) {
     return Response.json({ error: error instanceof AgentValidationError ? error.message : "Could not save executor settings." },

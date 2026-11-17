@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const { taskId } = await request.json();
-    const task = withTaskStore((store) => store.runTask(taskId));
+    const task = withTaskStore(request, (store) => store.runTask(taskId));
     execution();
     return Response.json(task);
   } catch (error) {
