@@ -4,6 +4,19 @@ import type { DatabaseSync } from "node:sqlite";
 
 // Called inside the schema transaction, after all legacy columns exist.
 export function migrateWorkspaceOwnership(db: DatabaseSync) {
+  migrateInitialWorkspaceOwnership(db);
+  // Early installations gained task ownership before comments were included.
+  // Keep this migration independent of the initial workspace migration marker.
+  if (!db.prepare("PRAGMA table_info(comments)").all().some((column) => column.name === "workspaceId")) {
+    db.exec("ALTER TABLE comments ADD COLUMN workspaceId TEXT REFERENCES workspaces(id)");
+  }
+  db.exec(`UPDATE comments SET workspaceId = (
+    SELECT tasks.workspaceId FROM tasks WHERE tasks.id = comments.taskId
+  ) WHERE workspaceId IS NULL;
+  CREATE INDEX IF NOT EXISTS comments_workspace ON comments(workspaceId);`);
+}
+
+function migrateInitialWorkspaceOwnership(db: DatabaseSync) {
   db.exec(`CREATE TABLE IF NOT EXISTS workspaces (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, path TEXT NOT NULL
   )`);
@@ -12,7 +25,7 @@ export function migrateWorkspaceOwnership(db: DatabaseSync) {
   const id = randomUUID();
   const path = (db.prepare("SELECT value FROM settings WHERE key = 'workspacePath'").get()?.value as string | undefined) ?? resolve("workspace");
   db.prepare("INSERT INTO workspaces (id, name, path) VALUES (?, ?, ?)").run(id, basename(path) || "Workspace", path);
-  for (const table of ["tasks", "agents", "runs", "comments"]) {
+  for (const table of ["tasks", "agents", "runs"]) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN workspaceId TEXT REFERENCES workspaces(id)`);
     db.prepare(`UPDATE ${table} SET workspaceId = ?`).run(id);
     db.exec(`CREATE INDEX ${table}_workspace ON ${table}(workspaceId)`);

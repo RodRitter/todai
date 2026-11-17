@@ -186,3 +186,32 @@ test("request-bound stores require explicit ownership and cannot mutate another 
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("startup repairs missing comment ownership in an already migrated database", () => {
+  const directory = mkdtempSync(join(tmpdir(), "todai-comment-migration-"));
+  const path = join(directory, "tasks.sqlite");
+  const first = new TaskStore(path);
+  const firstId = first.workspaceId;
+  const secondId = first.createWorkspace("Second", directory).id;
+  const second = new TaskStore(path, secondId);
+  for (const [id, store] of [["one", first], ["two", second]] as const) {
+    store.save({ id, title: id, description: "", status: "To do" });
+    store.postComment(id, `Conversation ${id}`);
+  }
+  first.close(); second.close();
+  const legacy = new DatabaseSync(path);
+  legacy.exec("DROP INDEX comments_workspace; ALTER TABLE comments DROP COLUMN workspaceId;");
+  legacy.close();
+  try {
+    for (let startup = 0; startup < 2; startup++) {
+      for (const [id, workspaceId] of [["one", firstId], ["two", secondId]]) {
+        const store = new TaskStore(path, workspaceId);
+        try {
+          assert.equal(store.list()[0].comments?.[0].body, `Conversation ${id}`);
+          assert.equal(store.listWorkspaces().length, 2);
+          assert.equal(store.history().length, 0);
+        } finally { store.close(); }
+      }
+    }
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
