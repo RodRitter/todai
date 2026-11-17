@@ -37,14 +37,16 @@ export function ColumnSettings({
   rename,
   remove,
   workspaceSettings,
+  generalSettings,
   executorSettings,
   tab,
   onTabChange,
 }: {
-  tab?: "general" | "board" | "executors";
+  tab?: "general" | "workspaces" | "board" | "executors";
   executorSettings?: ReactNode;
   onTabChange?: (value: string) => void;
   workspaceSettings?: ReactNode;
+  generalSettings?: ReactNode;
   initialColumns: string[];
   initialTaskCounts?: Record<string, number>;
   create: (name: string) => Promise<string[]>;
@@ -121,12 +123,14 @@ export function ColumnSettings({
         <main className="mx-auto max-w-2xl space-y-8 p-4 md:p-8">
           <TabsList aria-label="Settings sections">
             <TabsTrigger value="general">General</TabsTrigger>
+            {workspaceSettings && <TabsTrigger value="workspaces">Workspaces</TabsTrigger>}
             <TabsTrigger value="board">Board</TabsTrigger>
             {executorSettings && <TabsTrigger value="executors">Executors</TabsTrigger>}
           </TabsList>
           <TabsContent value="general" forceMount className="space-y-8">
-            {workspaceSettings}
+            {generalSettings}
           </TabsContent>
+          {workspaceSettings && <TabsContent value="workspaces" forceMount className="space-y-8">{workspaceSettings}</TabsContent>}
           {executorSettings && <TabsContent value="executors" forceMount>{executorSettings}</TabsContent>}
           <TabsContent value="board" forceMount>
             <section className="space-y-4" aria-labelledby="columns-heading">

@@ -31,13 +31,13 @@ npm run dev
 
 Open [localhost:3000](http://127.0.0.1:3000).
 
-1. In **Settings → General**, select your workspace directory.
+1. In **Settings → Workspaces**, select your workspace directory.
 2. In **Settings → Executors**, check tool status, test connections, and choose a default executor for new agents.
 3. In **Agents**, choose an executor, model, effort, and permissions.
 4. Assign an agent through a column’s settings, then create or move a task into that column. Open the saved task and press **Run** to queue its agent.
 
 
-Add another named workspace in **Settings → General → Add workspace**, then switch using the sidebar selector. Each workspace has its own tasks, agents, columns, assignments, and default executor. Selection lives in the browser URL, so separate tabs can work independently. Switching clears unsaved drafts and leaves queued and active runs in their original directories.
+Add another named workspace in **Settings → Workspaces → Add workspace**, then switch using the sidebar selector. Each workspace has its own tasks, agents, columns, assignments, and default executor. Selection lives in the browser URL, so separate tabs can work independently. Switching clears unsaved drafts and leaves queued and active runs in their original directories.
 
 Task automation is opt-in. Enable **Auto-run** to start the assigned agent when a task enters a column. Enable **Auto-workflow** to move to the next column after a successful run; the next agent waits for **Run** unless Auto-run is also enabled. Save task edits before pressing Run.
 
@@ -53,7 +53,7 @@ Data is stored in `.todai/tasks.sqlite`. Set `TODAI_DB_PATH` to use another data
 
 The agent workspace is configured separately in Settings. Configuration exports include selected agents, columns, and assignments; they do not include tasks or workspace paths.
 
-Settings tabs can be linked directly with `/settings?tab=general`, `/settings?tab=board`, or `/settings?tab=executors`.
+Settings tabs can be linked directly with `/settings?tab=general`, `/settings?tab=workspaces`, `/settings?tab=board`, or `/settings?tab=executors`.
 
 Changing the default executor only affects new agent forms. Existing profiles and queued runs retain their executor. Codex sandbox modes and Claude permission modes have different meanings; the agent editor shows the available choices for each tool. Claude runs deny unresolved permission prompts and report denied actions as failures. Connection tests make a small model request; refreshing installation and sign-in status does not.
 

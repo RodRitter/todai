@@ -45,7 +45,8 @@ const meta = {
     );
   },
   args: {
-    workspaceSettings: <p className="text-sm text-muted-foreground">Workspace and executor settings appear here.</p>,
+    generalSettings: <p className="text-sm text-muted-foreground">Configuration import and export appear here.</p>,
+    workspaceSettings: <p className="text-sm text-muted-foreground">Workspace directory and creation settings appear here.</p>,
     initialColumns: [...statuses],
     create: async (name) => [...statuses, name],
     reorder: async (columns) => columns,
