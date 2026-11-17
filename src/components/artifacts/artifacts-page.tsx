@@ -1,21 +1,24 @@
 "use client";
 
+import { DropdownMenu } from "radix-ui";
+import { ChevronDown, FileText, ImageIcon } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { ArtifactTable } from "./artifact-table";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { DescriptionEditor } from "@/components/tasks/description-editor";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { NativeSelect } from "@/components/ui/native-select";
 import { toast } from "@/components/ui/toast";
-import { artifactTypes, MAX_ARTIFACT_BYTES, type Artifact, type ArtifactType } from "@/domain/artifact";
+import { artifactCategory, MAX_ARTIFACT_BYTES, type Artifact, type ArtifactType } from "@/domain/artifact";
 import type { Task } from "@/domain/task";
 import { workspaceFetch } from "@/lib/workspace-fetch";
 
-const typeLabels = { text: "Text", markdown: "Markdown", file: "File", link: "External link" };
+const typeLabels = { document: "Document", image: "Image", file: "File", link: "External link" };
+const imageTypes = ["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif", "image/bmp"];
 
 async function checked(response: Response) {
   if (!response.ok) {
@@ -67,6 +70,12 @@ export function ArtifactsPage() {
     return () => controller.abort();
   }, [attempt]);
 
+  function create(kind: "document" | "image") {
+    setEditing(null); setContent(""); setType(kind === "document" ? "markdown" : "file"); setCreating(true);
+  }
+
+  const imageUpload = type === "file" && (!editing || artifactCategory(editing) === "image");
+
   async function publish(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -75,6 +84,10 @@ export function ArtifactsPage() {
     const file = data.get("file");
     if (file instanceof File && file.size > MAX_ARTIFACT_BYTES) {
       toast.error("Files must be 20 MiB or smaller.");
+      return;
+    }
+    if (imageUpload && (!(file instanceof File) || !imageTypes.includes(file.type))) {
+      toast.error("Choose a PNG, JPEG, GIF, WebP, AVIF, or BMP image.");
       return;
     }
     setSaving(true);
@@ -97,7 +110,7 @@ export function ArtifactsPage() {
       const text = artifact.type === "text" || artifact.type === "markdown"
         ? await (await fetchRevisionContent(artifact)).text()
         : "";
-      setEditing(artifact); setType(artifact.type); setContent(text); setCreating(true);
+      setEditing(artifact); setType(artifact.type === "text" ? "markdown" : artifact.type); setContent(text); setCreating(true);
     } catch (error) { toast.error(error instanceof Error ? error.message : "Could not load revision."); }
     finally { setSaving(false); }
   }
@@ -120,26 +133,37 @@ export function ArtifactsPage() {
     finally { setSaving(false); }
   }
 
-  const visible = artifacts.filter((artifact) => (!filterType || artifact.type === filterType)
+  const visible = artifacts.filter((artifact) => (!filterType || artifactCategory(artifact) === filterType)
     && (!creator || artifact.creator === creator)
     && `${artifact.title} ${artifact.description} ${artifact.filename ?? ""} ${artifact.url ?? ""}`.toLowerCase().includes(search.toLowerCase()));
 
   return <AppShell screen="artifacts"><main className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
     <div className="flex items-center justify-between gap-4"><div><h2 className="text-xl font-semibold">Workspace artifacts</h2><p className="text-sm text-muted-foreground">Documents, files, and references shared across this workspace.</p></div>
-      <Button onClick={() => { setEditing(null); setContent(""); setCreating((value) => !value); }} disabled={saving}>{creating ? "Cancel" : "Create artifact"}</Button>
+      <div className="flex shrink-0 items-center" role="group" aria-label="Create artifact">
+        <Button className="rounded-r-none" onClick={() => create("document")} disabled={saving || creating}>Create artifact</Button>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild><Button size="icon" className="rounded-l-none border-l border-primary-foreground/25" disabled={saving || creating} aria-label="Choose artifact type"><ChevronDown aria-hidden="true" /></Button></DropdownMenu.Trigger>
+          <DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={4} className="z-50 min-w-44 rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+            <DropdownMenu.Item className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground" onSelect={() => create("document")}><FileText className="size-4" aria-hidden="true" />Document</DropdownMenu.Item>
+            <DropdownMenu.Item className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground" onSelect={() => create("image")}><ImageIcon className="size-4" aria-hidden="true" />Image</DropdownMenu.Item>
+          </DropdownMenu.Content></DropdownMenu.Portal>
+        </DropdownMenu.Root>
+      </div>
     </div>
-    {creating && <Card><CardHeader><CardTitle>{editing ? "Publish new revision" : "Create artifact"}</CardTitle></CardHeader><form key={editing?.revisionId ?? "new"} onSubmit={publish} className="space-y-4 px-5">
+    {creating && <Dialog open onOpenChange={(open) => { if (!saving) setCreating(open); }}><DialogContent size="large" closeDisabled={saving}>
+      <DialogHeader><DialogTitle>{editing ? "Publish new revision" : imageUpload ? "Create image" : "Create document"}</DialogTitle><DialogDescription className="sr-only">{imageUpload ? "Upload an image to your workspace." : "Write and publish a workspace document."}</DialogDescription></DialogHeader>
+      <form key={editing?.revisionId ?? type} onSubmit={publish} className="space-y-4">
+      <input type="hidden" name="type" value={type} />
       <div className="flex flex-wrap gap-4">
-        <div className="space-y-2"><Label htmlFor="artifact-type">Type</Label><NativeSelect id="artifact-type" name="type" value={type} onChange={(event) => setType(event.target.value as ArtifactType)} disabled={saving}>{artifactTypes.map((value) => <option key={value} value={value}>{typeLabels[value]}</option>)}</NativeSelect></div>
         <div className="min-w-48 flex-1 space-y-2"><Label htmlFor="artifact-title">Title</Label><Input id="artifact-title" name="title" defaultValue={editing?.title ?? ""} required maxLength={300} disabled={saving} /></div>
         <div className="space-y-2"><Label htmlFor="artifact-creator">Creator name</Label><Input id="artifact-creator" name="creator" required maxLength={200} defaultValue="You" disabled={saving} /></div>
       </div>
       <div className="space-y-2"><Label htmlFor="artifact-description">Description</Label><Textarea id="artifact-description" name="description" defaultValue={editing?.description ?? ""} maxLength={10000} disabled={saving} /></div>
-      {type === "file" ? <div className="space-y-2"><Label htmlFor="artifact-file">File</Label><Input id="artifact-file" type="file" name="file" required disabled={saving} /><p className="text-sm text-muted-foreground">Any file type, up to 20 MiB. A stored copy is kept independently of the original file.</p></div>
+      {type === "file" ? <div className="space-y-2"><Label htmlFor="artifact-file">{imageUpload ? "Image" : "File"}</Label><Input id="artifact-file" type="file" name="file" accept={imageUpload ? imageTypes.join(",") : undefined} required disabled={saving} /><p className="text-sm text-muted-foreground">{imageUpload ? "PNG, JPEG, GIF, WebP, AVIF, or BMP, up to 20 MiB." : "Any file type, up to 20 MiB."} A stored copy is kept independently of the original file.</p></div>
         : type === "link" ? <div className="space-y-2"><Label htmlFor="artifact-url">External URL</Label><Input id="artifact-url" name="url" defaultValue={editing?.url ?? ""} type="url" required maxLength={8000} placeholder="https://example.com" disabled={saving} /><p className="text-sm text-muted-foreground">Stores the URL and metadata only. Remote content can change; upload a copy to preserve it.</p></div>
-          : <div className="space-y-2"><Label htmlFor="artifact-content">{typeLabels[type]} content</Label><Textarea id="artifact-content" name="content" defaultValue={content} rows={10} disabled={saving} /><p className="text-sm text-muted-foreground">Up to 20 MiB of UTF-8 text.</p></div>}
-      <Button type="submit" disabled={saving}>{saving ? "Publishing…" : editing ? "Publish revision" : "Publish artifact"}</Button>
-    </form></Card>}
+          : <><input type="hidden" name="content" value={content} /><DescriptionEditor id="artifact-content" label="Document content" value={content} onChange={setContent} disabled={saving} /></>}
+      <div className="flex items-center gap-2"><Button type="submit" disabled={saving}>{saving ? "Publishing…" : editing ? "Publish revision" : imageUpload ? "Publish image" : "Publish document"}</Button><Button type="button" variant="ghost" disabled={saving} onClick={() => setCreating(false)}>Cancel</Button></div>
+    </form></DialogContent></Dialog>}
     <div className="flex flex-wrap items-end gap-4">
       <div className="space-y-2"><Label htmlFor="artifact-task">Linked task</Label>
         <Select value={taskId || "all"} onValueChange={(value) => { setTaskId(value === "all" ? "" : value); setLoading(true); setArtifacts([]); }}>
@@ -157,7 +181,7 @@ export function ArtifactsPage() {
       <div className="space-y-2"><Label htmlFor="artifact-filter-type">Type</Label>
         <Select value={filterType || "all"} onValueChange={(value) => setFilterType(value === "all" ? "" : value)}>
           <SelectTrigger id="artifact-filter-type" className="w-36"><SelectValue /></SelectTrigger>
-          <SelectContent><SelectItem value="all">All types</SelectItem>{artifactTypes.map((value) => <SelectItem key={value} value={value}>{typeLabels[value]}</SelectItem>)}</SelectContent>
+          <SelectContent><SelectItem value="all">All types</SelectItem>{Object.entries(typeLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
         </Select>
       </div>
       <div className="space-y-2"><Label htmlFor="artifact-filter-creator">Creator</Label>

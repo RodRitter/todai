@@ -67,7 +67,7 @@ Changing the default executor only affects new agent forms. Existing profiles an
 
 ## Artifacts
 
-Open **Artifacts** in the sidebar to publish text or Markdown, upload any file type, or register an HTTP/HTTPS link with a title, description, and creator name. Search the current workspace’s collection and filter by type or creator. Creator names are descriptive labels entered by the publisher.
+Open **Artifacts** in the sidebar. **Create artifact** opens a document modal; its adjacent dropdown offers **Document** and **Image**. Documents use the same rich-text Markdown editor as task descriptions. Images accept PNG, JPEG, GIF, WebP, AVIF, and BMP uploads. Plain text and Markdown are grouped as documents. Search the workspace collection and filter by type or creator. Existing files and external links remain available, and agents can still publish them. Creator names are descriptive labels entered by the publisher.
 
 Stored content is limited to **20 MiB per revision** and downloaded using its artifact ID. Content and metadata are published atomically in the application database alongside tasks, so backing up `.todai/tasks.sqlite` (or `TODAI_DB_PATH`) also preserves artifacts. Uploading copies the bytes: moving, editing, or deleting the original file does not affect the artifact. External links store only their URL and metadata; remote content can change.
 

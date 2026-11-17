@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { DropdownMenu } from "radix-ui";
 import { Archive, FileText, History, Link2, MoreHorizontal, Upload } from "lucide-react";
-import type { Artifact } from "@/domain/artifact";
+import { artifactCategory, type Artifact } from "@/domain/artifact";
 import { Button } from "@/components/ui/button";
 import { ArtifactViewer } from "./artifact-viewer";
 
-const typeLabels = { text: "Text", markdown: "Markdown", file: "File", link: "External link" };
+const typeLabels = { document: "Document", image: "Image", file: "File", link: "External link" };
 const menuItemClass = "flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>svg]:size-4";
 
 export function ArtifactTable({ artifacts, label = "Artifacts", busy = false, onEdit, onHistory, onArchive }: {
@@ -41,7 +41,7 @@ export function ArtifactTable({ artifacts, label = "Artifacts", busy = false, on
                 <span className="truncate">{artifact.title}</span>
               </button>
             </td>
-            <td className="hidden px-3 py-2 text-muted-foreground sm:table-cell">{typeLabels[artifact.type]}</td>
+            <td className="hidden px-3 py-2 text-muted-foreground sm:table-cell">{typeLabels[artifactCategory(artifact)]}</td>
             <td className="hidden truncate px-3 py-2 text-muted-foreground lg:table-cell" title={artifact.creator}>{artifact.creator}</td>
             <td className="hidden px-3 py-2 text-muted-foreground md:table-cell">r{artifact.revisionNumber}</td>
             <td className="px-3 py-2 text-xs text-muted-foreground"><time dateTime={artifact.updatedAt} title={new Date(artifact.updatedAt).toLocaleString()}>{new Date(artifact.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</time></td>

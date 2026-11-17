@@ -51,3 +51,9 @@ export function artifactPreviewKind(artifact: Artifact) {
   if (mediaType === "application/pdf") return "pdf";
   return "unsupported";
 }
+
+export function artifactCategory(artifact: Artifact) {
+  if (artifact.type === "text" || artifact.type === "markdown") return "document";
+  if (artifactPreviewKind(artifact) === "image") return "image";
+  return artifact.type === "link" ? "link" : "file";
+}
