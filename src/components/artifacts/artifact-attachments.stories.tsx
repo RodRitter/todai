@@ -21,7 +21,12 @@ const meta = {
   parameters: { layout: "padded" },
   beforeEach: (context) => {
     const original = globalThis.fetch;
-    let links = context.parameters.empty ? [] : initialLinks;
+    let links: TaskArtifact[] = context.parameters.empty ? [] : context.parameters.compactRows ? [
+      ...initialLinks,
+      { artifact: { ...first, id: "long-title" }, explicit: true, comments: [] },
+      { artifact: { ...latest, id: "reference", title: "Research notes", type: "link", url: "https://example.com" }, explicit: true, comments: [] },
+      { artifact: { ...first, id: "archived", title: "Earlier proposal", archived: true }, explicit: false, comments: initialLinks[0].comments },
+    ] : initialLinks;
     globalThis.fetch = async (input, options) => {
       const url = new URL(String(input), "http://localhost");
       if (!url.pathname.startsWith("/api/artifacts")) return original(input, options);
@@ -42,6 +47,8 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const LatestAndPinned: Story = {};
+export const CompactRows: Story = { parameters: { compactRows: true } };
+export const NarrowRows: Story = { parameters: { compactRows: true }, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
 export const Empty: Story = { parameters: { empty: true } };
 export const LoadError: Story = { parameters: { failure: true } };
 export const BusyPicker: Story = { render: () => <ArtifactPicker disabled onSelect={() => {}} /> };
