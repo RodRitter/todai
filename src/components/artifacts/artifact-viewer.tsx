@@ -1,5 +1,7 @@
 "use client";
 
+import { Download } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { PdfPreview } from "./pdf-preview";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -65,12 +67,26 @@ export function ArtifactViewer({ artifact, onClose }: { artifact: Artifact; onCl
   return <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
     <DialogContent size="large">
       <DialogHeader>
-        <DialogTitle>{artifact.title} · Revision {artifact.revisionNumber}</DialogTitle>
-        <DialogDescription className="whitespace-pre-wrap break-words">{artifact.description || "Artifact preview"}</DialogDescription>
+        <DialogTitle>{artifact.title}</DialogTitle>
+        <DialogDescription className="sr-only">Preview of revision {artifact.revisionNumber} by {artifact.creator}.</DialogDescription>
       </DialogHeader>
-      <div className="space-y-2 break-words text-sm text-muted-foreground">
-        <p>By {artifact.creator} · Published {new Date(artifact.updatedAt).toLocaleString()}{artifact.archived ? " · Archived" : ""}</p>
-        {artifact.filename && <p>{artifact.filename} · {artifact.mediaType} · {artifact.byteSize?.toLocaleString()} bytes</p>}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="min-w-0 text-xs text-muted-foreground"><span className="font-medium text-foreground">Revision {artifact.revisionNumber}</span><span className="mx-2" aria-hidden="true">·</span>{new Date(artifact.updatedAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}{artifact.archived ? " · Archived" : ""}</p>
+          {kind !== "link" && <Button size="sm" variant="ghost" disabled={downloading} onClick={() => void download()}><Download aria-hidden="true" />{downloading ? "Downloading…" : "Download"}</Button>}
+        </div>
+        <details className="group text-xs text-muted-foreground">
+          <summary className="w-fit cursor-pointer rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">Document details</summary>
+          <div className="mt-3 space-y-3 rounded-lg bg-muted/40 p-3">
+            {artifact.description && <p className="whitespace-pre-wrap break-words text-sm text-foreground">{artifact.description}</p>}
+            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 [&_dd]:break-words">
+              <dt>Creator</dt><dd>{artifact.creator}</dd>
+              <dt>Published</dt><dd>{new Date(artifact.updatedAt).toLocaleString()}</dd>
+              {artifact.filename && <><dt>File</dt><dd>{artifact.filename}</dd><dt>Format</dt><dd>{artifact.mediaType}</dd><dt>Size</dt><dd>{artifact.byteSize?.toLocaleString()} bytes</dd></>}
+            </dl>
+          </div>
+        </details>
+        {downloadError && <p role="alert" className="text-sm text-destructive">{downloadError}</p>}
       </div>
       {kind === "link" ? <div className="space-y-3">
         <p>This external link stores only its URL and metadata. Remote content may change; it is not a preserved snapshot.</p>
@@ -82,17 +98,20 @@ export function ArtifactViewer({ artifact, onClose }: { artifact: Artifact; onCl
         {error && <div role="alert" className="space-y-2"><p>{error} You can try downloading the stored file.</p><Button variant="outline" onClick={() => { setError(""); setContent(null); setAttempt((value) => value + 1); }}>Retry preview</Button></div>}
         {!error && content && <div className="min-w-0 overflow-auto">
           {kind === "text" && <pre className="whitespace-pre-wrap break-words text-sm">{content.text || "This revision is empty."}</pre>}
-          {kind === "markdown" && <div className={richTextClassName}><ReactMarkdown skipHtml remarkPlugins={[remarkGfm]} components={{
+          {kind === "markdown" && <div className="rounded-xl bg-muted/50 p-3 sm:p-5"><article aria-label="Markdown document" className={cn(richTextClassName,
+            "min-h-96 rounded-sm border bg-background px-5 py-8 font-serif text-base leading-[1.8] shadow-sm sm:px-10 sm:py-12",
+            "[&_h1]:mb-7 [&_h1]:mt-10 [&_h1]:font-sans [&_h1]:text-3xl [&_h1]:leading-tight [&_h1]:tracking-tight [&_h2]:mb-4 [&_h2]:mt-9 [&_h2]:font-sans [&_h2]:text-xl [&_h2]:leading-snug [&_h3]:mb-3 [&_h3]:mt-7 [&_h3]:font-sans [&_h3]:text-lg [&_h4]:font-sans [&_h5]:font-sans [&_h6]:font-sans",
+            "[&_p]:my-5 [&_ul]:my-5 [&_ol]:my-5 [&_li]:my-2 [&_blockquote]:my-6 [&_blockquote]:border-l-2 [&_blockquote]:italic [&_pre]:my-6 [&_pre]:p-4 [&_pre]:text-sm [&_hr]:my-8 [&_table]:font-sans [&_table]:text-sm [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+          )}><ReactMarkdown skipHtml remarkPlugins={[remarkGfm]} components={{
             a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>,
             img: ({ alt }) => <span>[Image: {alt || "external image"}]</span>,
-          }}>{content.text || "This revision is empty."}</ReactMarkdown></div>}
+            table: ({ children }) => <div className="my-6 overflow-x-auto"><table>{children}</table></div>,
+          }}>{content.text || "This revision is empty."}</ReactMarkdown></article></div>}
           {/* Uploaded images use an inert image context, never an embedded document. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           {kind === "image" && <img src={content.url} alt={artifact.title} className="mx-auto max-h-[60vh] object-contain" onError={() => setError("This image could not be displayed.")} />}
           {kind === "pdf" && <PdfPreview url={content.url!} />}
         </div>}
-        <Button variant="outline" disabled={downloading} onClick={() => void download()}>{downloading ? "Downloading…" : `Download · r${artifact.revisionNumber}`}</Button>
-        {downloadError && <p role="alert">{downloadError}</p>}
       </>}
     </DialogContent>
   </Dialog>;

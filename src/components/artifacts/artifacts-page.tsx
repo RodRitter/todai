@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NativeSelect } from "@/components/ui/native-select";
 import { toast } from "@/components/ui/toast";
 import { artifactTypes, MAX_ARTIFACT_BYTES, type Artifact, type ArtifactType } from "@/domain/artifact";
@@ -140,11 +141,31 @@ export function ArtifactsPage() {
       <Button type="submit" disabled={saving}>{saving ? "Publishing…" : editing ? "Publish revision" : "Publish artifact"}</Button>
     </form></Card>}
     <div className="flex flex-wrap items-end gap-4">
-      <div className="space-y-2"><Label htmlFor="artifact-task">Linked task</Label><NativeSelect id="artifact-task" value={taskId} onChange={(event) => { setTaskId(event.target.value); setLoading(true); setArtifacts([]); }}><option value="">All tasks</option>{tasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}</NativeSelect></div>
-      <div className="space-y-2"><Label htmlFor="artifact-view">View</Label><NativeSelect id="artifact-view" value={archived ? "archived" : "active"} disabled={saving} onChange={(event) => { setArchived(event.target.value === "archived"); setLoading(true); setArtifacts([]); setHistory([]); setCreating(false); }}><option value="active">Active artifacts</option><option value="archived">Archived artifacts</option></NativeSelect></div>
-      <div className="min-w-48 flex-1 space-y-2"><Label htmlFor="artifact-search">Search artifacts</Label><Input id="artifact-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search titles, descriptions, filenames, or URLs" /></div>
-      <div className="space-y-2"><Label htmlFor="artifact-filter-type">Type</Label><NativeSelect id="artifact-filter-type" value={filterType} onChange={(event) => setFilterType(event.target.value)}><option value="">All types</option>{artifactTypes.map((value) => <option key={value} value={value}>{typeLabels[value]}</option>)}</NativeSelect></div>
-      <div className="space-y-2"><Label htmlFor="artifact-filter-creator">Creator</Label><NativeSelect id="artifact-filter-creator" value={creator} onChange={(event) => setCreator(event.target.value)}><option value="">All creators</option>{Array.from(new Set(artifacts.map((artifact) => artifact.creator))).sort().map((name) => <option key={name}>{name}</option>)}</NativeSelect></div>
+      <div className="space-y-2"><Label htmlFor="artifact-task">Linked task</Label>
+        <Select value={taskId || "all"} onValueChange={(value) => { setTaskId(value === "all" ? "" : value); setLoading(true); setArtifacts([]); }}>
+          <SelectTrigger id="artifact-task" className="w-44"><SelectValue /></SelectTrigger>
+          <SelectContent><SelectItem value="all">All tasks</SelectItem>{tasks.map((task) => <SelectItem key={task.id} value={task.id}>{task.title}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2"><Label htmlFor="artifact-view">View</Label>
+        <Select value={archived ? "archived" : "active"} disabled={saving} onValueChange={(value) => { setArchived(value === "archived"); setLoading(true); setArtifacts([]); setHistory([]); setCreating(false); }}>
+          <SelectTrigger id="artifact-view" className="w-44"><SelectValue /></SelectTrigger>
+          <SelectContent><SelectItem value="active">Active artifacts</SelectItem><SelectItem value="archived">Archived artifacts</SelectItem></SelectContent>
+        </Select>
+      </div>
+      <div className="min-w-48 flex-1 space-y-2"><Label htmlFor="artifact-search">Search artifacts</Label><Input id="artifact-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search artifacts…" /></div>
+      <div className="space-y-2"><Label htmlFor="artifact-filter-type">Type</Label>
+        <Select value={filterType || "all"} onValueChange={(value) => setFilterType(value === "all" ? "" : value)}>
+          <SelectTrigger id="artifact-filter-type" className="w-36"><SelectValue /></SelectTrigger>
+          <SelectContent><SelectItem value="all">All types</SelectItem>{artifactTypes.map((value) => <SelectItem key={value} value={value}>{typeLabels[value]}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2"><Label htmlFor="artifact-filter-creator">Creator</Label>
+        <Select value={creator ? `creator:${creator}` : "all"} onValueChange={(value) => setCreator(value === "all" ? "" : value.slice(8))}>
+          <SelectTrigger id="artifact-filter-creator" className="w-40"><SelectValue /></SelectTrigger>
+          <SelectContent><SelectItem value="all">All creators</SelectItem>{Array.from(new Set(artifacts.map((artifact) => artifact.creator))).sort().map((name) => <SelectItem key={name} value={`creator:${name}`}>{name}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
     </div>
     {error && <div role="alert" className="space-y-2"><p>{error}</p><Button variant="outline" onClick={() => setAttempt((value) => value + 1)}>Retry</Button></div>}
     {loading ? <p aria-busy="true">Loading artifacts…</p> : !error && !visible.length ? <p className="text-muted-foreground">{artifacts.length ? "No artifacts match these filters." : "No artifacts in this view."}</p> : null}

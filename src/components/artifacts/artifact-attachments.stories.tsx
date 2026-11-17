@@ -93,6 +93,6 @@ export const OpenPinnedRevision: Story = {
     await userEvent.click(await within(document.body).findByRole("button", { name: `Open ${first.title}, revision 1` }));
     const dialog = within(await within(document.body).findByRole("dialog"));
     await expect(await dialog.findByText("Evidence")).toBeVisible();
-    await expect(dialog.getByRole("heading")).toHaveTextContent("Revision 1");
+    await expect(dialog.getByText("Revision 1", { exact: true })).toBeInTheDocument();
   },
 };
