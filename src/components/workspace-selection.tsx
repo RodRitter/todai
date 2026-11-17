@@ -6,7 +6,7 @@ import { createContext, useContext, useSyncExternalStore, type ComponentProps, t
 import { selectedWorkspaceId } from "@/lib/workspace-fetch";
 import type { Workspace } from "@/domain/workspace";
 import { Label } from "@/components/ui/label";
-import { NativeSelect } from "@/components/ui/native-select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 const Selection = createContext<{ workspace: Workspace; workspaces: Workspace[] } | null>(null);
 
 const subscribe = () => () => {};
@@ -33,13 +33,17 @@ export function WorkspaceSwitcher() {
   if (!selection) return null;
   return <div className="border-b p-2">
     <Label htmlFor="workspace-switcher" className="mb-1 block truncate text-xs text-muted-foreground">Workspace</Label>
-    <NativeSelect id="workspace-switcher" className="max-w-full" value={selection.workspace.id} title={selection.workspace.path} onChange={(event) => {
+    <Select value={selection.workspace.id} onValueChange={(workspaceId) => {
       const url = new URL(window.location.href);
-      url.searchParams.set("workspace", event.target.value);
+      url.searchParams.set("workspace", workspaceId);
       window.location.assign(url.href);
     }}>
-      {selection.workspaces.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-    </NativeSelect>
-    <p className="mt-1 hidden text-xs text-muted-foreground md:block">Switching clears unsaved drafts.</p>
+      <SelectTrigger id="workspace-switcher" className="w-full min-w-0" title={selection.workspace.path}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent position="popper" align="start">
+        {selection.workspaces.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}
+      </SelectContent>
+    </Select>
   </div>;
 }
