@@ -14,7 +14,7 @@ test("file references search workspace paths without following symlinks or gener
   writeFileSync(join(root, ".env"), "secret");
   symlinkSync(tmpdir(), join(root, "outside"));
   assert.deepEqual(await fileReferences(root, "MY FILE"), [{
-    kind: "file", label: "@src/My file.ts", path: join(root, "src", "My file.ts"), detail: "src/My file.ts",
+    kind: "file", label: "/src/My file.ts", path: join(root, "src", "My file.ts"), detail: "src/My file.ts",
   }]);
   assert.equal((await fileReferences(root, "")).length, 1);
 });

@@ -18,7 +18,7 @@ export function Markdown({
           a: ({ href, children }) =>
             compact ? (
               <span>{children}</span>
-            ) : typeof children === "string" && /^[$@]/.test(children) && (href?.startsWith("/") || href?.startsWith("#agent/")) ? (
+            ) : typeof children === "string" && /^[$@/]/.test(children) && (href?.startsWith("/") || href?.startsWith("#agent/")) ? (
               <span title={href} className="rounded bg-accent px-1 py-0.5 font-medium text-accent-foreground">{children}</span>
             ) : (
               <a

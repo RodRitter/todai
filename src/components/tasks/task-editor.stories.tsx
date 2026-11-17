@@ -380,6 +380,7 @@ export const FailedDescriptionSave: Story = {
 export const RedirectRunningTask: Story = {
   args: {
     open: true,
+    onPostComment: fn(),
     task: { ...exampleTasks[0], status: "In progress", agentStatus: "Running" },
   },
 };
@@ -387,6 +388,7 @@ export const RedirectRunningTask: Story = {
 export const RedirectQueuedTask: Story = {
   args: {
     open: true,
+    onPostComment: fn(),
     task: { ...exampleTasks[0], status: "In review", agentStatus: "Queued" },
   },
 };

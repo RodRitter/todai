@@ -96,7 +96,7 @@ export class ExecutionService {
         });
         if (run.kind === "intent") {
           const order = orderedReplies(summary, run.replyPlan ?? []);
-          this.store.finishRun(run.id, "Complete", `Reply order: ${order.map((agent) => agent.name).join(" → ")}.`, undefined, order);
+          this.store.finishRun(run.id, "Complete", order.length ? `Reply order: ${order.map((agent) => agent.name).join(" → ")}.` : "No agent replies requested.", undefined, order);
           continue;
         }
         const feedback = parseFeedback(summary);
@@ -105,7 +105,7 @@ export class ExecutionService {
         this.store.finishRun(
           run.id,
           "Failed",
-          `Agent run failed: ${error instanceof Error ? error.message : "Unknown execution error."}${run.kind === "intent" ? " Responding in mention order instead." : ""}`,
+          `Agent run failed: ${error instanceof Error ? error.message : "Unknown execution error."}${run.kind === "intent" ? " No replies were started because the intended responders could not be determined. Post the comment again to retry." : ""}`,
         );
         continue;
       } finally {

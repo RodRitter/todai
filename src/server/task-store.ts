@@ -483,7 +483,7 @@ export class TaskStore {
           "UPDATE runs SET status = ?, finishedAt = ?, summary = ? WHERE id = ?",
         )
         .run(status, finishedAt, summary, runId);
-      if (run.kind && (status === "Complete" || status === "Failed")) {
+      if (run.kind && (status === "Complete" || (status === "Failed" && run.kind === "reply"))) {
         const remaining = replyPlan ?? run.replyPlan ?? [];
         const [next, ...rest] = remaining;
         if (next) this.queueCommentRun(run.taskId, run.column, next, "reply", run.commentId!, rest, run.createdAt);

@@ -72,8 +72,32 @@ test("intent chooses reply order, profiles survive edits, and later agents see e
   } finally { f.cleanup(); }
 });
 
-for (const output of ["not JSON", '["refiner","refiner"]', '["stranger"]', "throw"]) {
-  test(`intent failure falls back to mention order: ${output}`, async () => {
+for (const { comment, selected, expected } of [
+  { comment: "@Reviewer what do you think of @Implementor's comment?", selected: '["reviewer"]', expected: ["Reviewer"] },
+  { comment: "[@Reviewer](#agent/reviewer) what do you think of [@Implementor](#agent/implementor)'s comment?", selected: '["reviewer"]', expected: ["Reviewer"] },
+  { comment: "I agree with @Implementor's comment.", selected: "[]", expected: [] },
+]) {
+  test(`intent selects only requested responders: ${comment}`, async () => {
+    const calls: string[] = [];
+    const f = fixture(async ({ run }) => {
+      if (run.kind === "intent") return selected;
+      calls.push(run.profile.name);
+      return `${run.profile.name} response`;
+    });
+    try {
+      f.store.postComment("task", comment);
+      await f.service.drain();
+      assert.deepEqual(calls, expected);
+      assert.equal(f.store.history()[0].status, "Complete");
+      assert.deepEqual(f.store.list()[0].comments!.map((item) => item.authorName), ["Human", ...expected]);
+      assert.equal(f.store.list()[0].agentStatus, "Complete");
+      assert.equal(f.store.list()[0].status, "To do");
+    } finally { f.cleanup(); }
+  });
+}
+
+for (const output of ["not JSON", '["refiner","refiner"]', '["stranger"]', '{}', '[1]', "null", "throw"]) {
+  test(`intent failure does not invoke unconfirmed responders: ${output}`, async () => {
     const calls: string[] = [];
     const f = fixture(async ({ run }) => {
       if (run.kind === "intent") {
@@ -86,9 +110,10 @@ for (const output of ["not JSON", '["refiner","refiner"]', '["stranger"]', "thro
     try {
       f.store.postComment("task", "@Reviewer @Refiner");
       await f.service.drain();
-      assert.deepEqual(calls, ["Reviewer", "Refiner"]);
-      assert.match(f.store.history()[0].summary!, /mention order/);
-      assert.deepEqual(f.store.list()[0].comments!.map((comment) => comment.authorName), ["Human", "Reviewer", "Refiner"]);
+      assert.deepEqual(calls, []);
+      assert.match(f.store.history()[0].summary!, /No replies were started/);
+      assert.equal(f.store.list()[0].agentStatus, "Failed");
+      assert.deepEqual(f.store.list()[0].comments!.map((comment) => comment.authorName), ["Human"]);
     } finally { f.cleanup(); }
   });
 }

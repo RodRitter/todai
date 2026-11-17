@@ -16,14 +16,14 @@ import { Bold, Italic, Heading2, List, ListOrdered, Code } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-type Match = { from: number; to: number; kind: "skill" | "file"; query: string };
-function referenceMatch(editor: Editor): Match | null {
+type Match = { from: number; to: number; kind: "skill" | "file" | "agent"; query: string };
+function referenceMatch(editor: Editor, allowAgents: boolean): Match | null {
   const { $from, empty } = editor.state.selection;
   if (!empty || $from.parent.type.spec.code || editor.isActive("link")) return null;
   const before = $from.parent.textBetween(0, $from.parentOffset, "\n", "\ufffc");
-  const match = /(?:^|\s)([$@])([^\s$@]*)$/.exec(before);
-  if (!match) return null;
-  return { from: $from.pos - match[2].length - 1, to: $from.pos, kind: match[1] === "$" ? "skill" : "file", query: match[2] };
+  const match = /(?:^|\s)([$@/])([^\s$@]*)$/.exec(before);
+  if (!match || (match[1] === "@" && !allowAgents)) return null;
+  return { from: $from.pos - match[2].length - 1, to: $from.pos, kind: match[1] === "$" ? "skill" : match[1] === "@" ? "agent" : "file", query: match[2] };
 }
 
 export function DescriptionEditor({ value, onChange, disabled = false, autoFocus = false, agents, label = "Description", id = "task-description" }: {
@@ -33,7 +33,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
   const [match, setMatch] = useState<Match | null>(null);
   const [response, setResponse] = useState<{ key: string; items: TaskReference[] }>({ key: "", items: [] });
   const matchKey = JSON.stringify(match);
-  const agentMode = agents !== undefined && match?.kind === "file";
+  const agentMode = agents !== undefined && match?.kind === "agent";
   const results: TaskReference[] = agentMode
     ? agents.filter((agent) => agent.name.toLowerCase().includes(match.query.toLowerCase())).map((agent) => ({ kind: "file", label: `@${agent.name}`, path: agentMentionPath(agent.id), detail: agent.instructions }))
     : response.key === matchKey ? response.items : [];
@@ -49,14 +49,14 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
     editable: !disabled,
     editorProps: {
       attributes: {
-        id, role: "textbox", "aria-label": label, "aria-multiline": "true",
+        id, role: "textbox", "aria-label": label, "aria-multiline": "true", "aria-disabled": String(disabled),
         class: `${richTextClassName} min-h-32 max-h-96 overflow-y-auto p-3 outline-none [&_.tableWrapper]:my-3 [&_.tableWrapper]:overflow-x-auto [&_.tableWrapper]:rounded-lg [&_.tableWrapper]:border [&_ul[data-type=taskList]]:list-none [&_li[data-type=taskItem]]:flex [&_li[data-type=taskItem]]:gap-2 [&_li[data-type=taskItem]>label]:mt-1 [&_li[data-type=taskItem]>div]:min-w-0 [&_li[data-type=taskItem]>div]:flex-1 [&_li[data-type=taskItem]>div>p]:my-1`,
       },
       handleKeyDown: (_view, event) => keyboard.current(event),
     },
     onUpdate: ({ editor }) => onChange(editor.getMarkdown()),
     onTransaction: ({ editor }) => {
-      const next = referenceMatch(editor);
+      const next = referenceMatch(editor, agents !== undefined);
       setMatch((previous) => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
     },
     onBlur: () => setMatch(null),
@@ -141,7 +141,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
 
   return (
     <div className="space-y-2">
-      <div className="rounded-lg border focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/50">
+      <div className={`rounded-lg border ${disabled ? "cursor-not-allowed bg-muted/50 text-muted-foreground opacity-60" : "focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/50"}`}>
         <TooltipProvider>
           <div role="group" aria-label={`${label} formatting`} className="flex flex-wrap items-center gap-1 border-b p-1">
             {formatGroups.map((group, index) => (

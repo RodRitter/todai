@@ -30,6 +30,13 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Waiting: Story = { render: () => <FeedbackExample /> };
+export const Running: Story = { args: { agentStatus: "Running", comments: [] } };
+export const RunningWithHistory: Story = {
+  args: {
+    agentStatus: "Running",
+    comments: [{ id: "previous", taskId: "task", authorName: "Human", body: "Please review the changes.", createdAt: "2026-11-17T10:00:00Z" }],
+  },
+};
 export const SubmitFeedback: Story = {
   render: () => <FeedbackExample />,
   play: async ({ canvasElement }) => {

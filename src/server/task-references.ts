@@ -39,7 +39,7 @@ export async function fileReferences(workspace: string, query: string): Promise<
       if (entry.isDirectory() && directory.depth < 20) {
         pending.push({ path, relative: `${relative}/`, depth: directory.depth + 1 });
       } else if (entry.isFile() && relative.toLowerCase().includes(query.toLowerCase())) {
-        results.push({ kind: "file", label: `@${relative}`, path, detail: relative });
+        results.push({ kind: "file", label: `/${relative}`, path, detail: relative });
       }
     }
   }

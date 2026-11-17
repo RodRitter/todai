@@ -2,6 +2,7 @@
 
 import { useRef, useState, type FormEvent } from "react";
 import { TaskComments } from "./task-comments";
+import { AgentStatus } from "./agent-status";
 import { DescriptionField } from "./description-field";
 import { notifyOperation } from "@/components/ui/toast";
 import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
@@ -155,7 +156,14 @@ function TaskEditorSession({
     >
       <DialogContent aria-describedby={editing ? undefined : "create-task-description"} className="max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:max-w-3xl sm:p-8">
         <DialogHeader>
-          <DialogTitle className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{editing ? "Edit task" : "Create task"}</DialogTitle>
+          <div className="flex items-center gap-3 pr-6">
+            <DialogTitle className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{editing ? "Edit task" : "Create task"}</DialogTitle>
+            {pendingRun && (
+              <div role="status" className="rounded-full border bg-muted/50 px-2.5 py-1">
+                <AgentStatus status={editing!.agentStatus} className="font-medium" />
+              </div>
+            )}
+          </div>
           {!editing && <DialogDescription id="create-task-description">Add a task to the board.</DialogDescription>}
         </DialogHeader>
         <form
@@ -298,7 +306,7 @@ function TaskEditorSession({
                 </p>
               )}
             </div>
-            {editing && <TaskComments comments={editing.comments} onAnswerFeedback={onAnswerFeedback} agents={agents} onPostComment={onPostComment} />}
+            {editing && <TaskComments comments={editing.comments} agentStatus={editing.agentStatus} onAnswerFeedback={onAnswerFeedback} agents={agents} onPostComment={onPostComment} />}
             <DialogFooter className="flex-row flex-wrap items-center justify-end gap-2 pt-6">
               {editing && onDelete && (
                 <Button

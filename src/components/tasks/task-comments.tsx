@@ -7,10 +7,11 @@ import { Bot, MessageSquare } from "lucide-react";
 import { Markdown } from "@/components/ui/markdown";
 import { DescriptionEditor } from "./description-editor";
 import type { AgentProfile } from "@/domain/column-agent";
-import type { TaskComment } from "@/domain/task";
+import type { AgentStatus, TaskComment } from "@/domain/task";
 
-export function TaskComments({ comments = [], onAnswerFeedback, onPostComment, agents = [] }: {
+export function TaskComments({ comments = [], onAnswerFeedback, onPostComment, agents = [], agentStatus }: {
   comments?: TaskComment[];
+  agentStatus?: AgentStatus;
   agents?: AgentProfile[];
   onPostComment?: (body: string) => Promise<void>;
   onAnswerFeedback?: (commentId: string, body: string) => Promise<void>;
@@ -27,9 +28,30 @@ export function TaskComments({ comments = [], onAnswerFeedback, onPostComment, a
           {comments.length}
         </span>
       </div>
-      {onPostComment && <CommentInput agents={agents} onPost={onPostComment} />}
-      {comments.length ? (
+      {onPostComment && <CommentInput agents={agents} onPost={onPostComment} agentStatus={agentStatus} />}
+      {comments.length || agentStatus === "Running" ? (
         <ol className="space-y-6">
+          {agentStatus === "Running" && (
+            <li className="flex gap-3">
+              <div aria-hidden="true" className="bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-full border">
+                <Bot className="size-4" />
+              </div>
+              <div className="min-w-0 space-y-2">
+                <div className="flex min-h-9 items-center gap-3">
+                  <span className="text-sm font-semibold">Agent</span>
+                  <span className="text-xs text-muted-foreground">Working…</span>
+                </div>
+                <div role="status" className="bg-primary/10 ring-primary/15 w-fit rounded-2xl rounded-tl-sm px-4 py-4 ring-1 ring-inset">
+                  <span className="sr-only">The agent is working. Its comment will appear here.</span>
+                  <span aria-hidden="true" className="flex h-3 items-center gap-1.5 text-primary">
+                    {[0, 1, 2].map((dot) => (
+                      <span key={dot} className="size-1.5 animate-pulse rounded-full bg-current motion-reduce:animate-none" style={{ animationDelay: `${dot * 200}ms`, animationDuration: "1.2s" }} />
+                    ))}
+                  </span>
+                </div>
+              </div>
+            </li>
+          )}
           {[...comments]
             .filter((comment) => !(comment.authorName === "Human" && comment.runId && comments.some((request) => request.runId === comment.runId && request.feedbackStatus)))
             .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
@@ -172,14 +194,15 @@ function FeedbackInput({ commentId, onAnswer }: {
   );
 }
 
-function CommentInput({ agents, onPost }: { agents: AgentProfile[]; onPost: (body: string) => Promise<void> }) {
+function CommentInput({ agents, onPost, agentStatus }: { agents: AgentProfile[]; onPost: (body: string) => Promise<void>; agentStatus?: AgentStatus }) {
+  const pendingRun = agentStatus === "Running" || agentStatus === "Queued";
   const [body, setBody] = useState("");
   const [version, setVersion] = useState(0);
   const [busy, setBusy] = useState(false);
   const submitting = useRef(false);
   const [error, setError] = useState("");
   async function submit() {
-    if (!body.trim() || submitting.current) return;
+    if (!body.trim() || submitting.current || pendingRun) return;
     submitting.current = true;
     setBusy(true);
     setError("");
@@ -193,9 +216,10 @@ function CommentInput({ agents, onPost }: { agents: AgentProfile[]; onPost: (bod
   }
   return <div className="space-y-2">
     <label htmlFor="task-comment" className="text-sm font-medium">Your comment</label>
-    <DescriptionEditor key={version} id="task-comment" label="Your comment" value={body} onChange={setBody} disabled={busy} agents={agents} />
+    <DescriptionEditor key={version} id="task-comment" label="Your comment" value={body} onChange={setBody} disabled={busy || pendingRun} agents={agents} />
+    {pendingRun && <p role="status" className="text-xs text-muted-foreground">{agentStatus === "Running" ? "The agent is working." : "The agent is queued to start."} You can comment when it finishes or asks for feedback.</p>}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-    <Button type="button" size="sm" disabled={busy || !body.trim()} onClick={() => void submit()}>
+    <Button type="button" size="sm" disabled={busy || pendingRun || !body.trim()} onClick={() => void submit()}>
       {busy ? "Posting…" : "Post comment"}
     </Button>
   </div>;
