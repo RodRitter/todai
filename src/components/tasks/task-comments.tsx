@@ -1,6 +1,6 @@
 "use client";
 
-import { ArtifactPicker, CommentAttachments } from "@/components/artifacts/artifact-attachments";
+import { ArtifactPicker, CommentAttachments, TaskArtifacts } from "@/components/artifacts/artifact-attachments";
 import type { Artifact, ArtifactReference } from "@/domain/artifact";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -12,16 +12,18 @@ import { DescriptionEditor } from "./description-editor";
 import type { AgentProfile } from "@/domain/column-agent";
 import type { AgentStatus, TaskComment } from "@/domain/task";
 
-export function TaskComments({ comments = [], onAnswerFeedback, onPostComment, agents = [], agentStatus }: {
+export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostComment, agents = [], agentStatus }: {
+  taskId?: string;
   comments?: TaskComment[];
   agentStatus?: AgentStatus;
   agents?: AgentProfile[];
   onPostComment?: (body: string, artifacts?: ArtifactReference[]) => Promise<void>;
   onAnswerFeedback?: (commentId: string, body: string) => Promise<void>;
 }) {
+  const [tab, setTab] = useState("comments");
   return (
-    <Tabs defaultValue="comments" asChild>
-    <section aria-label="Comments" className="mt-8 space-y-6">
+    <Tabs value={tab} onValueChange={setTab} asChild>
+    <section aria-label="Task discussion" className="mt-8 space-y-6">
       <TabsList aria-label="Task discussion" className="flex h-auto justify-start gap-6 rounded-none border-b bg-transparent p-0">
         <TabsTrigger value="comments" className="-mb-px gap-2.5 rounded-none border-b-2 border-transparent px-0 pt-0 pb-3 font-semibold data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none">
           Comments
@@ -29,8 +31,8 @@ export function TaskComments({ comments = [], onAnswerFeedback, onPostComment, a
             {comments.length}
           </span>
         </TabsTrigger>
-        <TabsTrigger value="test" className="-mb-px gap-2.5 rounded-none border-b-2 border-transparent px-0 pt-0 pb-3 font-semibold data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none">
-          Test
+        <TabsTrigger value="artifacts" className="-mb-px gap-2.5 rounded-none border-b-2 border-transparent px-0 pt-0 pb-3 font-semibold data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none">
+          Artifacts
         </TabsTrigger>
       </TabsList>
       <TabsContent value="comments" forceMount className="space-y-6">
@@ -138,8 +140,11 @@ export function TaskComments({ comments = [], onAnswerFeedback, onPostComment, a
         </div>
       )}
       </TabsContent>
-      <TabsContent value="test">
-        <p className="text-sm text-muted-foreground">Test tab content.</p>
+      <TabsContent value="artifacts">
+        {taskId ? <TaskArtifacts taskId={taskId} commentsKey={JSON.stringify(comments.map((comment) => comment.id))} onNavigateComment={(commentId) => {
+          setTab("comments");
+          requestAnimationFrame(() => document.getElementById(`comment-${commentId}`)?.scrollIntoView({ block: "nearest" }));
+        }} /> : <p className="text-sm text-muted-foreground">No linked artifacts yet.</p>}
       </TabsContent>
     </section>
     </Tabs>

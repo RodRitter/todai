@@ -47,6 +47,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const LatestAndPinned: Story = {};
+export const TaskTabs: Story = { render: () => <TaskComments taskId="task" comments={[{ id: "comment", taskId: "task", body: "See the original evidence.", authorName: "Human", createdAt: first.createdAt }]} /> };
 export const CompactRows: Story = { parameters: { compactRows: true } };
 export const NarrowRows: Story = { parameters: { compactRows: true }, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
 export const Empty: Story = { parameters: { empty: true } };

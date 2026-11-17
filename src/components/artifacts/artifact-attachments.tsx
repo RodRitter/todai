@@ -88,7 +88,7 @@ export function CommentAttachments({ references }: { references: ArtifactReferen
   </div>;
 }
 
-export function TaskArtifacts({ taskId, commentsKey }: { taskId: string; commentsKey: string }) {
+export function TaskArtifacts({ taskId, commentsKey, onNavigateComment }: { taskId: string; commentsKey: string; onNavigateComment?: (commentId: string) => void }) {
   const [links, setLinks] = useState<TaskArtifact[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -137,7 +137,7 @@ export function TaskArtifacts({ taskId, commentsKey }: { taskId: string; comment
               <Popover.Content sideOffset={6} align="end" className="z-50 w-80 max-w-[calc(100vw-2rem)] space-y-2 rounded-md border bg-popover p-3 text-popover-foreground shadow-md">
                 <p className="text-xs font-semibold">Pinned comment references</p>
                 {comments.map((citation, index) => <div key={`${citation.commentId}:${citation.artifact.revisionId}`} className="flex items-center gap-2 text-sm">
-                  <Popover.Close asChild><a className="min-w-0 flex-1 truncate underline underline-offset-4" href={`#comment-${citation.commentId}`} title={citation.artifact.title}>Comment {index + 1} · {citation.artifact.title}</a></Popover.Close>
+                  <Popover.Close asChild><a className="min-w-0 flex-1 truncate underline underline-offset-4" href={`#comment-${citation.commentId}`} onClick={() => onNavigateComment?.(citation.commentId)} title={citation.artifact.title}>Comment {index + 1} · {citation.artifact.title}</a></Popover.Close>
                   <span className="shrink-0 text-xs text-muted-foreground">r{citation.artifact.revisionNumber}</span>
                   <ArtifactOpenButton artifact={citation.artifact} compact />
                 </div>)}

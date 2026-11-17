@@ -1,6 +1,5 @@
 "use client";
 
-import { TaskArtifacts } from "@/components/artifacts/artifact-attachments";
 import type { ArtifactReference } from "@/domain/artifact";
 import { useRef, useState, type FormEvent } from "react";
 import { Bot, CircleDot, CirclePlay, CircleStop, Workflow, Zap } from "lucide-react";
@@ -400,8 +399,7 @@ function TaskEditorSession({
                   </>
                 )}
               </div>
-              {editing && onPostComment && <TaskArtifacts taskId={editing.id} commentsKey={JSON.stringify(editing.comments?.map((comment) => comment.id))} />}
-              {editing && <TaskComments comments={editing.comments} agentStatus={editing.agentStatus} onAnswerFeedback={onAnswerFeedback} agents={agents} onPostComment={onPostComment} />}
+              {editing && <TaskComments taskId={editing.id} comments={editing.comments} agentStatus={editing.agentStatus} onAnswerFeedback={onAnswerFeedback} agents={agents} onPostComment={onPostComment} />}
             </div>
             <DialogFooter className="z-10 shrink-0 flex-row flex-wrap items-center justify-end gap-2 border-t bg-background px-6 py-4">
               {editing && onDelete && (
