@@ -1,6 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { FolderIcon } from "lucide-react";
+import { Combobox } from "@/components/ui/combobox";
+import { useDirectorySuggestions } from "./use-directory-suggestions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +12,7 @@ import { workspaceApi } from "@/lib/workspace-api";
 export function CreateWorkspace() {
   const [name, setName] = useState("");
   const [path, setPath] = useState("");
+  const { suggestions, directoryError, clearSuggestions } = useDirectorySuggestions(path);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const saving = useRef(false);
@@ -35,7 +39,25 @@ export function CreateWorkspace() {
       <Label htmlFor="new-workspace-name">Name</Label>
       <Input id="new-workspace-name" value={name} onChange={(event) => setName(event.target.value)} required disabled={busy} placeholder="My project" />
       <Label htmlFor="new-workspace-path">Working directory</Label>
-      <Input id="new-workspace-path" value={path} onChange={(event) => setPath(event.target.value)} required disabled={busy} placeholder="~/Projects/my-project" spellCheck={false} />
+      <Combobox
+        id="new-workspace-path"
+        value={path}
+        options={suggestions}
+        filterOptions={false}
+        closeOnSelect={false}
+        icon={FolderIcon}
+        emptyMessage={directoryError || "No directory suggestions. Enter a path to continue."}
+        onValueChange={(value) => {
+          setPath(value);
+          clearSuggestions();
+        }}
+        required
+        disabled={busy}
+        placeholder="~/Projects/my-project"
+        spellCheck={false}
+        aria-describedby="new-workspace-directory-error"
+      />
+      <p id="new-workspace-directory-error" className="text-xs text-muted-foreground" role="status">{directoryError}</p>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <Button type="submit" disabled={busy || !name.trim() || !path.trim()}>{busy ? "Adding workspace…" : "Add and open workspace"}</Button>
     </form>

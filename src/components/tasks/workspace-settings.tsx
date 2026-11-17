@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { workspaceApi } from "@/lib/workspace-api";
+import { useDirectorySuggestions } from "./use-directory-suggestions";
 import { FolderIcon } from "lucide-react";
 import { Combobox } from "@/components/ui/combobox";
 import { Label } from "@/components/ui/label";
@@ -11,8 +12,7 @@ import { notifyOperation, toast } from "@/components/ui/toast";
 export function WorkspaceSettings() {
   const [saved, setSaved] = useState<string | null>(null);
   const [path, setPath] = useState("");
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [directoryError, setDirectoryError] = useState("");
+  const { suggestions, directoryError, clearSuggestions } = useDirectorySuggestions(path);
   const [attempt, setAttempt] = useState(0);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -43,32 +43,6 @@ export function WorkspaceSettings() {
     };
   }, [attempt]);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const timer = setTimeout(
-      () => {
-        workspaceApi
-          .directories(path, controller.signal)
-          .then((data) => {
-            if (!controller.signal.aborted) {
-              setSuggestions(data);
-              setDirectoryError("");
-            }
-          })
-          .catch((error) => {
-            if (!controller.signal.aborted) {
-              setSuggestions([]);
-              setDirectoryError(error.message);
-            }
-          });
-      },
-      path.endsWith("/") ? 0 : 180,
-    );
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [path]);
 
   return (
     <section className="space-y-4" aria-labelledby="workspace-heading">
@@ -135,8 +109,7 @@ export function WorkspaceSettings() {
               }
               onValueChange={(value) => {
                 setPath(value);
-                setSuggestions([]);
-                setDirectoryError("");
+                clearSuggestions();
               }}
               spellCheck={false}
               placeholder="~/Projects/"
