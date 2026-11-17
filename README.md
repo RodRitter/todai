@@ -1,9 +1,3 @@
-# TODO
-
-[x] Add multi-workspace selector
-[ ] Artifacts, documents and storage
-[x] Queries, feedback & answers in comments
-
 # Todai
 
 A local task board for managing work with AI coding agents. Organize tasks, assign agents to columns, and follow their progress from one workspace.
@@ -37,7 +31,6 @@ Open [localhost:3000](http://127.0.0.1:3000).
 2. In **Settings → Executors**, check tool status, test connections, and choose a default executor for new agents.
 3. In **Agents**, choose an executor, model, effort, and permissions.
 4. Assign an agent through a column’s settings, then create or move a task into that column. Open the saved task and press **Run** to queue its agent.
-
 
 Add another named workspace in **Settings → Workspaces → Add workspace**, then switch using the sidebar selector. Each workspace has its own tasks, agents, columns, assignments, and default executor. Selection lives in the browser URL, so separate tabs can work independently. Switching clears unsaved drafts and leaves queued and active runs in their original directories.
 
