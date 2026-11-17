@@ -5,7 +5,8 @@ import { migrateWorkspaceOwnership } from "./workspace-schema.ts";
 import { statuses } from "../domain/task.ts";
 
 // Keep schema creation and legacy migrations together, in their original order.
-export function initializeSchema(db: DatabaseSync) {
+export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
+  const fresh = !db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'tasks'").get();
   db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
   db.exec(`
       CREATE TABLE IF NOT EXISTS execution_control (
@@ -43,7 +44,7 @@ export function initializeSchema(db: DatabaseSync) {
     db.exec(
       "CREATE TABLE IF NOT EXISTS board_columns (name TEXT PRIMARY KEY, position INTEGER NOT NULL)",
     );
-    if (!db.prepare("SELECT name FROM board_columns LIMIT 1").get()) {
+    if (!db.prepare("PRAGMA table_info(board_columns)").all().some((column) => column.name === "workspaceId") && !db.prepare("SELECT name FROM board_columns LIMIT 1").get()) {
       for (const [position, name] of statuses.entries()) {
         db.prepare(
           "INSERT INTO board_columns (name, position) VALUES (?, ?)",
@@ -125,7 +126,7 @@ export function initializeSchema(db: DatabaseSync) {
       }
       db.exec("DROP TABLE column_agents");
     }
-    migrateWorkspaceOwnership(db);
+    migrateWorkspaceOwnership(db, !fresh || seedWorkspace);
     initializeArtifactSchema(db);
     db.exec("COMMIT");
   } catch (error) {

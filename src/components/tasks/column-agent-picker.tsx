@@ -1,19 +1,14 @@
 "use client";
 
-import { WorkspaceLink as Link } from "@/components/workspace-selection";
-import { useRef, useState, type FormEvent } from "react";
-import { Button } from "@/components/ui/button";
+import { useRef, useState } from "react";
+import { Bot } from "lucide-react";
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { NativeSelect } from "@/components/ui/native-select";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { notifyOperation } from "@/components/ui/toast";
 import { executorLabel, type AgentProfile } from "@/domain/column-agent";
 import type { Status } from "@/domain/task";
@@ -22,92 +17,67 @@ export function ColumnAgentPicker({
   column,
   agents,
   agentId,
-  onClose,
+  disabled = false,
   onSave,
 }: {
   column: Status;
   agents: AgentProfile[];
   agentId?: string;
-  onClose: () => void;
+  disabled?: boolean;
   onSave: (agentId: string | null) => Promise<void>;
 }) {
   const saving = useRef(false);
   const [busy, setBusy] = useState(false);
-  async function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (saving.current) return;
-    const selected = String(
-      new FormData(event.currentTarget).get("agentId") ?? "",
-    );
+  async function save(value: string) {
+    if (saving.current || disabled) return;
+    const selected = value === "none" ? null : value.slice("agent:".length);
+    if (selected === (agentId ?? null)) return;
     saving.current = true;
     setBusy(true);
     try {
-      await notifyOperation(() => onSave(selected || null), {
+      await notifyOperation(() => onSave(selected), {
         loading: "Saving agent assignment…",
         success: selected ? "Agent assigned." : "Agent removed from column.",
         error:
           "Could not save assignment. Reload to check available agents, or try again.",
       });
-      onClose();
     } catch {
-      /* Preserve selection for retry. */
+      // Keep the saved assignment displayed when the update fails.
     } finally {
       saving.current = false;
       setBusy(false);
     }
   }
   return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open && !saving.current) onClose();
-      }}
+    <Select
+      value={agentId ? `agent:${agentId}` : "none"}
+      onValueChange={(value) => void save(value)}
+      disabled={disabled || busy}
     >
-      <DialogContent closeDisabled={busy}>
-        <DialogHeader>
-          <DialogTitle>Agent for {column}</DialogTitle>
-          <DialogDescription>
-            Choose a saved agent for this column. Removing it here keeps the
-            agent in your library.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={save}>
-          <fieldset disabled={busy} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="column-agent">Assigned agent</Label>
-              <NativeSelect
-                id="column-agent"
-                name="agentId"
-                defaultValue={agentId ?? ""}
-                className="max-w-full"
-              >
-                <option value="">No agent</option>
-                {agents.map((agent) => (
-                  <option key={agent.id} value={agent.id}>
-                    {agent.name} · {executorLabel(agent.tool)} · {agent.model}
-                  </option>
-                ))}
-              </NativeSelect>
-            </div>
-            {!agents.length && (
-              <p className="text-sm text-muted-foreground">
-                Create an agent before assigning one to this column.
-              </p>
-            )}
-            <Link href="/agents" className="text-sm underline">
-              Manage agents
-            </Link>
-            <DialogFooter className="pt-4">
-              <DialogClose asChild>
-                <Button type="button" variant="ghost">
-                  Cancel
-                </Button>
-              </DialogClose>
-              <Button type="submit">Save assignment</Button>
-            </DialogFooter>
-          </fieldset>
-        </form>
-      </DialogContent>
-    </Dialog>
+      <SelectTrigger
+        size="sm"
+        aria-label={`Agent for ${column}`}
+        aria-busy={busy}
+        className="max-w-full gap-1 rounded-full bg-secondary px-2 py-0 text-[11px] text-secondary-foreground shadow-none data-[size=sm]:h-6 [&_svg]:size-3 [&_[data-slot=select-value]]:min-w-0"
+      >
+        <Bot className="size-3" aria-hidden="true" />
+        <SelectValue placeholder="No agent">
+          {agents.find((agent) => agent.id === agentId)?.name ?? "No agent"}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent position="popper" align="start">
+        <SelectItem value="none">No agent</SelectItem>
+        {agents.map((agent) => (
+          <SelectItem key={agent.id} value={`agent:${agent.id}`}>
+            {agent.name} · {executorLabel(agent.tool)}
+          </SelectItem>
+        ))}
+        {!agents.length && (
+          <p className="px-2 py-1.5 text-xs text-muted-foreground">
+            Create an agent in Agents to assign it here.
+          </p>
+        )}
+      </SelectContent>
+    </Select>
   );
 }

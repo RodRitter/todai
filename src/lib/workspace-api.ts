@@ -100,7 +100,7 @@ export const executorApi = {
 export const workspaceApi = {
   archived: () => request<Workspace[]>("/api/workspaces?archived=true"),
   setArchived: (id: string, archived: boolean) => request<{ workspaces: Workspace[]; archived: Workspace[] }>("/api/workspaces", { method: "PATCH", body: { id, archived } }),
-  create: (name: string, path: string) => request<Workspace>("/api/workspaces", { method: "POST", body: { name, path } }),
+  create: (name: string, path: string, setup?: import("@/domain/workspace-setup").WorkspaceSetup) => request<Workspace>("/api/workspaces", { method: "POST", body: { name, path, ...setup } }),
   get: () => request<{ path: string }>("/api/workspace", {}, settingsError),
   save: (path: string) =>
     request<{ path: string }>(

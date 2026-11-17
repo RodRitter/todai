@@ -9,7 +9,6 @@ const meta = {
   args: {
     column: "In review",
     agents: [],
-    onClose: fn(),
     onSave: fn(async () => {}),
   },
 } satisfies Meta<typeof ColumnAgentPicker>;

@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { fn } from "storybook/test";
+import { ColumnAgentPicker } from "./column-agent-picker";
 import { TaskColumn } from "./task-column";
 import { TaskCard } from "./task-card";
 import { exampleTasks } from "./task.fixtures";
@@ -38,12 +39,23 @@ export const DropTarget: Story = {
   args: { ...Empty.args, canDrop: true, isDropTarget: true },
 };
 
+function agentSelector(name: string) {
+  return (
+    <ColumnAgentPicker
+      column="In review"
+      agentId="reviewer"
+      agents={[{ id: "reviewer", name, tool: "codex", model: "custom-model", effort: "high", instructions: "", permissions: "read-only" }]}
+      onSave={fn(async () => {})}
+    />
+  );
+}
+
 export const AssignedAgent: Story = {
-  args: { ...Empty.args, agentName: "Reviewer", onConfigureAgent: fn() },
+  args: { ...Empty.args, agentSelector: agentSelector("Reviewer") },
 };
 export const LongAgentName: Story = {
   args: {
     ...AssignedAgent.args,
-    agentName: "Architecture and implementation review specialist",
+    agentSelector: agentSelector("Architecture and implementation review specialist"),
   },
 };

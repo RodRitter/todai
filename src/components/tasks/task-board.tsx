@@ -12,8 +12,7 @@ import { statuses, type Status, type Task } from "@/domain/task";
 import { TaskCard } from "./task-card";
 import { TaskColumn } from "./task-column";
 import { ColumnAgentPicker } from "./column-agent-picker";
-import { AgentEditor } from "./agent-editor";
-import { executorLabel, type AgentProfile, type ColumnAssignment } from "@/domain/column-agent";
+import { type AgentProfile, type ColumnAssignment } from "@/domain/column-agent";
 import { TaskEditor } from "./task-editor";
 
 export function TaskBoard({
@@ -22,7 +21,6 @@ export function TaskBoard({
   initialAgents = [],
   initialAssignments = [],
   assignAgent,
-  saveAgent,
   persistence,
 }: {
   columns?: readonly string[];
@@ -33,7 +31,6 @@ export function TaskBoard({
     column: Status,
     agentId: string | null,
   ) => Promise<ColumnAssignment | null>;
-  saveAgent?: (agent: AgentProfile) => Promise<AgentProfile>;
   persistence?: {
     list?: () => Promise<Task[] | BoardSnapshot>;
     save: (task: Task) => Promise<Task>;
@@ -44,13 +41,9 @@ export function TaskBoard({
     answerFeedback?: (taskId: string, commentId: string, body: string) => Promise<Task>;
   };
 }) {
-  const [agents, setAgents] = useState(initialAgents);
-  const [editingAgent, setEditingAgent] = useState<AgentProfile | null>(null);
+  const [agents] = useState(initialAgents);
   const [columns, setColumns] = useState(initialColumns);
   const [assignments, setAssignments] = useState(initialAssignments);
-  const [configuringColumn, setConfiguringColumn] = useState<Status | null>(
-    null,
-  );
   const saving = useRef(false);
   const revision = useRef(0);
   const [busy, setBusy] = useState(false);
@@ -167,18 +160,29 @@ export function TaskBoard({
         >
           {columns.map((column) => {
             const columnTasks = tasks.filter((task) => task.status === column);
-            const agent = agents.find(
-              (agent) =>
-                agent.id ===
-                assignments.find((item) => item.column === column)?.agentId,
-            );
             return (
               <TaskColumn
                 key={column}
                 status={column}
-                agentName={agent ? `${agent.name} · ${executorLabel(agent.tool)}` : undefined}
-                onEditAgent={agent ? () => setEditingAgent(agent) : undefined}
-                onConfigureAgent={() => setConfiguringColumn(column)}
+                agentSelector={
+                  <ColumnAgentPicker
+                    column={column}
+                    agents={agents}
+                    agentId={assignments.find((item) => item.column === column)?.agentId}
+                    disabled={busy}
+                    onSave={(agentId) =>
+                      mutate(async () => {
+                        const saved = assignAgent
+                          ? await assignAgent(column, agentId)
+                          : agentId ? { column, agentId } : null;
+                        setAssignments((current) => [
+                          ...current.filter((item) => item.column !== column),
+                          ...(saved ? [saved] : []),
+                        ]);
+                      })
+                    }
+                  />
+                }
                 isEmpty={columnTasks.length === 0}
                 isDropTarget={dropColumn === column}
                 canDrop={!busy && draggedTaskId !== null}
@@ -215,46 +219,6 @@ export function TaskBoard({
             );
           })}
         </div>
-        {editingAgent && (
-          <AgentEditor
-            agent={editingAgent}
-            onClose={() => setEditingAgent(null)}
-            onSave={(agent) =>
-              mutate(async () => {
-                const saved = saveAgent ? await saveAgent(agent) : agent;
-                setAgents((current) =>
-                  current.map((item) => (item.id === saved.id ? saved : item)),
-                );
-              })
-            }
-          />
-        )}
-        {configuringColumn && (
-          <ColumnAgentPicker
-            column={configuringColumn}
-            agents={agents}
-            agentId={
-              assignments.find((item) => item.column === configuringColumn)
-                ?.agentId
-            }
-            onClose={() => setConfiguringColumn(null)}
-            onSave={(agentId) =>
-              mutate(async () => {
-                const saved = assignAgent
-                  ? await assignAgent(configuringColumn, agentId)
-                  : agentId
-                    ? { column: configuringColumn, agentId }
-                    : null;
-                setAssignments((current) => [
-                  ...current.filter(
-                    (item) => item.column !== configuringColumn,
-                  ),
-                  ...(saved ? [saved] : []),
-                ]);
-              })
-            }
-          />
-        )}
         <TaskEditor
           key={editing?.id ?? "new"}
           columns={columns}

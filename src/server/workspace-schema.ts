@@ -3,8 +3,8 @@ import { basename, resolve } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 
 // Called inside the schema transaction, after all legacy columns exist.
-export function migrateWorkspaceOwnership(db: DatabaseSync) {
-  migrateInitialWorkspaceOwnership(db);
+export function migrateWorkspaceOwnership(db: DatabaseSync, seedWorkspace = true) {
+  migrateInitialWorkspaceOwnership(db, seedWorkspace);
   if (!db.prepare("PRAGMA table_info(workspaces)").all().some((column) => column.name === "archived")) {
     db.exec("ALTER TABLE workspaces ADD COLUMN archived INTEGER NOT NULL DEFAULT 0");
   }
@@ -19,7 +19,7 @@ export function migrateWorkspaceOwnership(db: DatabaseSync) {
   CREATE INDEX IF NOT EXISTS comments_workspace ON comments(workspaceId);`);
 }
 
-function migrateInitialWorkspaceOwnership(db: DatabaseSync) {
+function migrateInitialWorkspaceOwnership(db: DatabaseSync, seedWorkspace: boolean) {
   db.exec(`CREATE TABLE IF NOT EXISTS workspaces (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, path TEXT NOT NULL
   )`);
@@ -27,7 +27,7 @@ function migrateInitialWorkspaceOwnership(db: DatabaseSync) {
 
   const id = randomUUID();
   const path = (db.prepare("SELECT value FROM settings WHERE key = 'workspacePath'").get()?.value as string | undefined) ?? resolve("workspace");
-  db.prepare("INSERT INTO workspaces (id, name, path) VALUES (?, ?, ?)").run(id, basename(path) || "Workspace", path);
+  if (seedWorkspace) db.prepare("INSERT INTO workspaces (id, name, path) VALUES (?, ?, ?)").run(id, basename(path) || "Workspace", path);
   for (const table of ["tasks", "agents", "runs"]) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN workspaceId TEXT REFERENCES workspaces(id)`);
     db.prepare(`UPDATE ${table} SET workspaceId = ?`).run(id);
@@ -54,8 +54,8 @@ function migrateInitialWorkspaceOwnership(db: DatabaseSync) {
       PRIMARY KEY(workspaceId, key)
     );
   `);
-  db.prepare("INSERT INTO board_columns SELECT id, name, position, ? FROM legacy_board_columns").run(id);
-  db.prepare("INSERT INTO column_assignments SELECT column, agentId, ? FROM legacy_column_assignments").run(id);
-  db.prepare("INSERT INTO settings SELECT key, value, ? FROM legacy_settings WHERE key <> 'workspacePath'").run(id);
+  if (seedWorkspace) db.prepare("INSERT INTO board_columns SELECT id, name, position, ? FROM legacy_board_columns").run(id);
+  if (seedWorkspace) db.prepare("INSERT INTO column_assignments SELECT column, agentId, ? FROM legacy_column_assignments").run(id);
+  if (seedWorkspace) db.prepare("INSERT INTO settings SELECT key, value, ? FROM legacy_settings WHERE key <> 'workspacePath'").run(id);
   db.exec("DROP TABLE legacy_board_columns; DROP TABLE legacy_column_assignments; DROP TABLE legacy_settings;");
 }

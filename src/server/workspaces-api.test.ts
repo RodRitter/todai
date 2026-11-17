@@ -45,3 +45,41 @@ test("workspace HTTP creation validates input and starts an independent default 
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("first install stays empty across reopen and creates a complete customized workspace", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "todai-first-install-"));
+  const previous = process.env.TODAI_DB_PATH;
+  process.env.TODAI_DB_PATH = join(directory, "tasks.sqlite");
+  try {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      assert.deepEqual(await GET(new Request("http://localhost/api/workspaces")).json(), []);
+    }
+    const create = (options: object) => POST(new Request("http://localhost/api/workspaces", {
+      method: "POST", body: JSON.stringify({ name: "My project", path: directory, ...options }),
+      headers: { "Content-Type": "application/json" },
+    }));
+    for (const options of [
+      { columns: [] }, { columns: [" "] }, { columns: ["Todo", " Todo "] },
+      { columns: [12] }, { starterAgentIds: ["unknown"] }, { starterAgentIds: ["planner", "planner"] },
+    ]) {
+      assert.equal((await create(options)).status, 400);
+      assert.deepEqual(await GET(new Request("http://localhost/api/workspaces")).json(), []);
+    }
+    const response = await create({ columns: [" Ready ", "Build", "Ship"], starterAgentIds: ["planner", "builder", "reviewer"] });
+    assert.equal(response.status, 201);
+    const workspace = await response.json();
+    const store = new TaskStore(process.env.TODAI_DB_PATH, workspace.id);
+    try {
+      assert.deepEqual(store.listColumns(), ["Ready", "Build", "Ship"]);
+      assert.deepEqual(store.listAgents().map((agent) => agent.name).sort(), ["Builder", "Planner", "Reviewer"]);
+      assert.equal(store.listAgents().find((agent) => agent.name === "Reviewer")?.permissions, "read-only");
+      assert.deepEqual(store.listColumnAgents(), []);
+      assert.deepEqual(store.list(), []);
+      assert.equal(store.listWorkspaces().length, 1);
+    } finally { store.close(); }
+  } finally {
+    if (previous === undefined) delete process.env.TODAI_DB_PATH;
+    else process.env.TODAI_DB_PATH = previous;
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

@@ -1,3 +1,4 @@
+import { parseWorkspaceSetup, starterAgentProfile } from "../domain/workspace-setup.ts";
 import type { ArtifactReference } from "../domain/artifact.ts";
 import { artifactMentions } from "./artifact-mentions.ts";
 import { mentionedAgentIds } from "../domain/agent-mentions.ts";
@@ -17,7 +18,7 @@ import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { statuses, type Task, type TaskComment } from "../domain/task.ts";
+import { type Task, type TaskComment } from "../domain/task.ts";
 
 import type { ExecutionState } from "../domain/execution.ts";
 import type { Workspace } from "../domain/workspace.ts";
@@ -61,12 +62,12 @@ export class TaskStore {
   readonly workspaceId: string;
   readonly databasePath: string;
 
-  constructor(path: string, workspaceId?: string) {
+  constructor(path: string, workspaceId?: string, options: { seedWorkspace?: boolean } = {}) {
     this.databasePath = path;
     mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
-    initializeSchema(this.db);
-    this.workspaceId = workspaceId ?? (this.listWorkspaces()[0] ?? this.listArchivedWorkspaces()[0]).id;
+    initializeSchema(this.db, options.seedWorkspace);
+    this.workspaceId = workspaceId ?? (this.listWorkspaces()[0] ?? this.listArchivedWorkspaces()[0])?.id ?? "";
     if (workspaceId && !this.listWorkspaces().some((workspace) => workspace.id === workspaceId)) {
       this.db.close();
       throw new WorkspaceOwnershipError("Choose an existing workspace. Archived workspaces must be restored first.");
@@ -98,13 +99,19 @@ export class TaskStore {
       throw new WorkspaceOwnershipError("This workspace is archived. Restore it before making changes.");
   }
 
-  createWorkspace(name: string, path: string): Workspace {
+  createWorkspace(name: string, path: string, options: unknown = {}): Workspace {
+    const setup = parseWorkspaceSetup(options);
     if (!name.trim()) throw new WorkspaceOwnershipError("Enter a workspace name.");
     const workspace = { id: randomUUID(), name: name.trim(), path: validateWorkspace(path) };
     return this.transaction(() => {
       this.db.prepare("INSERT INTO workspaces (id, name, path) VALUES (?, ?, ?)").run(workspace.id, workspace.name, workspace.path);
-      for (const [position, column] of statuses.entries()) {
+      for (const [position, column] of setup.columns.entries()) {
         this.db.prepare("INSERT INTO board_columns (id, name, position, workspaceId) VALUES (?, ?, ?, ?)").run(randomUUID(), column, position, workspace.id);
+      }
+      for (const id of setup.starterAgentIds) {
+        const agent = starterAgentProfile(id, randomUUID());
+        this.db.prepare("INSERT INTO agents (workspaceId, id, name, tool, model, effort, instructions, permissions) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+          .run(workspace.id, agent.id, agent.name, agent.tool, agent.model, agent.effort, agent.instructions, agent.permissions);
       }
       return workspace;
     });

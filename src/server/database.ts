@@ -3,7 +3,7 @@ import { TaskStore, WorkspaceOwnershipError } from "./task-store.ts";
 
 // An omitted ID is reserved for server bootstrap and scheduler discovery.
 export function openTaskStore(workspaceId?: string) {
-  return new TaskStore(resolve(process.env.TODAI_DB_PATH ?? ".todai/tasks.sqlite"), workspaceId);
+  return new TaskStore(resolve(process.env.TODAI_DB_PATH ?? ".todai/tasks.sqlite"), workspaceId, { seedWorkspace: false });
 }
 
 export function withTaskStore<T>(request: Request, operation: (store: TaskStore) => T): T {

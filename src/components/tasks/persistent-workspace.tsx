@@ -114,7 +114,6 @@ export function PersistentWorkspace({
       initialTasks={tasks}
       initialAgents={agents}
       initialAssignments={assignments}
-      saveAgent={agentApi.save}
       assignAgent={agentApi.assign}
       persistence={taskApi}
     />
