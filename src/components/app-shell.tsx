@@ -24,10 +24,10 @@ export function AppShell({
         aria-label="Sidebar"
         aria-hidden={!sidebarOpen}
         inert={!sidebarOpen}
-        className={`shrink-0 overflow-hidden transition-[width] duration-250 ease-in-out motion-reduce:transition-none ${sidebarOpen ? "w-16 md:w-48" : "w-0"}`}
+        className={`shrink-0 overflow-hidden transition-[width] duration-250 ease-in-out motion-reduce:transition-none ${sidebarOpen ? "w-16 md:w-60" : "w-0"}`}
       >
         <div
-          className={`h-full w-16 border-r bg-muted/40 transition-[transform,opacity] duration-250 ease-in-out motion-reduce:transition-none md:w-48 ${sidebarOpen ? "translate-x-0 opacity-100" : "-translate-x-4 opacity-0"}`}
+          className={`h-full w-16 border-r bg-muted/40 transition-[transform,opacity] duration-250 ease-in-out motion-reduce:transition-none md:w-60 ${sidebarOpen ? "translate-x-0 opacity-100" : "-translate-x-4 opacity-0"}`}
         >
           <div className="flex h-14 items-center justify-center border-b px-4 md:justify-start">
             <span className="font-semibold md:hidden" aria-label="Todai">

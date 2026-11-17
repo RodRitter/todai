@@ -31,8 +31,8 @@ export function WorkspaceLink({ href, ...props }: Omit<ComponentProps<typeof Lin
 export function WorkspaceSwitcher() {
   const selection = useContext(Selection);
   if (!selection) return null;
-  return <div className="border-b p-2">
-    <Label htmlFor="workspace-switcher" className="mb-1 block truncate text-xs text-muted-foreground">Workspace</Label>
+  return <div className="border-b px-2 py-4 md:px-4">
+    <Label htmlFor="workspace-switcher" className="mb-2 block truncate text-xs text-muted-foreground">Workspace</Label>
     <Select value={selection.workspace.id} onValueChange={(workspaceId) => {
       const url = new URL(window.location.href);
       url.searchParams.set("workspace", workspaceId);
