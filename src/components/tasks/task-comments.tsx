@@ -6,17 +6,18 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bot, Minus, Plus } from "lucide-react";
+import { Bot, Minus, Plus, Trash2 } from "lucide-react";
 import { Markdown } from "@/components/ui/markdown";
 import { DescriptionEditor } from "./description-editor";
 import type { AgentProfile } from "@/domain/column-agent";
 import type { AgentStatus, TaskComment } from "@/domain/task";
 
-export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostComment, agents = [], agentStatus }: {
+export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostComment, onDeleteComment, agents = [], agentStatus }: {
   taskId?: string;
   comments?: TaskComment[];
   agentStatus?: AgentStatus;
   agents?: AgentProfile[];
+  onDeleteComment?: (commentId: string) => Promise<void>;
   onPostComment?: (body: string, artifacts?: ArtifactReference[]) => Promise<void>;
   onAnswerFeedback?: (commentId: string, body: string) => Promise<void>;
 }) {
@@ -68,7 +69,7 @@ export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostCo
             .filter((comment) => !(comment.authorName === "Human" && comment.runId && comments.some((request) => request.runId === comment.runId && request.feedbackStatus)))
             .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
             .map((comment) => (
-              <li key={comment.id} id={`comment-${comment.id}`} className="grid grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-x-3 gap-y-3">
+              <li key={comment.id} id={`comment-${comment.id}`} className="group/comment grid grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-x-3 gap-y-3">
                 <div
                   className="bg-primary/10 text-primary flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
                   aria-hidden="true"
@@ -103,6 +104,7 @@ export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostCo
                         minute: "2-digit",
                       })}
                     </time>
+                    {onDeleteComment && <DeleteComment commentId={comment.id} onDelete={onDeleteComment} disabled={agentStatus === "Running" || agentStatus === "Queued" || comment.feedbackStatus === "pending"} />}
                   </div>
                   <div className={comment.feedbackStatus === "pending"
                     ? "col-span-2 min-w-0 space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4"
@@ -126,7 +128,9 @@ export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostCo
                   </div>
                   {comment.feedbackStatus === "answered" && comments.filter((reply) => reply.authorName === "Human" && reply.runId === comment.runId).map((reply) => (
                     <div key={reply.id} className="col-span-2 ml-4 min-w-0 space-y-2 border-l-2 border-border pl-4 sm:ml-9 sm:pl-5">
-                      <p className="text-sm font-semibold">Human</p>
+                      <div className="flex items-center gap-3"><p className="text-sm font-semibold">Human</p>
+                        {onDeleteComment && <DeleteComment commentId={reply.id} onDelete={onDeleteComment} disabled={agentStatus === "Running" || agentStatus === "Queued"} />}
+                      </div>
                       <time className="text-xs text-muted-foreground" dateTime={reply.createdAt}>{new Date(reply.createdAt).toLocaleString()}</time>
                       <CommentBody body={reply.body} />
                     </div>
@@ -153,6 +157,36 @@ export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostCo
     </section>
     </Tabs>
   );
+}
+
+function DeleteComment({ commentId, onDelete, disabled }: {
+  commentId: string;
+  onDelete: (commentId: string) => Promise<void>;
+  disabled: boolean;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function remove() {
+    if (busy || disabled) return;
+    setBusy(true);
+    setError("");
+    try { await onDelete(commentId); }
+    catch (error) { setError(error instanceof Error ? error.message : "Could not delete comment."); }
+    finally { setBusy(false); }
+  }
+  return <div className="ml-auto">
+    {confirming ? <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs">Delete comment?</span>
+      <Button type="button" size="sm" variant="destructive" disabled={busy || disabled} onClick={() => void remove()}>{busy ? "Deleting…" : "Delete"}</Button>
+      <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => { setConfirming(false); setError(""); }}>Cancel</Button>
+    </div> : <Button type="button" size="icon" variant="ghost" aria-label="Delete comment" title={disabled ? "Finish the agent run and resolve pending feedback before deleting." : "Delete comment"}
+      disabled={disabled} onClick={() => setConfirming(true)}
+      className="size-7 text-muted-foreground opacity-0 transition-opacity group-hover/comment:opacity-100 group-focus-within/comment:opacity-100 focus-visible:opacity-100 hover:text-destructive">
+      <Trash2 className="size-3.5" />
+    </Button>}
+    {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+  </div>;
 }
 
 function CommentBody({ body }: { body: string }) {

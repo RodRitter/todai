@@ -99,3 +99,25 @@ export const FailedComment: Story = {
     await expect(editor).toHaveTextContent("Keep this comment.");
   },
 };
+
+function DeletionExample() {
+  const [comments, setComments] = useState<TaskComment[]>([
+    { id: "delete-me", taskId: "task", authorName: "Human", body: "An outdated comment.", createdAt: "2026-11-17T10:00:00Z" },
+  ]);
+  return <TaskComments comments={comments} onDeleteComment={async (id) => setComments((current) => current.filter((comment) => comment.id !== id))} />;
+}
+
+export const DeleteComment: Story = {
+  render: () => <DeletionExample />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const control = canvas.getByRole("button", { name: "Delete comment" });
+    await userEvent.hover(canvas.getByText("An outdated comment."));
+    await userEvent.click(control);
+    await userEvent.click(canvas.getByRole("button", { name: "Cancel" }));
+    await expect(canvas.getByText("An outdated comment.")).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Delete comment" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Delete", exact: true }));
+    await expect(canvas.getByText("No comments yet.")).toBeVisible();
+  },
+};

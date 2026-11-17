@@ -32,6 +32,7 @@ export type TaskEditorProps = {
   onRun?: () => Promise<void>;
   onStop?: () => Promise<void>;
   agents?: AgentProfile[];
+  onDeleteComment?: (commentId: string) => Promise<void>;
   onPostComment?: (body: string, artifacts?: ArtifactReference[]) => Promise<void>;
   open: boolean;
   task?: Task | null;
@@ -64,6 +65,7 @@ function TaskEditorSession({
   onDelete,
   onAnswerFeedback,
   onPostComment,
+  onDeleteComment,
   agents,
 }: TaskEditorProps) {
   const pendingRun =
@@ -383,7 +385,7 @@ function TaskEditorSession({
                   </>
                 )}
               </div>
-              {editing && <TaskComments taskId={editing.id} comments={editing.comments} agentStatus={editing.agentStatus} onAnswerFeedback={onAnswerFeedback} agents={agents} onPostComment={onPostComment} />}
+              {editing && <TaskComments taskId={editing.id} comments={editing.comments} agentStatus={editing.agentStatus} onAnswerFeedback={onAnswerFeedback} agents={agents} onPostComment={onPostComment} onDeleteComment={onDeleteComment} />}
             </div>
             <DialogFooter className="z-10 shrink-0 flex-row flex-wrap items-center justify-end gap-2 border-t bg-background px-6 py-4">
               {editing && onDelete && (

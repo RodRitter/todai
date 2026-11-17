@@ -17,6 +17,7 @@ export function createCodexRunner(executable = "codex"): Runner {
               "--config", `mcp_servers.todai_artifacts.url=${JSON.stringify(request.artifacts.url)}`,
               "--config", `mcp_servers.todai_artifacts.http_headers={ Authorization = ${JSON.stringify(`Bearer ${request.artifacts.token}`)} }`,
               "--config", "mcp_servers.todai_artifacts.required=true",
+              "--config", 'mcp_servers.todai_artifacts.default_tools_approval_mode="approve"',
             ] : []),
             "--cd",
             workspace,

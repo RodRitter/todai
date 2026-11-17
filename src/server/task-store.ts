@@ -752,6 +752,24 @@ export class TaskStore {
     });
   }
 
+  deleteComment(taskId: unknown, commentId: unknown): Task {
+    this.assertWorkspaceActive();
+    if (typeof taskId !== "string" || typeof commentId !== "string")
+      throw new CommentValidationError("Choose a comment to delete.");
+    this.assertOwnership("tasks", taskId);
+    return this.transaction(() => {
+      const task = this.list().find((item) => item.id === taskId);
+      const comment = task?.comments?.find((item) => item.id === commentId);
+      if (!task || !comment) throw new CommentValidationError("This comment no longer exists.");
+      if (task.agentStatus === "Running" || task.agentStatus === "Queued")
+        throw new CommentValidationError("Stop the agent or wait for it to finish before deleting comments.");
+      if (comment.feedbackStatus === "pending" || this.history(taskId).some((run) => run.status === "Waiting" && run.commentId === commentId))
+        throw new CommentValidationError("Answer or cancel this feedback request before deleting it.");
+      this.db.prepare("DELETE FROM comments WHERE workspaceId = workspace_id() AND taskId = ? AND id = ?").run(taskId, commentId);
+      return this.list().find((item) => item.id === taskId)!;
+    });
+  }
+
   postComment(taskId: unknown, body: unknown, attachments: unknown = []): Task {
     this.assertWorkspaceActive();
     if (typeof taskId !== "string" || typeof body !== "string" || !body.trim())

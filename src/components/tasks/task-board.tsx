@@ -37,6 +37,7 @@ export function TaskBoard({
     delete: (id: string) => Promise<void>;
     run?: (taskId: string) => Promise<Task>;
     stop?: (taskId: string) => Promise<Task>;
+    deleteComment?: (taskId: string, commentId: string) => Promise<Task>;
     postComment?: (taskId: string, body: string, artifacts?: ArtifactReference[]) => Promise<Task>;
     answerFeedback?: (taskId: string, commentId: string, body: string) => Promise<Task>;
   };
@@ -231,6 +232,10 @@ export function TaskBoard({
           }
           onOpenChange={setOpen}
           agents={agents}
+          onDeleteComment={persistence?.deleteComment ? (commentId) => mutate(async () => {
+            const saved = await persistence.deleteComment!(editing!.id, commentId);
+            updateTasks((current) => current.map((task) => task.id === saved.id ? saved : task));
+          }) : undefined}
           onPostComment={persistence?.postComment ? (body, artifacts) => mutate(async () => {
             const saved = await persistence.postComment!(editing!.id, body, artifacts);
             updateTasks((current) => current.map((task) => task.id === saved.id ? saved : task));

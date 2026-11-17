@@ -90,6 +90,7 @@ process.stdin.on('end', () => {
       'model_reasoning_effort="high"',
       "read-only",
       'approval_policy="never"',
+      'mcp_servers.todai_artifacts.default_tools_approval_mode="approve"',
       'mcp_servers.todai_artifacts.url="http://127.0.0.1:12345/mcp"',
       'mcp_servers.todai_artifacts.http_headers={ Authorization = "Bearer test-token" }',
     ])
@@ -99,6 +100,8 @@ process.stdin.on('end', () => {
       "Keep keyboard navigation",
       "Earlier handover",
       "nominate_artifact",
+      "Todai artifact operations needed for this task are authorized.",
+      "report the actual error and continue any independent work",
     ])
       assert.ok(received.prompt.includes(context), context);
   } finally {
