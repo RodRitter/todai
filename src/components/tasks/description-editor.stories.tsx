@@ -37,7 +37,10 @@ export const Comment: Story = {
   },
 };
 export const DescriptionPreview: Story = {
-  render: () => <DescriptionField initialValue="Click anywhere in this gray surface to edit the description." disabled={false} onChange={fn()} onSave={fn()} />,
+  render: function Preview() {
+    const [value, setValue] = useState("Click anywhere in this gray surface to edit the description.");
+    return <DescriptionField value={value} disabled={false} onChange={setValue} />;
+  },
 };
 export const SurfaceFocus: Story = {
   play: async ({ canvasElement }) => {

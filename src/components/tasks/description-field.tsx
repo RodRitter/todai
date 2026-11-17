@@ -1,41 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { EditorSurface, editorLabelClassName } from "@/components/ui/editor-surface";
 import { Markdown } from "@/components/ui/markdown";
 import { DescriptionEditor } from "./description-editor";
 
 export function DescriptionField({
-  initialValue,
+  value,
   disabled,
   onChange,
-  onSave,
 }: {
-  initialValue: string;
+  value: string;
   disabled: boolean;
   onChange: (description: string) => void;
-  onSave: (description: string) => Promise<void>;
 }) {
-  const [description, setDescription] = useState(initialValue);
-  const [draft, setDraft] = useState(initialValue);
   const [isEditing, setIsEditing] = useState(false);
-
-  async function saveDescription() {
-    const value = draft.trim();
-    if (disabled || value === description.trim()) return;
-    try {
-      await onSave(value);
-      setDescription(value);
-      setIsEditing(false);
-    } catch {
-      /* Keep the draft open; the persistence boundary reports the failure. */
-    }
-  }
 
   function startEditing() {
     if (disabled) return;
-    setDraft(description);
     setIsEditing(true);
   }
 
@@ -44,42 +26,15 @@ export function DescriptionField({
       <input
         type="hidden"
         name="description"
-        value={isEditing ? draft : description}
+        value={value}
       />
       {isEditing ? (
           <DescriptionEditor
-            value={draft}
+            controlsOnFocus
+            value={value}
             disabled={disabled}
-            onChange={(value) => {
-              setDraft(value);
-              onChange(value);
-            }}
+            onChange={onChange}
             autoFocus
-            actions={<>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                aria-label="Cancel description edit"
-                onClick={() => {
-                  setIsEditing(false);
-                  onChange(description);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                aria-label="Save description"
-                disabled={disabled || draft.trim() === description.trim()}
-                onClick={() => {
-                  void saveDescription();
-                }}
-              >
-                Save
-              </Button>
-            </>}
           />
       ) : (
         <EditorSurface
@@ -103,8 +58,8 @@ export function DescriptionField({
           }}
         >
           <span className={editorLabelClassName}>Description</span>
-          {description.trim() ? (
-            <Markdown>{description}</Markdown>
+          {value.trim() ? (
+            <Markdown>{value}</Markdown>
           ) : (
             <p className="text-muted-foreground text-sm">
               Click to add a description…

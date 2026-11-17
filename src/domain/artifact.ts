@@ -35,3 +35,19 @@ export type ArtifactFilters = { taskId?: string; archived?: boolean; search?: st
 
 export type ArtifactReference = { artifactId: string; revisionId: string };
 export type TaskArtifact = { artifact: Artifact; explicit: boolean; comments: { commentId: string; artifact: Artifact }[] };
+
+// Deliberately exclude active document formats such as HTML and SVG.
+export function artifactPreviewKind(artifact: Artifact) {
+  if (artifact.type === "link") return "link";
+  if (artifact.type === "text" || artifact.type === "markdown") return artifact.type;
+  const mediaType = artifact.mediaType?.toLowerCase();
+  if (!mediaType || mediaType === "application/octet-stream") {
+    if (/\.(md|markdown)$/i.test(artifact.filename ?? "")) return "markdown";
+    if (/\.txt$/i.test(artifact.filename ?? "")) return "text";
+  }
+  if (mediaType === "text/plain") return "text";
+  if (mediaType === "text/markdown") return "markdown";
+  if (["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif", "image/bmp"].includes(mediaType ?? "")) return "image";
+  if (mediaType === "application/pdf") return "pdf";
+  return "unsupported";
+}

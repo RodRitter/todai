@@ -277,9 +277,9 @@ export const MarkdownContent: Story = {
     const dialog = within(
       await within(canvasElement.ownerDocument.body).findByRole("dialog"),
     );
-    await expect(
+    await waitFor(() => expect(
       dialog.getByRole("heading", { name: "Requirements" }),
-    ).toBeVisible();
+    ).toBeVisible());
     await expect(
       dialog.getByRole("heading", { name: "Handover" }),
     ).toBeVisible();
@@ -292,8 +292,12 @@ export const MarkdownContent: Story = {
       dialog.getByLabelText("Description"),
       "Updated requirements",
     );
+    await expect(args.onSave).not.toHaveBeenCalled();
+    await expect(
+      dialog.queryByRole("button", { name: "Save description" }),
+    ).not.toBeInTheDocument();
     await userEvent.click(
-      dialog.getByRole("button", { name: "Save description" }),
+      dialog.getByRole("button", { name: "Save changes" }),
     );
     await waitFor(() =>
       expect(
@@ -332,9 +336,9 @@ export const CancelDescriptionEdit: Story = {
       "Discard this draft",
     );
     await userEvent.click(
-      dialog.getByRole("button", { name: "Cancel description edit" }),
+      dialog.getByRole("button", { name: "Cancel" }),
     );
-    await expect(dialog.getByText("Original description")).toBeVisible();
+    await expect(args.onOpenChange).toHaveBeenCalledWith(false);
     await expect(args.onSave).not.toHaveBeenCalled();
   },
 };
@@ -357,16 +361,16 @@ export const FailedDescriptionSave: Story = {
       "Retained draft",
     );
     await userEvent.click(
-      dialog.getByRole("button", { name: "Save description" }),
+      dialog.getByRole("button", { name: "Save changes" }),
     );
     await within(canvasElement.ownerDocument.body).findByText(
-      "Could not save the description. Your draft is still open; try again.",
+      "Could not confirm changes were saved. Try again to save your draft.",
     );
     await expect(dialog.getByLabelText("Description")).toHaveTextContent(
       "Retained draft",
     );
     await userEvent.click(
-      dialog.getByRole("button", { name: "Save description" }),
+      dialog.getByRole("button", { name: "Save changes" }),
     );
     await waitFor(() =>
       expect(dialog.getByText("Retained draft")).toBeVisible(),

@@ -29,14 +29,48 @@ test("HTTP publication, history, exact downloads and archival retain workspace b
     const second = await (await publish("Updated", first.id)).json();
     assert.equal(second.id, first.id);
     assert.equal(second.revisionNumber, 2);
+    const preview = download(request(`?id=${first.id}&revision=${first.revisionId}&preview=true`));
+    assert.equal(preview.headers.get("X-Todai-Preview"), "text");
+    assert.equal(await preview.text(), "Original");
+    assert.equal(preview.headers.get("Content-Security-Policy"), "sandbox; default-src 'none'");
+    assert.equal(download(request(`?id=${first.id}&revision=${first.revisionId}&preview=true`, {}, other.id)).status, 400);
     assert.equal(await download(request(`?id=${first.id}&revision=${first.revisionId}`)).text(), "Original");
     assert.deepEqual(await api.GET(request(`?id=${first.id}&revision=${first.revisionId}`)).json(), first);
     assert.equal((await api.GET(request(`?id=${first.id}&history=true`)).json()).length, 2);
     assert.equal(api.GET(request(`?id=${first.id}&history=true`, {}, other.id)).status, 400);
     assert.equal(download(request(`?id=${first.id}&revision=missing`)).status, 400);
+    for (const [filename, mediaType, kind, content] of [
+      ["untyped.md", "", "markdown", "# Uploaded notes"],
+      ["notes.md", "text/markdown", "markdown", "# Notes\n<script>alert(1)</script>"],
+      ["screenshot.png", "image/png", "image", "image bytes"],
+      ["document.pdf", "application/pdf", "pdf", "%PDF-1.7"],
+      ["page.html", "text/html", "unsupported", "<script>alert(1)</script>"],
+      ["vector.svg", "image/svg+xml", "unsupported", "<svg onload='alert(1)'/>"],
+      ["document.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "unsupported", "office bytes"],
+    ]) {
+      const form = new FormData();
+      Object.entries({ title: filename, type: "file", creator: "Alice" }).forEach(([key, value]) => form.set(key, value));
+      form.set("file", new File([content], filename, { type: mediaType }));
+      const file = await (await api.POST(request("", { method: "POST", body: form }))).json();
+      const query = `?id=${file.id}&revision=${file.revisionId}`;
+      const response = download(request(`${query}&preview=true`));
+      assert.equal(response.status, kind === "unsupported" ? 415 : 200, filename);
+      if (kind !== "unsupported") {
+        assert.equal(response.headers.get("X-Todai-Preview"), kind);
+        assert.equal(response.headers.get("X-Content-Type-Options"), "nosniff");
+        assert.equal(await response.text(), content);
+      }
+      assert.equal(await download(request(query)).text(), content);
+      assert.match(download(request(query)).headers.get("Content-Disposition")!, /^attachment;/);
+      assert.equal(download(request(`${query}&preview=true`, {}, other.id)).status, 400);
+      assert.equal(download(request(`?id=${file.id}&revision=${first.revisionId}&preview=true`)).status, 400);
+    }
+    assert.equal(download(request(`?id=${first.id}&revision=missing&preview=true`)).status, 400);
+    assert.equal(download(request("?id=../../etc/passwd&preview=true")).status, 400);
+    assert.equal(download(new Request("http://localhost/api/artifacts/download?preview=true")).status, 403);
     const archived = await api.PATCH(request("", { method: "PATCH", body: JSON.stringify({ id: first.id }) }));
     assert.equal(archived.status, 200);
-    assert.deepEqual(await api.GET(request()).json(), []);
+    assert.equal((await api.GET(request()).json()).some((item: { id: string }) => item.id === first.id), false);
     assert.equal((await api.GET(request("?archived=true")).json()).length, 1);
     assert.equal(await download(request(`?id=${first.id}&revision=${first.revisionId}`)).text(), "Original");
     assert.equal(api.GET(new Request("http://localhost/api/artifacts")).status, 403);

@@ -6,7 +6,8 @@ import { workspaceFetch } from "@/lib/workspace-fetch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover } from "radix-ui";
-import { Download, ExternalLink, FileText, Link2, MessageSquare, Paperclip, Plus, Unlink } from "lucide-react";
+import { Eye, FileText, Link2, MessageSquare, Paperclip, Plus, Unlink } from "lucide-react";
+import { ArtifactViewer } from "./artifact-viewer";
 import { toast } from "@/components/ui/toast";
 
 async function checked(response: Response) {
@@ -14,36 +15,25 @@ async function checked(response: Response) {
   return response;
 }
 
-export async function openArtifact(selected: Artifact) {
-  if (selected.url) { window.location.assign(selected.url); return; }
-  const response = await checked(await workspaceFetch(`/api/artifacts/download?${new URLSearchParams({ id: selected.id, revision: selected.revisionId })}`));
-  const url = URL.createObjectURL(await response.blob());
-  const anchor = document.createElement("a");
-  anchor.href = url; anchor.download = selected.filename ?? "artifact";
-  document.body.append(anchor); anchor.click(); anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
 export function ArtifactOpenButton({ artifact, latest = false, compact = false }: { artifact: Artifact; latest?: boolean; compact?: boolean }) {
-  async function download() {
+  const [selected, setSelected] = useState<Artifact | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function open() {
+    setBusy(true);
     try {
-      const selected: Artifact = latest
+      setSelected(latest
         ? await (await checked(await workspaceFetch(`/api/artifacts?${new URLSearchParams({ id: artifact.id })}`))).json()
-        : artifact;
-      await openArtifact(selected);
-    } catch (error) { toast.error(error instanceof Error ? error.message : "Could not download artifact."); }
+        : artifact);
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Could not open artifact."); }
+    finally { setBusy(false); }
   }
-  if (compact) {
-    const label = latest ? `Open latest revision of ${artifact.title}` : `Open ${artifact.title}, revision ${artifact.revisionNumber}`;
-    const icon = artifact.url ? <ExternalLink aria-hidden="true" /> : <Download aria-hidden="true" />;
-    return artifact.url && !latest
-      ? <Button type="button" size="icon" variant="ghost" className="size-7" asChild><a href={artifact.url} target="_blank" rel="noopener noreferrer" aria-label={label} title={label}>{icon}</a></Button>
-      : <Button type="button" size="icon" variant="ghost" className="size-7" aria-label={label} title={label} onClick={() => void download()}>{icon}</Button>;
-  }
-  if (latest) return <Button type="button" size="sm" variant="outline" onClick={() => void download()}>Open latest revision</Button>;
-  return artifact.url
-    ? <Button type="button" size="sm" variant="outline" asChild><a href={artifact.url} target="_blank" rel="noopener noreferrer">Open external link · r{artifact.revisionNumber} ↗</a></Button>
-    : <Button type="button" size="sm" variant="outline" onClick={() => void download()}>Download · r{artifact.revisionNumber}</Button>;
+  const label = latest ? `Open latest revision of ${artifact.title}` : `Open ${artifact.title}, revision ${artifact.revisionNumber}`;
+  return <>
+    <Button type="button" size={compact ? "icon" : "sm"} variant={compact ? "ghost" : "outline"} className={compact ? "size-7" : undefined} disabled={busy} aria-label={label} title={label} onClick={() => void open()}>
+      {compact ? <Eye aria-hidden="true" /> : latest ? "Open latest revision" : `Open · r${artifact.revisionNumber}`}
+    </Button>
+    {selected && <ArtifactViewer key={selected.revisionId} artifact={selected} onClose={() => setSelected(null)} />}
+  </>;
 }
 
 export function ArtifactPicker({ onSelect, disabled, label = "Attach artifact", compact = false, attachmentIcon = false }: {

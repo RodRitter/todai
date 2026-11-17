@@ -266,6 +266,8 @@ function CommentInput({ agents, onPost, agentStatus }: { agents: AgentProfile[];
       key={version}
       id="task-comment"
       label="Your comment"
+      controlsOnFocus
+      compact
       value={body}
       onChange={setBody}
       disabled={busy || pendingRun}

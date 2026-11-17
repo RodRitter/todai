@@ -31,9 +31,9 @@ function referenceMatch(editor: Editor, allowAgents: boolean, allowArtifacts: bo
   return { from: $from.pos - match[2].length - 1, to: $from.pos, kind: match[1] === "#" ? "artifact" : match[1] === "$" ? "skill" : match[1] === "@" ? "agent" : "file", query: match[2] };
 }
 
-export function DescriptionEditor({ value, onChange, disabled = false, autoFocus = false, agents, artifacts = false, label = "Description", id = "task-description", actions, footer, toolbarActions }: {
+export function DescriptionEditor({ value, onChange, disabled = false, autoFocus = false, agents, artifacts = false, label = "Description", id = "task-description", actions, footer, toolbarActions, controlsOnFocus = false, compact = false }: {
   value: string; onChange: (value: string) => void; disabled?: boolean; autoFocus?: boolean;
-  agents?: AgentProfile[]; artifacts?: boolean; label?: string; id?: string; actions?: ReactNode; footer?: ReactNode; toolbarActions?: ReactNode;
+  agents?: AgentProfile[]; artifacts?: boolean; label?: string; id?: string; actions?: ReactNode; footer?: ReactNode; toolbarActions?: ReactNode; controlsOnFocus?: boolean; compact?: boolean;
 }) {
   const [match, setMatch] = useState<Match | null>(null);
   const [response, setResponse] = useState<{ key: string; items: TaskReference[] }>({ key: "", items: [] });
@@ -149,6 +149,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
 
   return (
     <EditorSurface
+      className="group/editor"
       disabled={disabled}
       onClick={(event) => {
         if (
@@ -159,8 +160,8 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
       }}
     >
       <label htmlFor={id} className={editorLabelClassName}>{label}</label>
-      <div className="flex flex-col [&_.tiptap]:min-h-24 [&_.tiptap]:px-0 [&_.tiptap]:pt-0">
-        <div className="order-last mt-2 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+      <div className={`flex flex-col [&_.tiptap]:px-0 [&_.tiptap]:pt-0 ${compact ? "[&_.tiptap]:min-h-12" : "[&_.tiptap]:min-h-24"}`}>
+        <div className={`order-last mt-2 flex-wrap items-center justify-between gap-3 border-t pt-3 ${controlsOnFocus ? "hidden group-focus-within/editor:flex group-has-[[data-state=open]]/editor:flex" : "flex"}`}>
           <TooltipProvider>
             <div role="group" aria-label={`${label} formatting`} className="flex flex-wrap items-center gap-1">
               {formatGroups.map((group, index) => (
@@ -193,7 +194,6 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
             </div>
           </TooltipProvider>
           {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
-          {footer && <div className="w-full space-y-2">{footer}</div>}
         </div>
         <EditorContent editor={editor} />
         {match && !disabled && (
@@ -209,6 +209,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
           </div>
         )}
       </div>
+      {footer && <div className="space-y-2 [&:not(:empty)]:mt-3">{footer}</div>}
     </EditorSurface>
   );
 }

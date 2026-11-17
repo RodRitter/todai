@@ -366,32 +366,16 @@ function TaskEditorSession({
               <div className="min-w-0">
                 {editing ? (
                   <DescriptionField
-                    initialValue={editing.description}
+                    key={savedDescription}
+                    value={description}
                     disabled={busy}
                     onChange={setDescription}
-                    onSave={async (description) => {
-                      setBusy(true);
-                      try {
-                        await notifyOperation(
-                          () => onSave({ ...editing, description }),
-                          {
-                            loading: "Saving description…",
-                            success: "Description saved.",
-                            error:
-                              "Could not save the description. Your draft is still open; try again.",
-                          },
-                        );
-                        setSavedDescription(description);
-                        setDescription(description);
-                      } finally {
-                        setBusy(false);
-                      }
-                    }}
                   />
                 ) : (
                   <>
                     <input type="hidden" name="description" value={description} />
                     <DescriptionEditor
+                      controlsOnFocus
                       value={description}
                       onChange={setDescription}
                       disabled={busy}
