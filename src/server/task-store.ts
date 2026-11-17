@@ -62,17 +62,36 @@ export class TaskStore {
     mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
     initializeSchema(this.db);
-    this.workspaceId = workspaceId ?? this.listWorkspaces()[0].id;
-    if (!this.listWorkspaces().some((workspace) => workspace.id === this.workspaceId)) {
+    this.workspaceId = workspaceId ?? (this.listWorkspaces()[0] ?? this.listArchivedWorkspaces()[0]).id;
+    if (workspaceId && !this.listWorkspaces().some((workspace) => workspace.id === workspaceId)) {
       this.db.close();
-      throw new WorkspaceOwnershipError("Choose an existing workspace.");
+      throw new WorkspaceOwnershipError("Choose an existing workspace. Archived workspaces must be restored first.");
     }
     // The SQL scope belongs to this connection and never follows a selected UI view.
     this.db.function("workspace_id", () => this.workspaceId);
   }
 
   listWorkspaces(): Workspace[] {
-    return this.db.prepare("SELECT id, name, path FROM workspaces ORDER BY rowid").all() as Workspace[];
+    return this.db.prepare("SELECT id, name, path FROM workspaces WHERE archived = 0 ORDER BY rowid").all() as Workspace[];
+  }
+
+  listArchivedWorkspaces(): Workspace[] {
+    return this.db.prepare("SELECT id, name, path FROM workspaces WHERE archived = 1 ORDER BY rowid").all() as Workspace[];
+  }
+
+  setWorkspaceArchived(id: string, archived: boolean) {
+    return this.transaction(() => {
+      if (!this.db.prepare("SELECT id FROM workspaces WHERE id = ?").get(id))
+        throw new WorkspaceOwnershipError("Choose an existing workspace.");
+      if (archived && this.db.prepare("SELECT id FROM runs WHERE workspaceId = ? AND status IN ('Queued', 'Running')").get(id))
+        throw new RunValidationError("Finish queued and running jobs before archiving this workspace.");
+      this.db.prepare("UPDATE workspaces SET archived = ? WHERE id = ?").run(Number(archived), id);
+    });
+  }
+
+  private assertWorkspaceActive() {
+    if (this.db.prepare("SELECT archived FROM workspaces WHERE id = workspace_id()").get()?.archived)
+      throw new WorkspaceOwnershipError("This workspace is archived. Restore it before making changes.");
   }
 
   createWorkspace(name: string, path: string): Workspace {
@@ -99,7 +118,7 @@ export class TaskStore {
   }
 
   getWorkspace(): Workspace {
-    return this.listWorkspaces().find((workspace) => workspace.id === this.workspaceId)!;
+    return this.db.prepare("SELECT id, name, path FROM workspaces WHERE id = workspace_id()").get() as Workspace;
   }
 
   getDefaultExecutor() {
@@ -118,7 +137,15 @@ export class TaskStore {
   }
 
   setWorkspacePath(path: string) {
-    this.db.prepare("UPDATE workspaces SET path = ? WHERE id = workspace_id()").run(path);
+    return this.transaction(() => {
+      this.assertWorkspaceActive();
+      if (path === this.getWorkspacePath()) return;
+      const state = this.executionState();
+      if (state.active) throw new RunValidationError("Stop the running agent before changing a directory.");
+      if (!state.paused && this.history().some((run) => run.status === "Queued"))
+        throw new RunValidationError("Pause the global queue before changing this directory.");
+      this.db.prepare("UPDATE workspaces SET path = ? WHERE id = workspace_id()").run(path);
+    });
   }
 
   boardSnapshot() {
@@ -438,6 +465,7 @@ export class TaskStore {
   }
 
   private queueAgent(taskId: string, column: string) {
+    this.assertWorkspaceActive();
     const assignment = this.listColumnAgents().find(
       (item) => item.column === column,
     );
@@ -497,6 +525,7 @@ export class TaskStore {
       FROM runs JOIN tasks ON tasks.id = runs.taskId JOIN workspaces ON workspaces.id = runs.workspaceId
       WHERE runs.status = 'Running' LIMIT 1`).get();
     return {
+      directoryChanges: this.queuedDirectoryChanges(),
       paused: Boolean(this.db.prepare("SELECT paused FROM execution_control WHERE id = 1").get()?.paused),
       active: active ? { ...active, stopping: Boolean(active.stopRequested) } as ExecutionState["active"] : null,
     };
@@ -513,13 +542,37 @@ export class TaskStore {
     });
   }
 
-  resumeExecution() {
-    this.db.prepare("UPDATE execution_control SET paused = 0 WHERE id = 1").run();
+  private queuedDirectoryChanges() {
+    return this.db.prepare(`SELECT runs.id AS runId, workspaces.name AS workspaceName,
+      runs.workspacePath AS previousPath, workspaces.path
+      FROM runs JOIN workspaces ON workspaces.id = runs.workspaceId
+      WHERE runs.status = 'Queued' AND runs.workspacePath <> workspaces.path ORDER BY runs.id`).all() as
+      import("../domain/execution.ts").QueuedDirectoryChange[];
+  }
+
+  pauseExecution() {
+    this.db.prepare("UPDATE execution_control SET paused = 1 WHERE id = 1").run();
+  }
+
+  resumeExecution(confirmedChanges?: unknown) {
+    return this.transaction(() => {
+      const changes = this.queuedDirectoryChanges();
+      if (changes.length && JSON.stringify(confirmedChanges) !== JSON.stringify(changes))
+        throw new RunValidationError("Confirm the current directory changes before resuming the queue.");
+      for (const change of changes)
+        this.db.prepare("UPDATE runs SET workspacePath = ? WHERE id = ?").run(change.path, change.runId);
+      this.db.prepare("UPDATE execution_control SET paused = 0 WHERE id = 1").run();
+    });
   }
 
   claimRun(): AgentRun | undefined {
     return this.transaction(() => {
+      if (!this.listWorkspaces().some((workspace) => workspace.id === this.workspaceId)) return;
       if (this.executionState().paused) return;
+      if (this.queuedDirectoryChanges().length) {
+        this.pauseExecution();
+        return;
+      }
       if (this.db.prepare("SELECT id FROM runs WHERE status = 'Running'").get())
         return;
       const waiting = new Set(this.list().filter((task) => task.agentStatus === "Stopped" || task.comments?.some((comment) => comment.feedbackStatus === "pending")).map((task) => task.id));
@@ -640,6 +693,7 @@ export class TaskStore {
   }
 
   answerFeedback(taskId: unknown, commentId: unknown, body: unknown): Task {
+    this.assertWorkspaceActive();
     if (typeof taskId !== "string" || typeof commentId !== "string" ||
         typeof body !== "string" || !body.trim())
       throw new FeedbackValidationError("Enter a feedback reply.");
@@ -685,6 +739,7 @@ export class TaskStore {
   }
 
   private queueCommentRun(taskId: string, column: string, profile: AgentProfile, kind: "intent" | "reply", commentId: string, replyPlan: AgentProfile[], createdAt = new Date().toISOString()) {
+    this.assertWorkspaceActive();
     this.db.prepare("INSERT INTO runs (workspaceId, workspacePath, id, taskId, column, profile, status, createdAt, kind, commentId, replyPlan) VALUES (workspace_id(), (SELECT path FROM workspaces WHERE id = workspace_id()), ?, ?, ?, ?, 'Queued', ?, ?, ?, ?)")
       .run(randomUUID(), taskId, column, JSON.stringify(profile), createdAt, kind, commentId, JSON.stringify(replyPlan));
   }

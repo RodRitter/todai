@@ -51,8 +51,9 @@ export function WorkspaceSettings() {
           Workspace
         </h2>
         <p className="text-sm text-muted-foreground">
-          Choose the directory where agents work. Changes apply to the next run;
-          active runs keep their current directory.
+          Stop any running agent, or pause the queue from the header, before changing
+          this directory. Saving keeps the queue paused. Resume queue will ask you to
+          confirm the new directory for affected queued jobs.
         </p>
       </div>
       {failed ? (

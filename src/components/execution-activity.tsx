@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { Circle, LoaderCircle, Pause } from "lucide-react";
 import { Popover } from "radix-ui";
 import { Button } from "@/components/ui/button";
-import type { ExecutionState } from "@/domain/execution";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import type { QueuedDirectoryChange, ExecutionState } from "@/domain/execution";
 
 export function ExecutionActivity() {
   const [state, setState] = useState<ExecutionState | null>(null);
@@ -32,14 +33,14 @@ export function ExecutionActivity() {
     return () => { active = false; clearTimeout(timer); };
   }, []);
 
-  async function act(action: "stop" | "resume") {
+  async function act(action: "stop" | "resume" | "pause", directoryChanges?: QueuedDirectoryChange[]) {
     requestVersion.current++;
     setBusy(true);
     setError(null);
     try {
       const response = await fetch("/api/execution", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, ...(action === "stop" ? { runId: state?.active?.runId } : {}) }),
+        body: JSON.stringify({ action, directoryChanges, ...(action === "stop" ? { runId: state?.active?.runId } : {}) }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not update execution.");
@@ -56,11 +57,13 @@ export function ExecutionActivityView({ state, error = null, busy = false, onAct
   state: ExecutionState | null;
   error?: string | null;
   busy?: boolean;
-  onAction: (action: "stop" | "resume") => void;
+  onAction: (action: "stop" | "resume" | "pause", directoryChanges?: QueuedDirectoryChange[]) => void;
 }) {
+  const [confirmation, setConfirmation] = useState<QueuedDirectoryChange[] | null>(null);
   const label = !state ? "Execution unavailable" : state.active?.stopping ? "Stopping" : state.active ? "Running" : state.paused ? "Paused" : "Idle";
   const Icon = state?.active ? LoaderCircle : state?.paused ? Pause : Circle;
   return (
+    <>
     <Popover.Root>
       <Popover.Trigger asChild>
         <Button variant="ghost" size="sm" aria-label={`Execution: ${label}`}>
@@ -84,11 +87,29 @@ export function ExecutionActivityView({ state, error = null, busy = false, onAct
             {state.active && <Button size="sm" variant="destructive" disabled={busy || state.active.stopping} onClick={() => onAction("stop")}>
               {state.active.stopping ? "Stopping…" : "Stop current run"}
             </Button>}
-            {state.paused && <Button size="sm" variant="outline" disabled={busy || Boolean(state.active?.stopping)} onClick={() => onAction("resume")}>Resume queue</Button>}
+            {!state.paused && !state.active && <Button size="sm" variant="outline" disabled={busy} onClick={() => onAction("pause")}>Pause queue</Button>}
+            {state.paused && <Button size="sm" variant="outline" disabled={busy || Boolean(state.active?.stopping)} onClick={() => state.directoryChanges?.length ? setConfirmation(state.directoryChanges) : onAction("resume")}>Resume queue</Button>}
           </>}
           {error && <p role="alert" className="text-destructive">{error}</p>}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+    <Dialog open={confirmation !== null} onOpenChange={(open) => { if (!open) setConfirmation(null); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Update queued directories?</DialogTitle>
+          <DialogDescription>Move {confirmation?.length} queued jobs to the current workspace directories and resume the queue. Stopped tasks stay stopped.</DialogDescription>
+        </DialogHeader>
+        <ul className="space-y-2 text-sm">
+          {Array.from(new Map(confirmation?.map((change) => [change.workspaceName + change.path, change])).values()).map((change) =>
+            <li key={change.runId} className="break-words"><span className="font-medium">{change.workspaceName}</span><p className="break-all text-muted-foreground">{change.path}</p></li>)}
+        </ul>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setConfirmation(null)}>Keep paused</Button>
+          <Button onClick={() => { onAction("resume", confirmation!); setConfirmation(null); }}>Update and resume</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

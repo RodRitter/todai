@@ -18,7 +18,7 @@ export default function RootLayout({
   let workspaces;
   try { workspaces = store.listWorkspaces().map((workspace) => ({ ...workspace })); } finally { store.close(); }
   return (
-    <html lang="en" data-workspace-id={workspaces[0].id}>
+    <html lang="en" data-workspace-id={workspaces[0]?.id}>
       <body className="font-sans antialiased">
         <WorkspaceSelection workspaces={workspaces}>{children}</WorkspaceSelection>
         <Toaster />

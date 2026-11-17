@@ -80,7 +80,7 @@ test("directory autocomplete filters files, handles spaces and symlinks, and bro
   }
 });
 
-test("queued and active runs retain the directory captured when enqueued", async () => {
+test("stop, edit, confirm and resume moves queued work while stopped tasks require an explicit restart", async () => {
   const directory = mkdtempSync(join(tmpdir(), "todai-workspace-runs-"));
   const store = new TaskStore(join(directory, "tasks.sqlite"));
   let finish!: () => void;
@@ -115,11 +115,28 @@ test("queued and active runs retain the directory captured when enqueued", async
       },
     );
     draining = service.drain();
-    store.setWorkspacePath(second);
-    assert.deepEqual(seen, [first]);
+    assert.throws(() => store.setWorkspacePath(second), /running/i);
+    const run = store.history("one")[0];
+    store.stopExecution(run.id);
+    assert.throws(() => store.setWorkspacePath(second), /running/i);
     finish();
     await draining;
-    assert.deepEqual(seen, [first, first]);
+    store.setWorkspacePath(second);
+    assert.equal(store.executionState().paused, true);
+    assert.equal(store.claimRun(), undefined);
+    assert.throws(() => store.resumeExecution(), /confirm/i);
+    assert.equal(store.executionState().paused, true);
+    assert.equal(store.history("two")[0].workspacePath, first);
+    const changes = store.executionState().directoryChanges!;
+    assert.equal(changes.length, 1);
+    assert.equal(changes[0].path, second);
+    store.resumeExecution(changes);
+    await service.drain();
+    assert.deepEqual(seen, [first, second]);
+    assert.equal(store.list().find((task) => task.id === "one")?.agentStatus, "Stopped");
+    store.runTask("one");
+    await service.drain();
+    assert.deepEqual(seen, [first, second, second]);
   } finally {
     finish?.();
     await draining;

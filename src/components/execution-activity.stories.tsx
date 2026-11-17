@@ -28,6 +28,12 @@ export const LongContent: Story = { args: { state: { ...running, active: { ...ru
 export const StopAndResume: Story = {
   render: function Interactive() {
     const [state, setState] = useState(running);
-    return <ExecutionActivityView state={state} onAction={(action) => setState({ paused: action === "stop", active: null })} />;
+    return <ExecutionActivityView state={state} onAction={(action) => setState({ paused: action !== "resume", active: null })} />;
   },
+};
+
+export const DirectoryConfirmation: Story = {
+  args: { state: { paused: true, active: null, directoryChanges: [
+    { runId: "queued", workspaceName: "Todai", previousPath: "/projects/old", path: "/projects/todai" },
+  ] } },
 };

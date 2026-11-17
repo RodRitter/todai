@@ -1,5 +1,7 @@
 "use client";
 
+import { CreateWorkspace } from "./tasks/create-workspace";
+import { WorkspaceArchive } from "./tasks/workspace-archive";
 import Link from "next/link";
 import { createContext, useContext, useSyncExternalStore, type ComponentProps, type ReactNode } from "react";
 
@@ -15,7 +17,8 @@ export function WorkspaceSelection({ workspaces, children }: { workspaces: Works
   const workspaceId = useSyncExternalStore(subscribe, selectedWorkspaceId, () => undefined);
   const workspace = workspaces.find((item) => item.id === workspaceId);
   const invalid = workspaceId !== undefined && !workspace;
-  if (invalid) return <main className="space-y-4 p-8"><p>This workspace is unavailable. Choose another workspace.</p>{workspaces.map((item) => <a className="block underline" key={item.id} href={`/?workspace=${encodeURIComponent(item.id)}`}>{item.name}</a>)}</main>;
+  if (!workspaces.length) return <main className="mx-auto max-w-2xl space-y-8 p-8"><h1 className="text-xl font-semibold">Workspaces</h1><p>No active workspaces. Create one or restore an archived workspace.</p><CreateWorkspace /><WorkspaceArchive allowArchive={false} /></main>;
+  if (invalid) return <main className="space-y-4 p-8"><p>This workspace is unavailable. Choose another workspace.</p>{workspaces.map((item) => <a className="block underline" key={item.id} href={`/?workspace=${encodeURIComponent(item.id)}`}>{item.name}</a>)}<WorkspaceArchive allowArchive={false} /></main>;
   if (!workspace) return <main className="p-8" aria-busy="true">Loading workspace…</main>;
   return <Selection.Provider value={{ workspace, workspaces }}>{children}</Selection.Provider>;
 }

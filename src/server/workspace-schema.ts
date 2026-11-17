@@ -5,6 +5,9 @@ import type { DatabaseSync } from "node:sqlite";
 // Called inside the schema transaction, after all legacy columns exist.
 export function migrateWorkspaceOwnership(db: DatabaseSync) {
   migrateInitialWorkspaceOwnership(db);
+  if (!db.prepare("PRAGMA table_info(workspaces)").all().some((column) => column.name === "archived")) {
+    db.exec("ALTER TABLE workspaces ADD COLUMN archived INTEGER NOT NULL DEFAULT 0");
+  }
   // Early installations gained task ownership before comments were included.
   // Keep this migration independent of the initial workspace migration marker.
   if (!db.prepare("PRAGMA table_info(comments)").all().some((column) => column.name === "workspaceId")) {

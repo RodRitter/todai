@@ -143,7 +143,7 @@ test("execution is globally serial across workspace stores and uses each capture
     await secondService.drain();
     assert.equal(seen.length, 1);
     assert.equal(second.history()[0].status, "Queued");
-    second.setWorkspacePath(directory);
+    assert.throws(() => second!.setWorkspacePath(directory), /running/i);
     release!();
     await draining;
     await secondService.drain();

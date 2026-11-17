@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { ConfigurationTransfer } from "./configuration-transfer";
+import { WorkspaceArchive } from "./workspace-archive";
 import { WorkspaceSettings } from "./workspace-settings";
 import { CreateWorkspace } from "./create-workspace";
 import { ExecutorSettings } from "./executor-settings";
@@ -91,6 +92,7 @@ export function PersistentWorkspace({
           <>
             <WorkspaceSettings />
             <CreateWorkspace />
+            <WorkspaceArchive />
           </>
         }
         {...columnApi}

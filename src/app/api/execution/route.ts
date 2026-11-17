@@ -17,15 +17,16 @@ export async function POST(request: Request) {
   try { input = await request.json(); }
   catch { return Response.json({ error: "Send an execution action as JSON." }, { status: 400 }); }
   if (!input || typeof input !== "object" || !("action" in input) ||
-      (input.action !== "resume" && input.action !== "stop") ||
+      (input.action !== "resume" && input.action !== "stop" && input.action !== "pause") ||
       (input.action === "stop" && (!("runId" in input) || typeof input.runId !== "string" || !input.runId))) {
-    return Response.json({ error: "Choose resume, or stop with the active run ID." }, { status: 400 });
+    return Response.json({ error: "Choose pause, resume, or stop with the active run ID." }, { status: 400 });
   }
   const store = openTaskStore();
   try {
     if (input.action === "resume") {
-      store.resumeExecution();
-    } else if ("runId" in input && typeof input.runId === "string") store.stopExecution(input.runId);
+      store.resumeExecution("directoryChanges" in input ? input.directoryChanges : undefined);
+    } else if (input.action === "pause") store.pauseExecution();
+    else if ("runId" in input && typeof input.runId === "string") store.stopExecution(input.runId);
     execution();
     return Response.json(store.executionState());
   } catch (error) {

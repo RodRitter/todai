@@ -1,9 +1,10 @@
-import { withTaskStore } from "@/server/database";
+import { RunValidationError, WorkspaceOwnershipError } from "../../../server/task-store.ts";
+import { withTaskStore } from "../../../server/database.ts";
 import {
   validateWorkspace,
   workspacePath,
   WorkspaceValidationError,
-} from "@/server/workspace-settings";
+} from "../../../server/workspace-settings.ts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,11 +38,11 @@ export async function PUT(request: Request) {
     return Response.json(
       {
         error:
-          error instanceof WorkspaceValidationError
+          error instanceof WorkspaceValidationError || error instanceof RunValidationError || error instanceof WorkspaceOwnershipError
             ? error.message
             : "Could not save workspace settings.",
       },
-      { status: error instanceof WorkspaceValidationError ? 400 : 500 },
+      { status: error instanceof RunValidationError || error instanceof WorkspaceOwnershipError ? 409 : error instanceof WorkspaceValidationError ? 400 : 500 },
     );
   }
 }
