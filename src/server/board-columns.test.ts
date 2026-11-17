@@ -56,6 +56,7 @@ test("custom columns accept tasks and agents, and reordering preserves their wor
     const task = store.save({
       id: "one",
       title: "Plan work",
+      autoRun: true,
       description: "",
       status: "Planning",
     });
@@ -128,6 +129,7 @@ test("renaming a column preserves tasks, assignments and queued work across rest
     store.save({
       id: "one",
       title: "Plan work",
+      autoRun: true,
       description: "",
       status: "To do",
     });

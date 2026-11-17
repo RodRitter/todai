@@ -18,6 +18,7 @@ test("create, edit, move and delete survive reopening SQLite", () => {
     });
     assert.equal(task.agentStatus, "Not started");
     assert.equal(task.autoWorkflow, false);
+    assert.equal(task.autoRun, false);
     store.save({ ...task, autoWorkflow: true });
     store.close();
     store = new TaskStore(path);
@@ -105,6 +106,7 @@ test("existing tasks and comments survive removing legacy task assignees", async
     const task = store.list()[0];
     assert.equal("owner" in task, false);
     assert.equal(task.autoWorkflow, false);
+    assert.equal(task.autoRun, false);
     assert.equal(task.status, "In review");
     assert.equal(task.comments?.[0].body, "Existing handover");
     store.save({ ...task, title: "Updated task" });

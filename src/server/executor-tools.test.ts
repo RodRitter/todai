@@ -22,7 +22,7 @@ test("executor settings persist without changing profiles or queued snapshots; m
     store.saveAgent(codex);
     store.saveAgent(claude);
     store.assignColumnAgent({ column: "To do", agentId: "codex" });
-    store.save({ id: "task", title: "Build", description: "", status: "To do" });
+    store.save({ autoRun: true, id: "task", title: "Build", description: "", status: "To do" });
     const queued = store.history();
     store.setDefaultExecutor("claude");
     assert.throws(() => store.setDefaultExecutor("unknown"));
@@ -56,8 +56,8 @@ test("mixed queue uses each snapshotted tool and continues after executor failur
     store.saveAgent(codex); store.saveAgent(claude);
     store.assignColumnAgent({ column: "To do", agentId: "codex" });
     store.assignColumnAgent({ column: "In review", agentId: "claude" });
-    store.save({ id: "one", title: "Build", description: "", status: "To do" });
-    store.save({ id: "two", title: "Review", description: "", status: "In review" });
+    store.save({ autoRun: true, id: "one", title: "Build", description: "", status: "To do" });
+    store.save({ autoRun: true, id: "two", title: "Review", description: "", status: "In review" });
     store.saveAgent({ ...claude, id: "codex" });
     store.setDefaultExecutor("claude");
     await new ExecutionService(store, createExecutorRunner({

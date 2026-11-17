@@ -93,7 +93,7 @@ export function DescriptionField({
           tabIndex={disabled ? -1 : 0}
           aria-label="Edit description"
           aria-disabled={disabled}
-          className="min-h-24 cursor-text border-l-2 border-border p-3 outline-none transition-colors hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring/50"
+          className="cursor-text border-l-2 border-border p-3 outline-none transition-colors hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring/50"
           onClick={(event) => {
             if (!(event.target as HTMLElement).closest("a")) startEditing();
           }}

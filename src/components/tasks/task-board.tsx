@@ -37,6 +37,7 @@ export function TaskBoard({
     list?: () => Promise<Task[] | BoardSnapshot>;
     save: (task: Task) => Promise<Task>;
     delete: (id: string) => Promise<void>;
+    run?: (taskId: string) => Promise<Task>;
     postComment?: (taskId: string, body: string) => Promise<Task>;
     answerFeedback?: (taskId: string, commentId: string, body: string) => Promise<Task>;
   };
@@ -272,7 +273,15 @@ export function TaskBoard({
             const saved = await persistence.answerFeedback!(editing!.id, commentId, body);
             updateTasks((current) => current.map((task) => task.id === saved.id ? saved : task));
           }) : undefined}
-          onSave={saveTask}
+          assignedColumns={assignments.map((assignment) => assignment.column)}
+          onRun={persistence?.run ? () => mutate(async () => {
+            const saved = await persistence.run!(editing!.id);
+            updateTasks((current) => current.map((task) => task.id === saved.id ? saved : task));
+          }) : undefined}
+          onSave={async (task) => {
+            await saveTask(task);
+            setEditing(task);
+          }}
           onDelete={deleteTask}
         />
       </main>

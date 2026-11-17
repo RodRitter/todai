@@ -102,7 +102,7 @@ test("workspace changes apply to queued runs without changing the active run dir
     });
     store.assignColumnAgent({ column: "To do", agentId: "agent" });
     for (const id of ["one", "two"])
-      store.save({ id, title: id, description: "", status: "To do" });
+      store.save({ autoRun: true, id, title: id, description: "", status: "To do" });
     const service = new ExecutionService(
       store,
       async ({ workspace }) => {

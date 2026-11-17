@@ -15,6 +15,7 @@ Built with Next.js, React, TypeScript, Tailwind CSS, and SQLite.
 - Rich text task descriptions and human comments, with @agent mentions and ordered agent replies.
 - Reusable Codex CLI and Claude Code profiles with tool-specific model, effort, instructions, and permissions.
 - Queued agent execution with live status updates and persisted run history.
+- Manual execution by default, with a Run button in each task and optional Auto-run on column entry.
 - Optional auto-workflow to move tasks to the next column after a successful run.
 - JSON import and export of agents, columns, and their assignments.
 - Local SQLite storage and a Storybook component explorer.
@@ -33,7 +34,9 @@ Open [localhost:3000](http://127.0.0.1:3000).
 1. In **Settings → General**, select your workspace directory.
 2. In **Settings → Executors**, check tool status, test connections, and choose a default executor for new agents.
 3. In **Agents**, choose an executor, model, effort, and permissions.
-4. Assign an agent through a column’s settings, then create or move a task into that column to queue a run.
+4. Assign an agent through a column’s settings, then create or move a task into that column. Open the saved task and press **Run** to queue its agent.
+
+Task automation is opt-in. Enable **Auto-run** to start the assigned agent when a task enters a column. Enable **Auto-workflow** to move to the next column after a successful run; the next agent waits for **Run** unless Auto-run is also enabled. Save task edits before pressing Run.
 
 New boards start with **To do**, **In progress**, **In review**, and **Done**. Customize them in **Settings → Board**.
 

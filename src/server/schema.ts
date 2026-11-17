@@ -84,6 +84,9 @@ export function initializeSchema(db: DatabaseSync) {
         "ALTER TABLE tasks ADD COLUMN autoWorkflow INTEGER NOT NULL DEFAULT 0",
       );
     }
+    if (!columns.some((column) => column.name === "autoRun")) {
+      db.exec("ALTER TABLE tasks ADD COLUMN autoRun INTEGER NOT NULL DEFAULT 0");
+    }
     if (columns.some((column) => column.name === "owner")) {
       db.exec("ALTER TABLE tasks DROP COLUMN owner");
     }

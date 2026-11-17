@@ -20,6 +20,7 @@ export type Task = {
   status: Status;
   agentStatus: AgentStatus;
   autoWorkflow?: boolean;
+  autoRun?: boolean;
   comments?: TaskComment[];
 };
 

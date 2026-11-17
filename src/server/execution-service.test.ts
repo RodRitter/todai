@@ -36,6 +36,7 @@ test("a move to an assigned column queues a run, with a profile snapshot", async
   const f = fixture(async () => "Finished");
   try {
     const task = f.service.save({
+      autoRun: true,
       id: "one",
       title: "Build",
       description: "A board",
@@ -67,6 +68,7 @@ test("runs are serialized across services and completion persists handovers with
   try {
     for (const id of ["one", "two"]) {
       const task = f.service.save({
+        autoRun: true,
         id,
         title: id,
         description: "",
@@ -128,6 +130,7 @@ test("failed launches release the queue and later loops receive earlier handover
   try {
     for (const id of ["bad", "good"]) {
       const task = f.service.save({
+        autoRun: true,
         id,
         title: id,
         description: "Task details",
@@ -156,6 +159,7 @@ test("pending tasks can move but cannot disappear until execution ends", async (
   const f = fixture(async () => "Done");
   try {
     const task = f.service.save({
+      autoRun: true,
       id: "one",
       title: "Build",
       description: "",
@@ -196,6 +200,7 @@ test("restart surfaces an abandoned run, resumes queued work, and never reruns c
   try {
     for (const id of ["abandoned", "waiting"]) {
       const task = f.service.save({
+        autoRun: true,
         id,
         title: id,
         description: "",
@@ -249,6 +254,7 @@ test("restart does not treat a reused owner PID as the original app process", as
   const f = fixture(async () => "Should not rerun");
   try {
     const task = f.service.save({
+      autoRun: true,
       id: "stale",
       title: "Old work",
       description: "",
@@ -279,6 +285,7 @@ test("creating in To do with an assigned agent queues once, including retries af
   try {
     f.store.assignColumnAgent({ column: "To do", agentId: "builder" });
     const input = {
+      autoRun: true,
       id: "created",
       title: "New task",
       description: "Run on creation",
@@ -307,6 +314,7 @@ test("older handovers recover their agent name while unmatched comments keep an 
   const f = fixture(async () => "A saved handover");
   try {
     f.service.save({
+      autoRun: true,
       id: "old",
       title: "Earlier work",
       description: "",
@@ -368,6 +376,7 @@ test("redirecting active work waits for exit, keeps only the latest destination,
   try {
     f.store.assignColumnAgent({ column: "In review", agentId: "builder" });
     const task = f.service.save({
+      autoRun: true,
       id: "redirect",
       title: "Build",
       description: "",
@@ -390,6 +399,7 @@ test("redirecting active work waits for exit, keeps only the latest destination,
       ),
     ]);
     f.service.save({
+      autoRun: true,
       id: "waiting",
       title: "Other work",
       description: "",
@@ -444,6 +454,7 @@ test("moving away and back still interrupts, even when success arrives before ca
   );
   try {
     const task = f.service.save({
+      autoRun: true,
       id: "quick",
       title: "Quick move",
       description: "",
@@ -466,6 +477,39 @@ test("moving away and back still interrupts, even when success arrives before ca
   }
 });
 
+test("auto-workflow preserves completion in Done and queues assigned next columns", () => {
+  const f = fixture(async () => "Unused");
+  try {
+    f.store.assignColumnAgent({ column: "In review", agentId: "builder" });
+    f.service.save({ autoRun: true, id: "auto", title: "Build", description: "", status: "In progress", autoWorkflow: true });
+    f.store.finishRun(f.store.claimRun()!.id, "Complete", "Built");
+    assert.equal(f.store.list()[0].status, "In review");
+    assert.equal(f.store.list()[0].agentStatus, "Queued");
+    const review = f.store.claimRun()!;
+    assert.equal(f.store.list()[0].agentStatus, "Running");
+    f.store.finishRun(review.id, "Complete", "Reviewed");
+    assert.equal(f.store.list()[0].status, "Done");
+    assert.equal(f.store.list()[0].agentStatus, "Complete");
+    assert.equal(f.store.claimRun(), undefined);
+    const reopened = new TaskStore(join(f.directory, "tasks.sqlite"));
+    try { assert.equal(reopened.list()[0].agentStatus, "Complete"); }
+    finally { reopened.close(); }
+  } finally { f.cleanup(); }
+});
+
+for (const outcome of ["Complete", "Failed", "Interrupted"] as const) {
+  test(`manual moves preserve ${outcome} until another agent is queued`, () => {
+    const f = fixture(async () => "Unused");
+    try {
+      f.service.save({ autoRun: true, id: "one", title: "Build", description: "", status: "In progress" });
+      f.store.finishRun(f.store.claimRun()!.id, outcome, "Result");
+      const moved = f.store.save({ ...f.store.list()[0], status: "Done" });
+      assert.equal(moved.agentStatus, outcome);
+      assert.equal(f.store.save({ ...moved, status: "In progress" }).agentStatus, "Queued");
+    } finally { f.cleanup(); }
+  });
+}
+
 test("auto-workflow follows column order, chains agents with handovers, and stops at an unassigned column", async () => {
   const contexts: string[][] = [];
   const f = fixture(async ({ task }) => {
@@ -483,6 +527,7 @@ test("auto-workflow follows column order, chains agents with handovers, and stop
     ]);
     f.store.assignColumnAgent({ column: "In review", agentId: "builder" });
     f.service.save({
+      autoRun: true,
       id: "auto",
       title: "Build",
       description: "",
@@ -492,6 +537,7 @@ test("auto-workflow follows column order, chains agents with handovers, and stop
     await f.service.drain();
     assert.deepEqual(contexts, [[], ["Finished In progress"]]);
     assert.equal(f.service.list()[0].status, "Approval");
+    assert.equal(f.service.list()[0].agentStatus, "Complete");
     assert.equal(f.service.list()[0].autoWorkflow, true);
     assert.deepEqual(
       f.service.history("auto").map((run) => run.status),
@@ -509,6 +555,7 @@ for (const outcome of ["Complete", "Failed", "Interrupted"] as const) {
     const f = fixture(async () => "Unused");
     try {
       f.service.save({
+        autoRun: true,
         id: "auto",
         title: "Build",
         description: "",
@@ -538,6 +585,7 @@ test("auto-workflow respects disabling and manual moves while a run is active", 
   const f = fixture(async () => "Unused");
   try {
     const task = f.service.save({
+      autoRun: true,
       id: "auto",
       title: "Build",
       description: "",
@@ -574,8 +622,8 @@ test("feedback persists, releases the queue, and resumes the same agent with Hum
     return JSON.stringify({ type: "feedback_request", question: "Which approach?", recommendation: "Use the simpler approach." });
   });
   try {
-    f.service.save({ id: "one", title: "Build", description: "", status: "In progress", autoWorkflow: true });
-    f.service.save({ id: "other", title: "Other", description: "", status: "In progress" });
+    f.service.save({ autoRun: true, id: "one", title: "Build", description: "", status: "In progress", autoWorkflow: true });
+    f.service.save({ autoRun: true, id: "other", title: "Other", description: "", status: "In progress" });
     await f.service.drain();
     let task = f.store.list().find((item) => item.id === "one")!;
     assert.equal(task.agentStatus, "Waiting");
@@ -604,7 +652,7 @@ test("feedback persists, releases the queue, and resumes the same agent with Hum
 test("moving a waiting task cancels feedback and rejects stale replies", async () => {
   const f = fixture(async () => JSON.stringify({ type: "feedback_request", question: "Proceed?", recommendation: "Yes." }));
   try {
-    f.service.save({ id: "one", title: "Build", description: "", status: "In progress" });
+    f.service.save({ autoRun: true, id: "one", title: "Build", description: "", status: "In progress" });
     await f.service.drain();
     const task = f.store.list()[0];
     const request = task.comments![0];
@@ -619,7 +667,7 @@ test("moving a waiting task cancels feedback and rejects stale replies", async (
 test("invalid feedback cannot complete or advance a task", async () => {
   const f = fixture(async () => '{"type":"feedback_request","question":"Proceed?","recommendation":""}');
   try {
-    f.service.save({ id: "one", title: "Build", description: "", status: "In progress", autoWorkflow: true });
+    f.service.save({ autoRun: true, id: "one", title: "Build", description: "", status: "In progress", autoWorkflow: true });
     await f.service.drain();
     assert.equal(f.store.list()[0].agentStatus, "Failed");
     assert.equal(f.store.list()[0].status, "In progress");
@@ -633,7 +681,7 @@ test("a move during a run takes precedence over its feedback request", async () 
     return '{"type":"feedback_request","question":"Proceed?","recommendation":"Yes"}';
   });
   try {
-    f.service.save({ id: "one", title: "Build", description: "", status: "In progress" });
+    f.service.save({ autoRun: true, id: "one", title: "Build", description: "", status: "In progress" });
     await f.service.drain();
     assert.equal(f.store.list()[0].agentStatus, "Interrupted");
     assert.equal(f.store.list()[0].comments![0].feedbackStatus, null);

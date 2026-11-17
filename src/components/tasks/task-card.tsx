@@ -38,7 +38,7 @@ export function TaskCard({
       tabIndex={0}
       aria-label={`Edit ${task.title}, ${task.agentStatus}`}
       aria-haspopup="dialog"
-      className={`cursor-pointer outline-none transition-[box-shadow,border-color,opacity] duration-150 ease-out focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] active:cursor-grabbing motion-reduce:transition-none ${isDragging ? "opacity-40" : "hover:border-ring/40 hover:shadow-md"}`}
+      className={`cursor-pointer shadow-xs outline-none transition-[box-shadow,border-color,opacity] duration-150 ease-out focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] active:cursor-grabbing motion-reduce:transition-none ${isDragging ? "opacity-40" : "hover:border-ring/40 hover:shadow-sm"}`}
       onPointerDown={() => {
         didDrag.current = false;
       }}

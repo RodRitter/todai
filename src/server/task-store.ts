@@ -18,6 +18,8 @@ import { type Task, type TaskComment } from "../domain/task.ts";
 
 export class ColumnValidationError extends Error {}
 
+export class RunValidationError extends Error {}
+
 export class PendingRunError extends Error {}
 export class FeedbackValidationError extends Error {}
 export class CommentValidationError extends Error {}
@@ -286,6 +288,7 @@ export class TaskStore {
     ).map((task) => ({
       ...task,
       autoWorkflow: Boolean(task.autoWorkflow),
+      autoRun: Boolean(task.autoRun),
       comments: this.db
         .prepare(
           `SELECT comments.* FROM comments WHERE taskId = ? AND NOT EXISTS (
@@ -311,7 +314,8 @@ export class TaskStore {
       typeof task.description !== "string" ||
       !this.listColumns().includes(task.status) ||
       (task.autoWorkflow !== undefined &&
-        typeof task.autoWorkflow !== "boolean")
+        typeof task.autoWorkflow !== "boolean") ||
+      (task.autoRun !== undefined && typeof task.autoRun !== "boolean")
     ) {
       throw new Error("Enter a title and valid task properties.");
     }
@@ -338,15 +342,16 @@ export class TaskStore {
           .prepare(
             `UPDATE tasks SET agentStatus = CASE
           WHEN EXISTS (SELECT 1 FROM runs WHERE taskId = ? AND status = 'Running') THEN 'Running'
+          WHEN agentStatus IN ('Complete', 'Failed', 'Interrupted') THEN agentStatus
           ELSE 'Not started' END WHERE id = ?`,
           )
           .run(task.id, task.id);
       }
       this.db
         .prepare(
-          `INSERT INTO tasks (id, title, description, status, autoWorkflow) VALUES (?, ?, ?, ?, ?)
+          `INSERT INTO tasks (id, title, description, status, autoWorkflow, autoRun) VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET title=excluded.title, description=excluded.description,
-        status=excluded.status, autoWorkflow=excluded.autoWorkflow`,
+        status=excluded.status, autoWorkflow=excluded.autoWorkflow, autoRun=excluded.autoRun`,
         )
         .run(
           task.id,
@@ -354,11 +359,28 @@ export class TaskStore {
           task.description,
           task.status,
           Number(task.autoWorkflow ?? previous?.autoWorkflow ?? false),
+          Number(task.autoRun ?? previous?.autoRun ?? false),
         );
-      if (!previous || previous.status !== task.status) {
+      if ((!previous || previous.status !== task.status) && (task.autoRun ?? previous?.autoRun ?? false)) {
         this.queueAgent(task.id, task.status);
       }
       return this.list().find((item) => item.id === task.id)!;
+    });
+  }
+
+  runTask(taskId: unknown): Task {
+    if (typeof taskId !== "string") throw new RunValidationError("Choose a task to run.");
+    return this.transaction(() => {
+      const task = this.list().find((item) => item.id === taskId);
+      if (!task) throw new RunValidationError("This task no longer exists.");
+      if (this.history(taskId).some((run) => run.status === "Queued" || run.status === "Running"))
+        throw new RunValidationError("This task already has a queued or running agent.");
+      if (task.comments?.some((comment) => comment.feedbackStatus === "pending"))
+        throw new RunValidationError("Answer the pending feedback before starting another run.");
+      if (!this.listColumnAgents().some((assignment) => assignment.column === task.status))
+        throw new RunValidationError("Assign an agent to this column before running the task.");
+      this.queueAgent(task.id, task.status);
+      return this.list().find((item) => item.id === taskId)!;
     });
   }
 
@@ -518,10 +540,10 @@ export class TaskStore {
         if (nextColumn) {
           this.db
             .prepare(
-              "UPDATE tasks SET status = ?, agentStatus = 'Not started' WHERE id = ?",
+              "UPDATE tasks SET status = ? WHERE id = ?",
             )
             .run(nextColumn, task.id);
-          this.queueAgent(task.id, nextColumn);
+          if (task.autoRun) this.queueAgent(task.id, nextColumn);
         }
       }
     });

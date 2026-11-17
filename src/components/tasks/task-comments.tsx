@@ -93,7 +93,7 @@ export function TaskComments({ comments = [], onAnswerFeedback, onPostComment, a
                     </time>
                   </div>
                   <div className={comment.feedbackStatus === "pending"
-                    ? "space-y-3 rounded-xl border-2 border-amber-500/60 bg-amber-500/10 px-4 py-4"
+                    ? "space-y-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-4"
                     : "space-y-3 bg-muted/50 rounded-2xl rounded-tl-sm px-4 py-3"}>
                     {comment.feedbackStatus && (
                       <p className="text-sm font-semibold">

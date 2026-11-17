@@ -138,7 +138,7 @@ test("replacement and column overwrites are blocked while work is queued", () =>
   const store = new TaskStore(":memory:");
   try {
     const data = seed(store);
-    store.save({ id: "task", title: "Queued", description: "", status: "To do" });
+    store.save({ id: "task", title: "Queued", autoRun: true, description: "", status: "To do" });
     for (const mode of ["replace", "add"] as const) {
       assert.throws(() => store.importConfiguration(data, mode, "overwrite"), /runs to finish/);
       assert.deepEqual(store.exportConfiguration(), data);

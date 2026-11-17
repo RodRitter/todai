@@ -19,12 +19,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
+import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { DescriptionEditor } from "./description-editor";
 import type { AgentProfile } from "@/domain/column-agent";
 import { statuses, type Status, type Task } from "@/domain/task";
 
 export type TaskEditorProps = {
   columns?: readonly string[];
+  assignedColumns?: readonly string[];
+  onRun?: () => Promise<void>;
   agents?: AgentProfile[];
   onPostComment?: (body: string) => Promise<void>;
   open: boolean;
@@ -47,6 +51,8 @@ export function TaskEditor(props: TaskEditorProps) {
 
 function TaskEditorSession({
   columns = statuses,
+  assignedColumns = [],
+  onRun,
   open,
   task: editing = null,
   defaultStatus = "To do",
@@ -73,6 +79,7 @@ function TaskEditorSession({
   const [autoWorkflow, setAutoWorkflow] = useState(
     editing?.autoWorkflow ?? false,
   );
+  const [autoRun, setAutoRun] = useState(editing?.autoRun ?? false);
   const [title, setTitle] = useState(editing?.title ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
   const [savedDescription, setSavedDescription] = useState(
@@ -84,7 +91,8 @@ function TaskEditorSession({
       title.trim() !== editing.title.trim() ||
       description.trim() !== savedDescription.trim() ||
       currentStatus !== editing.status ||
-      autoWorkflow !== (editing.autoWorkflow ?? false));
+      autoWorkflow !== (editing.autoWorkflow ?? false) ||
+      autoRun !== (editing.autoRun ?? false));
 
   async function persist(
     operation: () => void | Promise<void>,
@@ -105,7 +113,7 @@ function TaskEditorSession({
       });
       draftId.current = null;
       setSelectedStatus(null);
-      onOpenChange(false);
+      if (deleting) onOpenChange(false);
     } catch {
       /* Keep the draft open; notifyOperation reports the failure. */
     } finally {
@@ -127,17 +135,20 @@ function TaskEditorSession({
       editing?.status ??
       defaultStatus;
     const agentStatus = editing?.agentStatus ?? "Not started";
-    void persist(() =>
-      onSave({
+    const description = String(data.get("description") ?? "").trim();
+    void persist(async () => {
+      await onSave({
         id: editing?.id ?? (draftId.current ??= crypto.randomUUID()),
         title,
-        description: String(data.get("description") ?? "").trim(),
+        description,
         status,
         agentStatus,
         autoWorkflow,
+        autoRun,
         comments: editing?.comments ?? [],
-      }),
-    );
+      });
+      setSavedDescription(description);
+    });
   }
 
   return (
@@ -253,56 +264,75 @@ function TaskEditorSession({
             <div
               role="group"
               aria-label="Task properties"
-              className="bg-muted/50 mt-6 flex flex-col gap-1 rounded-xl p-3"
+              className="bg-muted/50 flex flex-col gap-2 rounded-lg p-2.5"
             >
-              <div className="flex items-center justify-between gap-3 rounded-lg px-1 py-1.5">
-                <Label
-                  htmlFor="task-status"
-                  className="text-muted-foreground gap-2 leading-snug font-normal"
-                >
-                  Status
-                </Label>
-                <NativeSelect
-                  id="task-status"
-                  name="status"
-                  value={currentStatus}
-                  onChange={(event) => setSelectedStatus(event.target.value)}
-                  className="bg-background dark:bg-background h-10 w-32 rounded-lg border-transparent shadow-none hover:bg-accent sm:w-40"
-                >
-                  {columns.map((option) => (
-                    <option key={option}>{option}</option>
-                  ))}
-                </NativeSelect>
-              </div>
-              <div className="flex items-center justify-between gap-3 rounded-lg px-1 py-1.5">
-                <Label
-                  htmlFor="task-auto-workflow"
-                  className="text-muted-foreground font-normal"
-                >
-                  Auto-workflow
-                </Label>
-                <input
-                  id="task-auto-workflow"
-                  name="autoWorkflow"
-                  type="checkbox"
-                  checked={autoWorkflow}
-                  onChange={(event) => setAutoWorkflow(event.target.checked)}
-                  aria-describedby="auto-workflow-hint"
-                  className="size-4 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                />
-              </div>
-              <p
-                id="auto-workflow-hint"
-                className="px-1 text-xs text-muted-foreground"
-              >
-                Move to the next column when the agent completes successfully,
-                and start its agent if assigned.
-              </p>
+              <TooltipProvider>
+                <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-2">
+                        <Label
+                          htmlFor="task-status"
+                          className="text-muted-foreground gap-2 leading-snug font-normal"
+                        >
+                          Status
+                        </Label>
+                        <NativeSelect
+                          id="task-status"
+                          name="status"
+                          value={currentStatus}
+                          onChange={(event) => setSelectedStatus(event.target.value)}
+                          className="bg-background dark:bg-background h-8 w-32 rounded-md border-transparent py-1 shadow-none hover:bg-accent"
+                        >
+                          {columns.map((option) => (
+                            <option key={option}>{option}</option>
+                          ))}
+                        </NativeSelect>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Choose the task’s board column. Its assigned agent starts on entry only when Auto-run is enabled.
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex h-8 items-center gap-2">
+                        <Label
+                          htmlFor="task-auto-workflow"
+                          className="text-muted-foreground font-normal"
+                        >
+                          Auto-workflow
+                        </Label>
+                        <Switch
+                          id="task-auto-workflow"
+                          name="autoWorkflow"
+                          checked={autoWorkflow}
+                          onCheckedChange={setAutoWorkflow}
+                          disabled={busy}
+                        />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Move to the next column when the agent completes successfully. Its agent starts only when Auto-run is enabled.
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex h-8 items-center gap-2">
+                        <Label htmlFor="task-auto-run" className="text-muted-foreground font-normal">Auto-run</Label>
+                        <Switch id="task-auto-run" name="autoRun" checked={autoRun} onCheckedChange={setAutoRun} disabled={busy} />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Automatically start the assigned agent when this task enters a column. Leave off to start it with Run.
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </TooltipProvider>
               {pendingRun && (
-                <p className="px-1 text-xs text-muted-foreground">
-                  Moving this task stops its current run and queues work for the
-                  destination’s agent, if assigned. Deletion is available after
-                  execution stops.
+                <p className="text-xs text-muted-foreground">
+                  Moving this task stops its current run. The destination’s agent
+                  starts only when Auto-run is enabled. Deletion is available after execution stops.
                 </p>
               )}
             </div>
@@ -324,6 +354,29 @@ function TaskEditorSession({
                 </Button>
               )}
               <div className="flex items-center gap-1.5">
+                {editing && onRun && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>
+                          <Button type="button" size="sm" variant="outline" disabled={busy || pendingRun || canSave || editing.agentStatus === "Waiting" || !assignedColumns.includes(editing.status)} onClick={async () => {
+                            setBusy(true);
+                            try {
+                              await notifyOperation(onRun, { loading: "Queuing agent…", success: "Agent queued.", error: "Could not start the agent. Reload the task and try again." });
+                            } catch {
+                              /* The toast reports the failure; keep the task open. */
+                            } finally {
+                              setBusy(false);
+                            }
+                          }}>Run</Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {canSave ? "Save your changes before running the agent." : pendingRun ? "An agent is already queued or running." : editing.agentStatus === "Waiting" ? "Answer the pending feedback first." : !assignedColumns.includes(editing.status) ? "Assign an agent to this column first." : "Run the current column’s agent using the saved task details."}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
                 <DialogClose asChild>
                   <Button
                     type="button"
