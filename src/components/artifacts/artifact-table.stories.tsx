@@ -35,7 +35,6 @@ export const OpenDetails: Story = {
   play: async ({ canvasElement }) => {
     await userEvent.click(within(canvasElement).getByRole("button", { name: "Open Reference documentation, revision 1" }));
     const dialog = within(await within(document.body).findByRole("dialog"));
-    await userEvent.click(dialog.getByText("Document details"));
     await expect(dialog.getByText(base.description)).toBeInTheDocument();
     await expect(dialog.getByRole("link", { name: "Open external link ↗" })).toHaveAttribute("href", "https://example.com");
   },
