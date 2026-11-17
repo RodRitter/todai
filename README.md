@@ -19,6 +19,7 @@ Built with Next.js, React, TypeScript, Tailwind CSS, and SQLite.
 - Manual execution by default, with a Run button in each task and optional Auto-run on column entry.
 - Optional auto-workflow to move tasks to the next column after a successful run.
 - JSON import and export of agents, columns, and their assignments.
+- Workspace artifact library for text, Markdown, file uploads, and external links.
 - Local SQLite storage and a Storybook component explorer.
 
 ## Getting started
@@ -63,6 +64,12 @@ The agent workspace is configured separately in Settings. Configuration exports 
 Settings tabs can be linked directly with `/settings?tab=general`, `/settings?tab=workspaces`, `/settings?tab=board`, or `/settings?tab=executors`.
 
 Changing the default executor only affects new agent forms. Existing profiles and queued runs retain their executor. Codex sandbox modes and Claude permission modes have different meanings; the agent editor shows the available choices for each tool. Claude runs deny unresolved permission prompts and report denied actions as failures. Connection tests make a small model request; refreshing installation and sign-in status does not.
+
+## Artifacts
+
+Open **Artifacts** in the sidebar to publish text or Markdown, upload any file type, or register an HTTP/HTTPS link with a title, description, and creator name. Search the current workspace’s collection and filter by type or creator. Creator names are descriptive labels entered by the publisher.
+
+Stored content is limited to **20 MiB per artifact** and downloaded using its artifact ID. Content and metadata are published atomically in the application database alongside tasks, so backing up `.todai/tasks.sqlite` (or `TODAI_DB_PATH`) also preserves artifacts. Uploading copies the bytes: moving, editing, or deleting the original file does not affect the artifact. External links store only their URL and metadata; remote content can change.
 
 ## Development
 

@@ -40,3 +40,7 @@ export const CollapsibleSidebar: Story = {
     ).toBeVisible();
   },
 };
+
+export const Artifacts: Story = {
+  args: { screen: "artifacts", children: <main className="p-8">Workspace artifacts</main> },
+};
