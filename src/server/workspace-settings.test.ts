@@ -83,6 +83,7 @@ test("directory autocomplete filters files, handles spaces and symlinks, and bro
 test("stop, edit, confirm and resume moves queued work while stopped tasks require an explicit restart", async () => {
   const directory = mkdtempSync(join(tmpdir(), "todai-workspace-runs-"));
   const store = new TaskStore(join(directory, "tasks.sqlite"));
+  const ready = Promise.withResolvers<void>();
   let finish!: () => void;
   const seen: string[] = [];
   let draining: Promise<void> | undefined;
@@ -110,11 +111,13 @@ test("stop, edit, confirm and resume moves queued work while stopped tasks requi
         if (seen.length === 1)
           await new Promise<void>((resolve) => {
             finish = resolve;
+            ready.resolve();
           });
         return "Finished";
       },
     );
     draining = service.drain();
+    await ready.promise;
     assert.throws(() => store.setWorkspacePath(second), /running/i);
     const run = store.history("one")[0];
     store.stopExecution(run.id);

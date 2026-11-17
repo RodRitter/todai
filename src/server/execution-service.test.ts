@@ -352,6 +352,7 @@ test("older handovers recover their agent name while unmatched comments keep an 
 
 test("redirecting active work waits for exit, keeps only the latest destination, and ignores late success", async () => {
   const started: string[] = [];
+  const ready = Promise.withResolvers<void>();
   let exit!: (summary: string) => void;
   let stopped!: () => void;
   const stopRequested = new Promise<void>((resolve) => {
@@ -365,6 +366,7 @@ test("redirecting active work waits for exit, keeps only the latest destination,
       signal.addEventListener("abort", stopped, { once: true });
       return new Promise((resolve) => {
         exit = resolve;
+        ready.resolve();
       });
     }
     return Promise.resolve("Replacement finished");
@@ -381,6 +383,7 @@ test("redirecting active work waits for exit, keeps only the latest destination,
       status: "In progress",
     });
     draining = f.service.drain();
+    await ready.promise;
     f.service.save({ ...task, status: "In progress" });
     assert.equal(f.service.history(task.id).length, 1);
     // API requests use a separate connection from the scheduler.
@@ -442,11 +445,13 @@ test("redirecting active work waits for exit, keeps only the latest destination,
 });
 
 test("moving away and back still interrupts, even when success arrives before cancellation polling", async () => {
+  const ready = Promise.withResolvers<void>();
   let finish!: (summary: string) => void;
   const f = fixture(
     () =>
       new Promise((resolve) => {
         finish = resolve;
+        ready.resolve();
       }),
   );
   try {
@@ -458,6 +463,7 @@ test("moving away and back still interrupts, even when success arrives before ca
       status: "In progress",
     });
     const draining = f.service.drain();
+    await ready.promise;
     f.service.save({ ...task, status: "Done" });
     f.store.assignColumnAgent({ column: "In progress", agentId: null });
     f.service.save({ ...task, status: "In progress" });

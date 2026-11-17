@@ -77,13 +77,15 @@ process.stdin.on('end', () => {
   );
   try {
     assert.equal(
-      await createClaudeRunner(executable)(request(directory)),
+      await createClaudeRunner(executable)({ ...request(directory), artifacts: { url: "http://127.0.0.1:12345/mcp", token: "test-token", context: [] } }),
       "Built and verified the board",
     );
     const received = JSON.parse(
       readFileSync(join(directory, "received.json"), "utf8"),
     );
     assert.equal(received.cwd, realpathSync(directory));
+    assert.deepEqual(JSON.parse(received.args[received.args.indexOf("--mcp-config") + 1]), { mcpServers: { todai_artifacts: { type: "http", url: "http://127.0.0.1:12345/mcp", headers: { Authorization: "Bearer test-token" } } } });
+    assert.ok(received.args.includes("mcp__todai_artifacts"));
     for (const arg of [
       "-p",
       "--output-format",

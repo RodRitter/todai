@@ -1,3 +1,4 @@
+import { openRunArtifacts, type RunArtifactConnection } from "./run-artifacts.ts";
 import { executionWorkspacePath } from "./workspace-settings.ts";
 import { orderedReplies } from "./comment-intent.ts";
 import { parseFeedback } from "./feedback.ts";
@@ -12,6 +13,7 @@ export type RunRequest = {
   workspace: string;
   signal: AbortSignal;
   onStart: (pid: number) => void;
+  artifacts?: RunArtifactConnection;
 };
 export type Runner = (request: RunRequest) => Promise<string>;
 
@@ -81,8 +83,13 @@ export class ExecutionService {
         if (this.store.interruptionRequested(run.id)) controller.abort();
       }, 50);
       let summary: string;
+      let artifacts: Awaited<ReturnType<typeof openRunArtifacts>> | undefined;
       try {
+        if (run.kind !== "intent") artifacts = await openRunArtifacts(this.store, run, controller.signal);
+        if (this.store.interruptionRequested(run.id)) controller.abort();
+        controller.signal.throwIfAborted();
         summary = await this.runner({
+          artifacts: artifacts?.connection,
           run,
           task,
           workspace: executionWorkspacePath(run.workspacePath),
@@ -92,14 +99,16 @@ export class ExecutionService {
             if (this.store.interruptionRequested(run.id)) controller.abort();
           },
         });
+        artifacts?.close();
         if (run.kind === "intent") {
           const order = orderedReplies(summary, run.replyPlan ?? []);
           this.store.finishRun(run.id, "Complete", order.length ? `Reply order: ${order.map((agent) => agent.name).join(" → ")}.` : "No agent replies requested.", undefined, order);
           continue;
         }
         const feedback = parseFeedback(summary);
-        this.store.finishRun(run.id, feedback ? "Waiting" : "Complete", feedback?.question ?? summary, feedback?.recommendation);
+        this.store.finishRun(run.id, feedback ? "Waiting" : "Complete", feedback?.question ?? summary, feedback?.recommendation, undefined, artifacts?.pending);
       } catch (error) {
+        artifacts?.close();
         this.store.finishRun(
           run.id,
           "Failed",
@@ -107,6 +116,7 @@ export class ExecutionService {
         );
         continue;
       } finally {
+        artifacts?.close();
         clearInterval(checkInterruption);
       }
     }

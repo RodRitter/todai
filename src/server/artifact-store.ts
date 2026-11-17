@@ -12,7 +12,10 @@ export class ArtifactStore {
   private db: DatabaseSync;
   private workspaceId: string;
 
-  constructor(path: string, workspaceId: string) {
+  private runId?: string;
+
+  constructor(path: string, workspaceId: string, runId?: string) {
+    this.runId = runId;
     if (!workspaceId) throw new WorkspaceOwnershipError("A workspace ID is required.");
     const tasks = new TaskStore(path, workspaceId);
     tasks.close();
@@ -71,6 +74,9 @@ export class ArtifactStore {
     } else { throw new ArtifactError("Choose a supported artifact type."); }
     if (bytes && bytes.length > MAX_ARTIFACT_BYTES) throw new ArtifactTooLargeError("Artifacts must be 20 MiB or smaller.");
     return this.transaction(() => {
+      const run = this.runId ? this.db.prepare("SELECT taskId, profile FROM runs WHERE id = ? AND workspaceId = ? AND status = 'Running' AND stopRequested IS NULL AND interruptionColumn IS NULL").get(this.runId, this.workspaceId) : undefined;
+      if (this.runId && !run) throw new ArtifactError("Artifact access has expired.");
+      if (run && JSON.parse(run.profile as string).name !== creator) throw new ArtifactError("Creator must match the running agent.");
       const previous = id ? this.read(id) : undefined;
       const now = new Date().toISOString();
       const artifact: Artifact = {
@@ -88,7 +94,8 @@ export class ArtifactStore {
       );
       this.db.prepare(`INSERT INTO artifact_revisions (${fields}, content, revisionId, revisionNumber)
         SELECT ${fields}, content, ?, ? FROM artifacts WHERE id = ?`).run(artifact.revisionId, artifact.revisionNumber, artifact.id);
-      return artifact;
+      if (run) this.db.prepare("UPDATE artifact_revisions SET runId = ?, taskId = ? WHERE revisionId = ?").run(this.runId!, run.taskId, artifact.revisionId);
+      return this.read(artifact.id, artifact.revisionId);
     });
   }
 
@@ -139,7 +146,7 @@ export class ArtifactStore {
 
   read(id: string, revisionId?: string): Artifact {
     this.assertActive();
-    const artifact = this.db.prepare(`SELECT ${fields}, revisionId, revisionNumber FROM artifact_revisions
+    const artifact = this.db.prepare(`SELECT ${fields}, revisionId, revisionNumber, runId, taskId FROM artifact_revisions
       WHERE workspaceId = ? AND id = ? AND (? IS NULL OR revisionId = ?)
       ORDER BY revisionNumber DESC LIMIT 1`).get(this.workspaceId, id, revisionId ?? null, revisionId ?? null);
     if (!artifact) throw new ArtifactError("Artifact not found in this workspace.");

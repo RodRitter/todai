@@ -26,6 +26,11 @@ export function initializeArtifactSchema(db: DatabaseSync) {
       SELECT ${fields}, content, id, 1 FROM artifacts a
       WHERE NOT EXISTS (SELECT 1 FROM artifact_revisions r WHERE r.id = a.id);`);
 
+  const revisionColumns = db.prepare("PRAGMA table_info(artifact_revisions)").all();
+  if (!revisionColumns.some((column) => column.name === "runId")) {
+    db.exec("ALTER TABLE artifact_revisions ADD COLUMN runId TEXT; ALTER TABLE artifact_revisions ADD COLUMN taskId TEXT");
+  }
+
   db.exec(`CREATE TABLE IF NOT EXISTS task_artifacts (
     taskId TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
     artifactId TEXT NOT NULL REFERENCES artifacts(id),

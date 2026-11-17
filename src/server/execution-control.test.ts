@@ -20,12 +20,14 @@ function fixture() {
 test("stop wins a late completion, preserves history, and keeps the global queue paused after reopening", async () => {
   const f = fixture();
   let complete!: (summary: string) => void;
-  const service = new ExecutionService(f.store, () => new Promise((resolve) => { complete = resolve; }));
+  const ready = Promise.withResolvers<void>();
+  const service = new ExecutionService(f.store, () => new Promise((resolve) => { complete = resolve; ready.resolve(); }));
   try {
     f.store.save({ id: "active", title: "Active", description: "Saved work", status: "In progress", autoRun: true, autoWorkflow: true });
     f.store.postComment("active", "Keep this history");
     f.store.save({ id: "waiting", title: "Waiting", description: "", status: "In progress", autoRun: true });
     const draining = service.drain();
+    await ready.promise;
     const run = f.store.history("active")[0];
     f.store.stopExecution(run.id);
     assert.equal(f.store.list().find((task) => task.id === "active")?.agentStatus, "Stopped");
@@ -185,9 +187,11 @@ test("task stop respects workspace ownership and an intentionally paused queue",
 test("execution service continues to the next task after a task-specific stop", async () => {
   const f = fixture();
   const started: string[] = [];
+  const ready = Promise.withResolvers<void>();
   const service = new ExecutionService(f.store, async ({ task, signal }) => {
     started.push(task.id);
     if (task.id === "active") {
+      ready.resolve();
       await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }));
       return "Stopped";
     }
@@ -197,6 +201,7 @@ test("execution service continues to the next task after a task-specific stop", 
     for (const id of ["active", "next"])
       f.store.save({ id, title: id, description: "", status: "In progress", autoRun: true });
     const draining = service.drain();
+    await ready.promise;
     f.store.stopTask("active");
     await draining;
     assert.deepEqual(started, ["active", "next"]);

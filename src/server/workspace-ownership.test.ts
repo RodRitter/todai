@@ -122,6 +122,7 @@ test("execution is globally serial across workspace stores and uses each capture
   first.setWorkspacePath(directory);
   const second = new TaskStore(path, first.createWorkspace("Second", tmpdir()).id);
   const seen: { workspaceId: string; workspace: string }[] = [];
+  const ready = Promise.withResolvers<void>();
   let release: (() => void) | undefined;
   let draining: Promise<void> | undefined;
   try {
@@ -132,7 +133,7 @@ test("execution is globally serial across workspace stores and uses each capture
     }
     const firstService = new ExecutionService(first, async ({ run, workspace }) => {
       seen.push({ workspaceId: run.workspaceId, workspace });
-      await new Promise<void>((resolve) => { release = resolve; });
+      await new Promise<void>((resolve) => { release = resolve; ready.resolve(); });
       return "First done";
     });
     const secondService = new ExecutionService(second, async ({ run, workspace }) => {
@@ -140,6 +141,7 @@ test("execution is globally serial across workspace stores and uses each capture
       return "Second done";
     });
     draining = firstService.drain();
+    await ready.promise;
     await secondService.drain();
     assert.equal(seen.length, 1);
     assert.equal(second.history()[0].status, "Queued");

@@ -5,9 +5,9 @@ import { WorkspaceValidationError } from "../../../server/workspace-settings.ts"
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export function GET(request?: Request) {
+export function GET(request: Request) {
   const store = openTaskStore();
-  try { return Response.json(request && new URL(request.url).searchParams.get("archived") === "true" ? store.listArchivedWorkspaces() : store.listWorkspaces()); }
+  try { return Response.json(new URL(request.url).searchParams.get("archived") === "true" ? store.listArchivedWorkspaces() : store.listWorkspaces()); }
   finally { store.close(); }
 }
 

@@ -1,3 +1,4 @@
+import type { ArtifactReference } from "../domain/artifact.ts";
 import { artifactMentions } from "./artifact-mentions.ts";
 import { mentionedAgentIds } from "../domain/agent-mentions.ts";
 import { intentProfile } from "./comment-intent.ts";
@@ -58,8 +59,10 @@ export class TaskStore {
   private db: DatabaseSync;
 
   readonly workspaceId: string;
+  readonly databasePath: string;
 
   constructor(path: string, workspaceId?: string) {
+    this.databasePath = path;
     mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
     initializeSchema(this.db);
@@ -646,6 +649,7 @@ export class TaskStore {
     summary: string,
     recommendation?: string,
     replyPlan?: AgentProfile[],
+    artifacts: ArtifactReference[] = [],
   ) {
     this.assertOwnership("runs", runId);
     this.transaction(() => {
@@ -684,14 +688,19 @@ export class TaskStore {
         )
         .run(status, run.taskId, status, run.taskId, status, run.taskId);
       // A stop notice is execution history, not an agent handover or evidence of saved work.
-      if (run.kind !== "intent" && status !== "Stopped") this.addComment({
-        id: randomUUID(),
-        taskId: run.taskId,
-        body: summary,
-        createdAt: finishedAt,
-        authorName: run.profile.name,
-        ...(status === "Waiting" ? { recommendation, feedbackStatus: "pending", runId } : {}),
-      });
+      if (run.kind !== "intent" && status !== "Stopped") {
+        const commentId = randomUUID();
+        this.addComment({
+          id: commentId,
+          taskId: run.taskId,
+          runId,
+          body: summary,
+          createdAt: finishedAt,
+          authorName: run.profile.name,
+          ...(status === "Waiting" ? { recommendation, feedbackStatus: "pending" } : {}),
+        });
+        if (status === "Complete" || status === "Waiting") this.attachCommentArtifacts(commentId, artifacts);
+      }
       const task = this.list().find((task) => task.id === run.taskId);
       if (
         status === "Complete" &&

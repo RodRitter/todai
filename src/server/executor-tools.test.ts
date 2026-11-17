@@ -50,7 +50,8 @@ test("profiles reject cross-executor permissions and unsupported effort", () => 
 });
 
 test("mixed queue uses each snapshotted tool and continues after executor failure", async () => {
-  const store = new TaskStore(":memory:");
+  const directory = await mkdtemp(join(tmpdir(), "todai-mixed-queue-"));
+  const store = new TaskStore(join(directory, "tasks.sqlite"));
   const calls: string[] = [];
   try {
     store.saveAgent(codex); store.saveAgent(claude);
@@ -67,7 +68,7 @@ test("mixed queue uses each snapshotted tool and continues after executor failur
     assert.deepEqual(calls, ["codex", "claude"]);
     assert.equal(store.list().find((task) => task.id === "one")?.agentStatus, "Failed");
     assert.equal(store.list().find((task) => task.id === "two")?.comments?.[0].body, "Reviewed");
-  } finally { store.close(); }
+  } finally { store.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
 test("Claude results reject errors, empty output, and denied permissions", () => {

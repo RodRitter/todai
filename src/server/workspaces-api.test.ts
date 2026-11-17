@@ -36,7 +36,7 @@ test("workspace HTTP creation validates input and starts an independent default 
       assert.equal(second.getDefaultExecutor(), "codex");
       assert.equal(first.list()[0].title, "Keep");
       assert.equal(first.getDefaultExecutor(), "claude");
-      assert.deepEqual(await GET().json(), [{ ...first.getWorkspace() }, workspace]);
+      assert.deepEqual(await GET(new Request("http://localhost/api/workspaces")).json(), [{ ...first.getWorkspace() }, workspace]);
     } finally { second.close(); }
   } finally {
     first.close();

@@ -5,6 +5,8 @@ export type Artifact = {
   id: string;
   revisionId: string;
   revisionNumber: number;
+  runId?: string | null;
+  taskId?: string | null;
   archived: boolean;
   workspaceId: string;
   title: string;

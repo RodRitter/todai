@@ -79,6 +79,10 @@ In saved task details, use **Link artifact to task** to reuse a workspace artifa
 
 Type **#** in the comment editor to search workspace artifacts and insert a titled citation at the cursor. Citations pin the revision selected, even if a newer revision is published before you post. Click a saved citation to download that revision or open its external URL; archived artifacts remain accessible. Agents can use the same Markdown form: `[Artifact title](#artifact/ARTIFACT_ID/REVISION_ID)`. Repeated citations share one tracked association per comment and revision.
 
+During a run, Codex and Claude receive the same workspace-scoped artifact tools automatically. Agents can publish text, Markdown, file bytes (base64), and external links; publish new revisions; search and read artifacts; and link or unlink the current task. Only current-task metadata is included in the starting prompt. Published revisions record their task and run provenance and appear in the library immediately.
+
+Agents can nominate exact revisions for their final handover or feedback request. Those attachments are saved atomically with the comment and deduplicated with inline citations. Tools expire when execution ends or is interrupted. Published work survives failure or interruption; nominations are not attached to failure or interruption notices. The tools cannot archive artifacts or choose a different workspace, task, creator, or run.
+
 ## Development
 
 ```sh

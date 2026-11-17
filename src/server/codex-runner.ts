@@ -13,6 +13,11 @@ export function createCodexRunner(executable = "codex"): Runner {
     try {
       await runCli({ executable, label: "Codex CLI", cwd: workspace, onStart, signal, input: agentPrompt(request), timeout: run.kind === "intent" ? 60000 : 0, args: [
             "exec",
+            ...(request.artifacts ? [
+              "--config", `mcp_servers.todai_artifacts.url=${JSON.stringify(request.artifacts.url)}`,
+              "--config", `mcp_servers.todai_artifacts.http_headers={ Authorization = ${JSON.stringify(`Bearer ${request.artifacts.token}`)} }`,
+              "--config", "mcp_servers.todai_artifacts.required=true",
+            ] : []),
             "--cd",
             workspace,
             "--model",

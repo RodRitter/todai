@@ -46,10 +46,10 @@ test("HTTP directory changes require pause and current confirmation; archived wo
     for (let pending = store.claimRun(); pending; pending = store.claimRun())
       store.finishRun(pending.id, "Interrupted", "Finished pending work");
     assert.equal((await workspaces.PATCH(request({ id: store.workspaceId, archived: true }, false))).status, 200);
-    assert.deepEqual(await workspaces.GET().json(), []);
+    assert.deepEqual(await workspaces.GET(new Request("http://localhost/api/workspaces")).json(), []);
     assert.equal((await workspaces.GET(new Request("http://localhost/api/workspaces?archived=true")).json()).length, 1);
     assert.equal((await workspaces.PATCH(request({ id: store.workspaceId, archived: false }, false))).status, 200);
-    assert.equal((await workspaces.GET().json()).length, 1);
+    assert.equal((await workspaces.GET(new Request("http://localhost/api/workspaces")).json()).length, 1);
     assert.equal((await workspaces.PATCH(request({ archived: "true" }, false))).status, 400);
   } finally {
     await new Promise((resolve) => setImmediate(resolve));
