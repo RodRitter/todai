@@ -88,7 +88,7 @@ export function CommentAttachments({ references }: { references: ArtifactReferen
   </div>;
 }
 
-export function TaskArtifacts({ taskId, commentsKey, onNavigateComment }: { taskId: string; commentsKey: string; onNavigateComment?: (commentId: string) => void }) {
+export function TaskArtifacts({ taskId, commentsKey, onNavigateComment, onCountChange }: { taskId: string; commentsKey: string; onNavigateComment?: (commentId: string) => void; onCountChange?: (count: number) => void }) {
   const [links, setLinks] = useState<TaskArtifact[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -100,17 +100,18 @@ export function TaskArtifacts({ taskId, commentsKey, onNavigateComment }: { task
     async function checkedFetch() {
       const response = await checked(await workspaceFetch(`/api/artifacts/links?${new URLSearchParams({ taskId })}`, { signal: controller.signal }));
       const items: TaskArtifact[] = await response.json();
-      if (!controller.signal.aborted) { setLinks(items); setError(""); setLoading(false); }
+      if (!controller.signal.aborted) { setLinks(items); onCountChange?.(items.length); setError(""); setLoading(false); }
     }
     const refresh = () => { void checkedFetch().catch((error: Error) => { if (!controller.signal.aborted) setError(error.message); }); };
     window.addEventListener("focus", refresh);
     return () => { controller.abort(); window.removeEventListener("focus", refresh); };
-  }, [taskId, commentsKey, attempt]);
+  }, [taskId, commentsKey, attempt, onCountChange]);
   async function change(artifactId: string, remove = false) {
     setBusy(true);
     try {
       const response = await checked(await workspaceFetch("/api/artifacts/links", { method: remove ? "DELETE" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ taskId, artifactId }) }));
-      setLinks(await response.json()); setError("");
+      const items: TaskArtifact[] = await response.json();
+      setLinks(items); onCountChange?.(items.length); setError("");
     } catch (error) { setError(error instanceof Error ? error.message : "Could not change artifact link."); }
     finally { setBusy(false); }
   }

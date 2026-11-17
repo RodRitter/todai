@@ -21,6 +21,7 @@ export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostCo
   onAnswerFeedback?: (commentId: string, body: string) => Promise<void>;
 }) {
   const [tab, setTab] = useState("comments");
+  const [artifactCount, setArtifactCount] = useState(0);
   return (
     <Tabs value={tab} onValueChange={setTab} asChild>
     <section aria-label="Task discussion" className="mt-8 space-y-6">
@@ -33,6 +34,9 @@ export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostCo
         </TabsTrigger>
         <TabsTrigger value="artifacts" className="-mb-px gap-2.5 rounded-none border-b-2 border-transparent px-0 pt-0 pb-3 font-semibold data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none">
           Artifacts
+          <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs font-medium tabular-nums">
+            {artifactCount}
+          </span>
         </TabsTrigger>
       </TabsList>
       <TabsContent value="comments" forceMount className="space-y-6">
@@ -140,8 +144,8 @@ export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostCo
         </div>
       )}
       </TabsContent>
-      <TabsContent value="artifacts">
-        {taskId ? <TaskArtifacts taskId={taskId} commentsKey={JSON.stringify(comments.map((comment) => comment.id))} onNavigateComment={(commentId) => {
+      <TabsContent value="artifacts" forceMount>
+        {taskId ? <TaskArtifacts onCountChange={setArtifactCount} taskId={taskId} commentsKey={JSON.stringify(comments.map((comment) => comment.id))} onNavigateComment={(commentId) => {
           setTab("comments");
           requestAnimationFrame(() => document.getElementById(`comment-${commentId}`)?.scrollIntoView({ block: "nearest" }));
         }} /> : <p className="text-sm text-muted-foreground">No linked artifacts yet.</p>}
