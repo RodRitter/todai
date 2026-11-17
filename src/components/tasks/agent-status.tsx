@@ -9,6 +9,7 @@ const agentStatusColors: Record<Status, string> = {
   Failed: "text-red-600 dark:text-red-400",
   Interrupted: "text-amber-600 dark:text-amber-400",
   Running: "text-emerald-600 dark:text-emerald-400",
+  Waiting: "text-amber-600 dark:text-amber-400",
   Paused: "text-amber-600 dark:text-amber-400",
   Review: "text-blue-600 dark:text-blue-400",
   Blocked: "text-red-600 dark:text-red-400",

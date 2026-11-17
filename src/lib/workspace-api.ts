@@ -30,6 +30,10 @@ async function request<T>(
 }
 
 export const taskApi = {
+  postComment: (taskId: string, body: string) =>
+    request<Task>("/api/tasks/comments", { method: "POST", body: { taskId, body } }),
+  answerFeedback: (taskId: string, commentId: string, body: string) =>
+    request<Task>("/api/tasks/feedback", { method: "POST", body: { taskId, commentId, body } }),
   list: () => request<BoardSnapshot>("/api/tasks?workspace=true"),
   save: (task: Task) =>
     request<Task>("/api/tasks", { method: "PUT", body: task }),

@@ -61,11 +61,19 @@ export function initializeSchema(db: DatabaseSync) {
             WHERE runs.taskId = comments.taskId AND runs.finishedAt = comments.createdAt AND runs.summary = comments.body) = 1;
         `);
     }
+    for (const column of ["recommendation", "feedbackStatus", "runId"]) {
+      if (!commentColumns.some((item) => item.name === column))
+        db.exec(`ALTER TABLE comments ADD COLUMN ${column} TEXT`);
+    }
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS one_pending_feedback ON comments(taskId) WHERE feedbackStatus = 'pending'");
     const runColumns = db.prepare("PRAGMA table_info(runs)").all();
     for (const column of [
       "ownerIdentity",
       "runnerIdentity",
       "interruptionColumn",
+      "kind",
+      "commentId",
+      "replyPlan",
     ]) {
       if (!runColumns.some((item) => item.name === column))
         db.exec(`ALTER TABLE runs ADD COLUMN ${column} TEXT`);

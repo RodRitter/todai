@@ -11,7 +11,7 @@ export function createCodexRunner(executable = "codex"): Runner {
     const directory = await mkdtemp(join(tmpdir(), "todai-handover-"));
     const output = join(directory, "handover.txt");
     try {
-      await runCli({ executable, label: "Codex CLI", cwd: workspace, onStart, signal, input: agentPrompt(request), args: [
+      await runCli({ executable, label: "Codex CLI", cwd: workspace, onStart, signal, input: agentPrompt(request), timeout: run.kind === "intent" ? 60000 : 0, args: [
             "exec",
             "--cd",
             workspace,

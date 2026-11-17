@@ -20,7 +20,7 @@ export function createClaudeRunner(executable = "claude"): Runner {
     const { run, workspace, signal, onStart } = request;
     const output = await runCli({
       executable, label: "Claude Code", cwd: workspace, signal, onStart,
-      input: agentPrompt(request),
+      input: agentPrompt(request), timeout: run.kind === "intent" ? 60000 : 0,
       args: ["-p", "--output-format", "json", "--no-session-persistence",
         "--permission-prompts", "none", "--model", run.profile.model,
         "--effort", run.profile.effort, "--permission-mode", run.profile.permissions],

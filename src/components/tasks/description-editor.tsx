@@ -9,6 +9,8 @@ import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import Image from "@tiptap/extension-image";
 import { richTextClassName } from "@/components/ui/rich-text-styles";
+import { agentMentionPath } from "@/domain/agent-mentions";
+import type { AgentProfile } from "@/domain/column-agent";
 import type { TaskReference } from "@/domain/reference";
 import { Bold, Italic, Heading2, List, ListOrdered, Code } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -24,13 +26,17 @@ function referenceMatch(editor: Editor): Match | null {
   return { from: $from.pos - match[2].length - 1, to: $from.pos, kind: match[1] === "$" ? "skill" : "file", query: match[2] };
 }
 
-export function DescriptionEditor({ value, onChange, disabled = false, autoFocus = false }: {
+export function DescriptionEditor({ value, onChange, disabled = false, autoFocus = false, agents, label = "Description", id = "task-description" }: {
   value: string; onChange: (value: string) => void; disabled?: boolean; autoFocus?: boolean;
+  agents?: AgentProfile[]; label?: string; id?: string;
 }) {
   const [match, setMatch] = useState<Match | null>(null);
   const [response, setResponse] = useState<{ key: string; items: TaskReference[] }>({ key: "", items: [] });
   const matchKey = JSON.stringify(match);
-  const results = response.key === matchKey ? response.items : [];
+  const agentMode = agents !== undefined && match?.kind === "file";
+  const results: TaskReference[] = agentMode
+    ? agents.filter((agent) => agent.name.toLowerCase().includes(match.query.toLowerCase())).map((agent) => ({ kind: "file", label: `@${agent.name}`, path: agentMentionPath(agent.id), detail: agent.instructions }))
+    : response.key === matchKey ? response.items : [];
   const [status, setStatus] = useState("Loading references…");
   const [selected, setSelected] = useState(0);
   const keyboard = useRef<(event: KeyboardEvent) => boolean>(() => false);
@@ -43,7 +49,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
     editable: !disabled,
     editorProps: {
       attributes: {
-        id: "task-description", role: "textbox", "aria-label": "Description", "aria-multiline": "true", "aria-describedby": "description-hint",
+        id, role: "textbox", "aria-label": label, "aria-multiline": "true",
         class: `${richTextClassName} min-h-32 max-h-96 overflow-y-auto p-3 outline-none [&_.tableWrapper]:my-3 [&_.tableWrapper]:overflow-x-auto [&_.tableWrapper]:rounded-lg [&_.tableWrapper]:border [&_ul[data-type=taskList]]:list-none [&_li[data-type=taskItem]]:flex [&_li[data-type=taskItem]]:gap-2 [&_li[data-type=taskItem]>label]:mt-1 [&_li[data-type=taskItem]>div]:min-w-0 [&_li[data-type=taskItem]>div]:flex-1 [&_li[data-type=taskItem]>div>p]:my-1`,
       },
       handleKeyDown: (_view, event) => keyboard.current(event),
@@ -89,7 +95,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
 
   useEffect(() => { editor?.setEditable(!disabled, false); }, [editor, disabled]);
   useEffect(() => {
-    if (!match || disabled) return;
+    if (!match || disabled || agentMode) return;
     const abort = new AbortController();
     const timer = setTimeout(async () => {
       setResponse({ key: "", items: [] });
@@ -107,7 +113,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
       }
     }, 150);
     return () => { clearTimeout(timer); abort.abort(); };
-  }, [match, disabled]);
+  }, [match, disabled, agentMode]);
 
   function insert(reference: TaskReference) {
     if (!editor || !match || disabled) return;
@@ -137,7 +143,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
     <div className="space-y-2">
       <div className="rounded-lg border focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/50">
         <TooltipProvider>
-          <div role="group" aria-label="Description formatting" className="flex flex-wrap items-center gap-1 border-b p-1">
+          <div role="group" aria-label={`${label} formatting`} className="flex flex-wrap items-center gap-1 border-b p-1">
             {formatGroups.map((group, index) => (
               <ToggleGroup
                 key={group.label}
@@ -168,10 +174,11 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
         </TooltipProvider>
         <EditorContent editor={editor} />
         {match && !disabled && (
-          <div className="max-h-52 overflow-y-auto border-t p-1" role="listbox" aria-label={match.kind === "skill" ? "Available skills" : "Workspace files"}>
-            {(response.key !== matchKey || status) && <p role="status" className="p-2 text-xs text-muted-foreground">{response.key !== matchKey && !status.startsWith("Could not") ? "Loading references…" : status}</p>}
+          <div className="max-h-52 overflow-y-auto border-t p-1" role="listbox" aria-label={agentMode ? "Available agents" : match.kind === "skill" ? "Available skills" : "Workspace files"}>
+            {agentMode && !results.length && <p role="status" className="p-2 text-xs text-muted-foreground">No matching agents.</p>}
+            {!agentMode && (response.key !== matchKey || status) && <p role="status" className="p-2 text-xs text-muted-foreground">{response.key !== matchKey && !status.startsWith("Could not") ? "Loading references…" : status}</p>}
             {results.map((reference, index) => (
-              <button key={reference.path} type="button" role="option" aria-selected={index === selected} className={`block w-full rounded px-2 py-1.5 text-left text-sm ${index === selected ? "bg-accent" : "hover:bg-muted"}`} onMouseDown={(event) => event.preventDefault()} onClick={() => insert(reference)}>
+              <button key={reference.path} type="button" role="option" aria-selected={index === (selected < results.length ? selected : 0)} className={`block w-full rounded px-2 py-1.5 text-left text-sm ${index === selected ? "bg-accent" : "hover:bg-muted"}`} onMouseDown={(event) => event.preventDefault()} onClick={() => insert(reference)}>
                 <span className="block font-medium">{reference.label}</span>
                 <span className="block truncate text-xs text-muted-foreground">{reference.detail}</span>
               </button>
@@ -179,7 +186,6 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
           </div>
         )}
       </div>
-      <p id="description-hint" className="text-xs text-muted-foreground">Type $ to reference a skill or @ to reference a workspace file. Use ↑ ↓ and Enter to select.</p>
     </div>
   );
 }

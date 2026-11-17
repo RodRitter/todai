@@ -1,3 +1,5 @@
+import { mentionedAgentIds } from "../domain/agent-mentions.ts";
+import { intentProfile } from "./comment-intent.ts";
 import { parseConfiguration, ConfigurationValidationError, type Configuration } from "../domain/configuration.ts";
 import { initializeSchema } from "./schema.ts";
 import {
@@ -17,13 +19,18 @@ import { type Task, type TaskComment } from "../domain/task.ts";
 export class ColumnValidationError extends Error {}
 
 export class PendingRunError extends Error {}
+export class FeedbackValidationError extends Error {}
+export class CommentValidationError extends Error {}
 
 export type AgentRun = {
   id: string;
   taskId: string;
   column: Task["status"];
   profile: AgentProfile;
-  status: "Queued" | "Running" | "Complete" | "Failed" | "Interrupted";
+  status: "Queued" | "Running" | "Complete" | "Failed" | "Interrupted" | "Waiting";
+  kind?: "intent" | "reply" | null;
+  commentId?: string | null;
+  replyPlan?: AgentProfile[] | null;
   interruptionColumn?: Task["status"] | null;
   createdAt: string;
   startedAt: string | null;
@@ -136,6 +143,7 @@ export class TaskStore {
         this.assignColumnAgent({ column: columnNames.get(assignment.columnId)!, agentId: agentIds.get(assignment.agentId)! });
       }
       if (columnMode === "replace" && data.columns.length) {
+        this.db.prepare("UPDATE comments SET feedbackStatus = 'cancelled' WHERE feedbackStatus = 'pending'").run();
         this.db.prepare("UPDATE tasks SET status = ?, agentStatus = 'Not started'").run(columnNames.get(data.columns[0].id)!);
       }
       return { agents: data.agents.length, columns: data.columns.length, assignments: data.assignments.length };
@@ -202,7 +210,7 @@ export class TaskStore {
         .run(name, column);
       this.db
         .prepare(
-          "UPDATE runs SET column = ? WHERE column = ? AND status IN ('Queued', 'Running')",
+          "UPDATE runs SET column = ? WHERE column = ? AND status IN ('Queued', 'Running', 'Waiting')",
         )
         .run(name, column);
       this.db
@@ -280,7 +288,13 @@ export class TaskStore {
       autoWorkflow: Boolean(task.autoWorkflow),
       comments: this.db
         .prepare(
-          "SELECT * FROM comments WHERE taskId = ? ORDER BY createdAt, rowid",
+          `SELECT comments.* FROM comments WHERE taskId = ? AND NOT EXISTS (
+            SELECT 1 FROM runs WHERE runs.kind = 'intent' AND runs.taskId = comments.taskId
+              AND (runs.id = comments.runId OR (
+                runs.finishedAt = comments.createdAt AND runs.summary = comments.body
+                AND json_extract(runs.profile, '$.name') = comments.authorName
+              ))
+          ) ORDER BY createdAt, rowid`,
         )
         .all(task.id) as unknown as NonNullable<Task["comments"]>,
     }));
@@ -304,6 +318,7 @@ export class TaskStore {
     return this.transaction(() => {
       const previous = this.list().find((item) => item.id === task.id);
       if (previous && previous.status !== task.status) {
+        this.db.prepare("UPDATE comments SET feedbackStatus = 'cancelled' WHERE taskId = ? AND feedbackStatus = 'pending'").run(task.id);
         this.db
           .prepare(
             `UPDATE runs SET status = 'Interrupted', finishedAt = ?, summary = ?
@@ -395,6 +410,7 @@ export class TaskStore {
     return rows.map((row) => ({
       ...row,
       profile: JSON.parse(row.profile as string),
+      replyPlan: row.replyPlan ? JSON.parse(row.replyPlan as string) : null,
     })) as AgentRun[];
   }
 
@@ -402,7 +418,8 @@ export class TaskStore {
     return this.transaction(() => {
       if (this.db.prepare("SELECT id FROM runs WHERE status = 'Running'").get())
         return;
-      const run = this.history().find((run) => run.status === "Queued");
+      const waiting = new Set(this.list().filter((task) => task.comments?.some((comment) => comment.feedbackStatus === "pending")).map((task) => task.id));
+      const run = this.history().sort((a, b) => a.createdAt.localeCompare(b.createdAt)).find((run) => run.status === "Queued" && !waiting.has(run.taskId));
       if (!run) return;
       const startedAt = new Date().toISOString();
       const ownerIdentity = processIdentity(process.pid);
@@ -444,8 +461,10 @@ export class TaskStore {
 
   finishRun(
     runId: string,
-    status: "Complete" | "Failed" | "Interrupted",
+    status: "Complete" | "Failed" | "Interrupted" | "Waiting",
     summary: string,
+    recommendation?: string,
+    replyPlan?: AgentProfile[],
   ) {
     this.transaction(() => {
       const run = this.history().find(
@@ -456,29 +475,40 @@ export class TaskStore {
         status = "Interrupted";
         summary = `Agent run interrupted because the task moved to ${run.interruptionColumn}. Workspace changes were preserved.`;
       }
+      if (status === "Waiting" && (!summary.trim() || !recommendation?.trim()))
+        throw new FeedbackValidationError("Feedback requests require a question and recommendation.");
       const finishedAt = new Date().toISOString();
       this.db
         .prepare(
           "UPDATE runs SET status = ?, finishedAt = ?, summary = ? WHERE id = ?",
         )
         .run(status, finishedAt, summary, runId);
+      if (run.kind && (status === "Complete" || status === "Failed")) {
+        const remaining = replyPlan ?? run.replyPlan ?? [];
+        const [next, ...rest] = remaining;
+        if (next) this.queueCommentRun(run.taskId, run.column, next, "reply", run.commentId!, rest, run.createdAt);
+      }
       this.db
         .prepare(
           `UPDATE tasks SET agentStatus = CASE
+        WHEN EXISTS (SELECT 1 FROM comments WHERE taskId = ? AND feedbackStatus = 'pending') OR ? = 'Waiting' THEN 'Waiting'
         WHEN EXISTS (SELECT 1 FROM runs WHERE taskId = ? AND status = 'Queued') THEN 'Queued'
         ELSE ? END WHERE id = ?`,
         )
-        .run(run.taskId, status, run.taskId);
-      this.addComment({
+        .run(run.taskId, status, run.taskId, status, run.taskId);
+      if (run.kind !== "intent") this.addComment({
         id: randomUUID(),
         taskId: run.taskId,
         body: summary,
         createdAt: finishedAt,
         authorName: run.profile.name,
+        ...(status === "Waiting" ? { recommendation, feedbackStatus: "pending", runId } : {}),
       });
       const task = this.list().find((task) => task.id === run.taskId);
       if (
         status === "Complete" &&
+        !run.kind &&
+        !this.history(run.taskId).some((item) => item.status === "Queued") &&
         task?.autoWorkflow &&
         task.status === run.column
       ) {
@@ -495,6 +525,54 @@ export class TaskStore {
         }
       }
     });
+  }
+
+  answerFeedback(taskId: unknown, commentId: unknown, body: unknown): Task {
+    if (typeof taskId !== "string" || typeof commentId !== "string" ||
+        typeof body !== "string" || !body.trim())
+      throw new FeedbackValidationError("Enter a feedback reply.");
+    return this.transaction(() => {
+      const task = this.list().find((item) => item.id === taskId);
+      const request = task?.comments?.find((item) => item.id === commentId && item.feedbackStatus === "pending");
+      const run = request && this.history(taskId).find((item) => item.id === request.runId);
+      if (!task || task.agentStatus !== "Waiting" || !request || !run)
+        throw new FeedbackValidationError("This feedback request is no longer pending. Reload the task.");
+      this.db.prepare("UPDATE comments SET feedbackStatus = 'answered' WHERE id = ?").run(commentId);
+      this.addComment({ id: randomUUID(), taskId, body: body.trim(), createdAt: new Date().toISOString(), authorName: "Human", runId: run.id });
+      this.db.prepare("INSERT INTO runs (id, taskId, column, profile, status, createdAt, kind, commentId, replyPlan) VALUES (?, ?, ?, ?, 'Queued', ?, ?, ?, ?)")
+        .run(randomUUID(), taskId, task.status, JSON.stringify(run.profile), run.createdAt, run.kind ?? null, run.commentId ?? null, run.replyPlan ? JSON.stringify(run.replyPlan) : null);
+      this.db.prepare("UPDATE tasks SET agentStatus = 'Queued' WHERE id = ?").run(taskId);
+      return this.list().find((item) => item.id === taskId)!;
+    });
+  }
+
+  postComment(taskId: unknown, body: unknown): Task {
+    if (typeof taskId !== "string" || typeof body !== "string" || !body.trim())
+      throw new CommentValidationError("Enter a comment.");
+    return this.transaction(() => {
+      const task = this.list().find((item) => item.id === taskId);
+      if (!task) throw new CommentValidationError("This task no longer exists.");
+      const agents = this.listAgents();
+      const ids = mentionedAgentIds(body, agents);
+      const profiles = ids.map((id) => {
+        const agent = agents.find((item) => item.id === id);
+        if (!agent) throw new CommentValidationError("A tagged agent no longer exists. Remove the mention and try again.");
+        return agent;
+      });
+      const commentId = randomUUID();
+      this.addComment({ id: commentId, taskId, body: body.trim(), createdAt: new Date().toISOString(), authorName: "Human" });
+      if (profiles.length) {
+        this.queueCommentRun(taskId, task.status, intentProfile(this.getDefaultExecutor()), "intent", commentId, profiles);
+        if (task.agentStatus !== "Running" && task.agentStatus !== "Waiting")
+          this.db.prepare("UPDATE tasks SET agentStatus = 'Queued' WHERE id = ?").run(taskId);
+      }
+      return this.list().find((item) => item.id === taskId)!;
+    });
+  }
+
+  private queueCommentRun(taskId: string, column: string, profile: AgentProfile, kind: "intent" | "reply", commentId: string, replyPlan: AgentProfile[], createdAt = new Date().toISOString()) {
+    this.db.prepare("INSERT INTO runs (id, taskId, column, profile, status, createdAt, kind, commentId, replyPlan) VALUES (?, ?, ?, ?, 'Queued', ?, ?, ?, ?)")
+      .run(randomUUID(), taskId, column, JSON.stringify(profile), createdAt, kind, commentId, JSON.stringify(replyPlan));
   }
 
   delete(id: string) {
@@ -521,7 +599,7 @@ export class TaskStore {
   addComment(comment: TaskComment) {
     this.db
       .prepare(
-        "INSERT INTO comments (id, taskId, body, createdAt, authorName) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO comments (id, taskId, body, createdAt, authorName, recommendation, feedbackStatus, runId) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       )
       .run(
         comment.id,
@@ -529,6 +607,9 @@ export class TaskStore {
         comment.body,
         new Date(comment.createdAt).toISOString(),
         comment.authorName ?? null,
+        comment.recommendation ?? null,
+        comment.feedbackStatus ?? null,
+        comment.runId ?? null,
       );
   }
 

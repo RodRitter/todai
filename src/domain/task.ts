@@ -8,6 +8,7 @@ export const agentStatuses = [
   "Interrupted",
   "Running",
   "Paused",
+  "Waiting",
   "Review",
   "Blocked",
 ] as const;
@@ -28,4 +29,7 @@ export type TaskComment = {
   body: string;
   createdAt: string;
   authorName?: string | null;
+  recommendation?: string | null;
+  feedbackStatus?: "pending" | "answered" | "cancelled" | null;
+  runId?: string | null;
 };

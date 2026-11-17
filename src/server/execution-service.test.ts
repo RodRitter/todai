@@ -559,3 +559,83 @@ test("auto-workflow respects disabling and manual moves while a run is active", 
     f.cleanup();
   }
 });
+
+test("feedback persists, releases the queue, and resumes the same agent with Human context", async () => {
+  let resumed = false;
+  const f = fixture(async ({ task, run }) => {
+    if (task.id === "other") return "Other work done";
+    const reply = task.comments?.find((comment) => comment.authorName === "Human");
+    if (reply) {
+      assert.equal(reply.body, "Use the recommended approach");
+      assert.equal(run.profile.model, "test-model");
+      resumed = true;
+      return "Completed with feedback";
+    }
+    return JSON.stringify({ type: "feedback_request", question: "Which approach?", recommendation: "Use the simpler approach." });
+  });
+  try {
+    f.service.save({ id: "one", title: "Build", description: "", status: "In progress", autoWorkflow: true });
+    f.service.save({ id: "other", title: "Other", description: "", status: "In progress" });
+    await f.service.drain();
+    let task = f.store.list().find((item) => item.id === "one")!;
+    assert.equal(task.agentStatus, "Waiting");
+    assert.equal(task.status, "In progress");
+    assert.equal(f.store.list().find((item) => item.id === "other")!.agentStatus, "Complete");
+    const request = task.comments![0];
+    assert.equal(request.feedbackStatus, "pending");
+    assert.equal(request.recommendation, "Use the simpler approach.");
+    assert.throws(() => f.store.answerFeedback("one", request.id, "  "), /Enter a feedback/);
+    const reopened = new TaskStore(join(f.directory, "tasks.sqlite"));
+    try {
+      assert.equal(reopened.list()[0].agentStatus, "Waiting");
+      f.store.saveAgent({ ...profile, model: "changed" });
+      task = reopened.answerFeedback("one", request.id, " Use the recommended approach ");
+      assert.equal(task.agentStatus, "Queued");
+      assert.equal(task.comments![0].feedbackStatus, "answered");
+      assert.throws(() => f.store.answerFeedback("one", request.id, "Again"), /no longer pending/);
+    } finally { reopened.close(); }
+    await f.service.drain();
+    assert.equal(resumed, true);
+    assert.equal(f.store.list()[0].status, "In review");
+    assert.equal(f.store.history("one").length, 2);
+  } finally { f.cleanup(); }
+});
+
+test("moving a waiting task cancels feedback and rejects stale replies", async () => {
+  const f = fixture(async () => JSON.stringify({ type: "feedback_request", question: "Proceed?", recommendation: "Yes." }));
+  try {
+    f.service.save({ id: "one", title: "Build", description: "", status: "In progress" });
+    await f.service.drain();
+    const task = f.store.list()[0];
+    const request = task.comments![0];
+    const moved = f.store.save({ ...task, status: "Done" });
+    assert.equal(moved.agentStatus, "Not started");
+    assert.equal(moved.comments![0].feedbackStatus, "cancelled");
+    assert.throws(() => f.store.answerFeedback(task.id, request.id, "Yes"), /no longer pending/);
+    assert.equal(f.store.history().length, 1);
+  } finally { f.cleanup(); }
+});
+
+test("invalid feedback cannot complete or advance a task", async () => {
+  const f = fixture(async () => '{"type":"feedback_request","question":"Proceed?","recommendation":""}');
+  try {
+    f.service.save({ id: "one", title: "Build", description: "", status: "In progress", autoWorkflow: true });
+    await f.service.drain();
+    assert.equal(f.store.list()[0].agentStatus, "Failed");
+    assert.equal(f.store.list()[0].status, "In progress");
+    assert.equal(f.store.list()[0].comments![0].feedbackStatus, null);
+  } finally { f.cleanup(); }
+});
+
+test("a move during a run takes precedence over its feedback request", async () => {
+  const f = fixture(async ({ task }) => {
+    f.store.save({ ...task, status: "Done" });
+    return '{"type":"feedback_request","question":"Proceed?","recommendation":"Yes"}';
+  });
+  try {
+    f.service.save({ id: "one", title: "Build", description: "", status: "In progress" });
+    await f.service.drain();
+    assert.equal(f.store.list()[0].agentStatus, "Interrupted");
+    assert.equal(f.store.list()[0].comments![0].feedbackStatus, null);
+  } finally { f.cleanup(); }
+});

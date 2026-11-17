@@ -1,7 +1,7 @@
 # TODO
 
 - Artifacts, documents and storage
-- Queries & answers in comments
+- Queries, feedback & answers in comments
 
 # Todai
 
@@ -12,7 +12,7 @@ Built with Next.js, React, TypeScript, Tailwind CSS, and SQLite.
 ## Features
 
 - Drag-and-drop task board with customizable columns.
-- Markdown task descriptions and agent handover comments.
+- Rich text task descriptions and human comments, with @agent mentions and ordered agent replies.
 - Reusable Codex CLI and Claude Code profiles with tool-specific model, effort, instructions, and permissions.
 - Queued agent execution with live status updates and persisted run history.
 - Optional auto-workflow to move tasks to the next column after a successful run.
@@ -36,6 +36,8 @@ Open [localhost:3000](http://127.0.0.1:3000).
 4. Assign an agent through a column’s settings, then create or move a task into that column to queue a run.
 
 New boards start with **To do**, **In progress**, **In review**, and **Done**. Customize them in **Settings → Board**.
+
+In a task’s Comments section, write a rich text comment and type **@** to select agents. Comments without mentions stay as context. A lightweight intent agent orders tagged replies, and each agent sees earlier responses. The intent agent uses the default executor with `gpt-6-luna` (Codex) or `haiku` (Claude), at low effort; if ordering fails, replies follow mention order. Comment replies keep the task in its current column.
 
 Agents run one at a time. Keep the server running while they work. Todai is designed for a persistent local Node.js process on macOS or Linux.
 

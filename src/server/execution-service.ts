@@ -1,3 +1,5 @@
+import { orderedReplies } from "./comment-intent.ts";
+import { parseFeedback } from "./feedback.ts";
 import { processIdentity } from "./process-identity.ts";
 import { setTimeout } from "node:timers/promises";
 import type { TaskStore, AgentRun } from "./task-store.ts";
@@ -92,17 +94,23 @@ export class ExecutionService {
           signal: controller.signal,
           onStart: (pid) => this.store.recordRunner(run.id, pid),
         });
+        if (run.kind === "intent") {
+          const order = orderedReplies(summary, run.replyPlan ?? []);
+          this.store.finishRun(run.id, "Complete", `Reply order: ${order.map((agent) => agent.name).join(" → ")}.`, undefined, order);
+          continue;
+        }
+        const feedback = parseFeedback(summary);
+        this.store.finishRun(run.id, feedback ? "Waiting" : "Complete", feedback?.question ?? summary, feedback?.recommendation);
       } catch (error) {
         this.store.finishRun(
           run.id,
           "Failed",
-          `Agent run failed: ${error instanceof Error ? error.message : "Unknown execution error."}`,
+          `Agent run failed: ${error instanceof Error ? error.message : "Unknown execution error."}${run.kind === "intent" ? " Responding in mention order instead." : ""}`,
         );
         continue;
       } finally {
         clearInterval(checkInterruption);
       }
-      this.store.finishRun(run.id, "Complete", summary);
     }
   }
 }

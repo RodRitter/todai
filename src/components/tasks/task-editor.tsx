@@ -19,15 +19,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { DescriptionEditor } from "./description-editor";
+import type { AgentProfile } from "@/domain/column-agent";
 import { statuses, type Status, type Task } from "@/domain/task";
 
 export type TaskEditorProps = {
   columns?: readonly string[];
+  agents?: AgentProfile[];
+  onPostComment?: (body: string) => Promise<void>;
   open: boolean;
   task?: Task | null;
   defaultStatus?: Status;
   onOpenChange: (open: boolean) => void;
   onSave: (task: Task) => void | Promise<void>;
+  onAnswerFeedback?: (commentId: string, body: string) => Promise<void>;
   onDelete?: (id: string) => void | Promise<void>;
 };
 
@@ -48,6 +52,9 @@ function TaskEditorSession({
   onOpenChange,
   onSave,
   onDelete,
+  onAnswerFeedback,
+  onPostComment,
+  agents,
 }: TaskEditorProps) {
   const pendingRun =
     editing?.agentStatus === "Queued" || editing?.agentStatus === "Running";
@@ -146,12 +153,10 @@ function TaskEditorSession({
         }
       }}
     >
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:max-w-3xl sm:p-8">
+      <DialogContent aria-describedby={editing ? undefined : "create-task-description"} className="max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:max-w-3xl sm:p-8">
         <DialogHeader>
-          <DialogTitle>{editing ? "Edit task" : "Create task"}</DialogTitle>
-          <DialogDescription>
-            {editing ? "Update the task details." : "Add a task to the board."}
-          </DialogDescription>
+          <DialogTitle className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{editing ? "Edit task" : "Create task"}</DialogTitle>
+          {!editing && <DialogDescription id="create-task-description">Add a task to the board.</DialogDescription>}
         </DialogHeader>
         <form
           onSubmit={saveTask}
@@ -165,6 +170,7 @@ function TaskEditorSession({
               <Label htmlFor="task-title">Title</Label>
               <Input
                 id="task-title"
+                className="h-auto py-2 text-xl font-semibold tracking-tight md:text-2xl"
                 value={title}
                 required
                 autoFocus
@@ -189,7 +195,7 @@ function TaskEditorSession({
                 }}
               />
               </> : (
-                <h2 className="text-lg font-semibold tracking-tight">
+                <h2 className="text-2xl font-semibold leading-tight tracking-tight break-words">
                   <button type="button" aria-label="Edit title" className="w-full rounded-md text-left outline-none hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setIsEditingTitle(true)}>{title}</button>
                 </h2>
               )}
@@ -292,7 +298,7 @@ function TaskEditorSession({
                 </p>
               )}
             </div>
-            {editing && <TaskComments comments={editing.comments} />}
+            {editing && <TaskComments comments={editing.comments} onAnswerFeedback={onAnswerFeedback} agents={agents} onPostComment={onPostComment} />}
             <DialogFooter className="flex-row flex-wrap items-center justify-end gap-2 pt-6">
               {editing && onDelete && (
                 <Button

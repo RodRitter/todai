@@ -37,6 +37,8 @@ export function TaskBoard({
     list?: () => Promise<Task[] | BoardSnapshot>;
     save: (task: Task) => Promise<Task>;
     delete: (id: string) => Promise<void>;
+    postComment?: (taskId: string, body: string) => Promise<Task>;
+    answerFeedback?: (taskId: string, commentId: string, body: string) => Promise<Task>;
   };
 }) {
   const [agents, setAgents] = useState(initialAgents);
@@ -261,6 +263,15 @@ export function TaskBoard({
               : null
           }
           onOpenChange={setOpen}
+          agents={agents}
+          onPostComment={persistence?.postComment ? (body) => mutate(async () => {
+            const saved = await persistence.postComment!(editing!.id, body);
+            updateTasks((current) => current.map((task) => task.id === saved.id ? saved : task));
+          }) : undefined}
+          onAnswerFeedback={persistence?.answerFeedback ? (commentId, body) => mutate(async () => {
+            const saved = await persistence.answerFeedback!(editing!.id, commentId, body);
+            updateTasks((current) => current.map((task) => task.id === saved.id ? saved : task));
+          }) : undefined}
           onSave={saveTask}
           onDelete={deleteTask}
         />
