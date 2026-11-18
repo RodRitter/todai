@@ -482,7 +482,7 @@ export const ManyArtifacts: Story = {
   },
 };
 export const StableWorkspace: Story = {
-  args: { open: true, task: exampleTasks[0], onPostComment: fn(), onRun: fn(), assignedColumns: [exampleTasks[0].status] },
+  args: { open: true, task: { ...exampleTasks[0], workflowId: "build" }, onPostComment: fn(), onRun: fn() },
   play: async ({ canvasElement, args }) => {
     const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
     await userEvent.click(dialog.getByRole("tab", { name: "Activity" }));
@@ -490,7 +490,7 @@ export const StableWorkspace: Story = {
     await userEvent.click(dialog.getByRole("button", { name: "Expand task details" }));
     await expect(dialog.getByRole("tab", { name: "Activity" })).toHaveAttribute("aria-selected", "true");
     await userEvent.click(dialog.getByRole("tab", { name: "Workflow" }));
-    await expect(dialog.getByText(/No workflow is configured/)).toBeVisible();
+    await expect(dialog.getByText(/Save task changes, then Run/)).toBeVisible();
     await userEvent.click(dialog.getByRole("tab", { name: "Activity" }));
     await expect(dialog.getByRole("textbox", { name: "Your comment" })).toHaveTextContent("Please check the keyboard navigation.");
     await userEvent.click(dialog.getByRole("textbox", { name: "Your comment" }));
@@ -672,3 +672,5 @@ export const DenseReviewHistory: Story = {
   },
 };
 export const DenseReviewHistoryNarrow: Story = { ...DenseReviewHistory, play: undefined, globals: { viewport: { value: "mobile1" } } };
+
+export const LegacyFeedbackBeforeConversion: Story = { args: { open: true, task: { ...exampleTasks[0], workflowId: null, agentStatus: "Waiting", comments: [{ id: "legacy-question", taskId: exampleTasks[0].id, body: "Which option should I use?", createdAt: "2026-11-18T10:00:00Z", feedbackStatus: "pending" }] }, onStop: fn() } };

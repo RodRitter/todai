@@ -26,7 +26,8 @@ const workflowApi = {
   save: (workflow: Workflow) => request<Workflow>("/api/workflows", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(workflow) }),
 };
 
-export function TaskWorkflow({ taskId, workflowId, onChange, agents = [], disabled, onHistory, api = workflowApi }: {
+export function TaskWorkflow({ taskId, workflowId, onChange, agents = [], columns = [], disabled, onHistory, api = workflowApi }: {
+  columns?: readonly string[];
   taskId: string;
   workflowId: string | null;
   onChange: (id: string | null) => void;
@@ -64,11 +65,11 @@ export function TaskWorkflow({ taskId, workflowId, onChange, agents = [], disabl
     <div className="space-y-2">
       <Label htmlFor="task-workflow">Workflow</Label>
       <NativeSelect id="task-workflow" value={workflowId ?? ""} disabled={disabled || !loaded} onChange={(event) => onChange(event.target.value || null)}>
-        <option value="">Use column agent (legacy)</option>
+        <option value="">Choose a workflow</option>
         {workflowId && !selected && <option value={workflowId}>Unavailable workflow — choose another</option>}
         {workflows.map((workflow) => <option key={workflow.id} value={workflow.id}>{workflow.name}</option>)}
       </NativeSelect>
-      <p className="text-sm text-muted-foreground">{workflowId ? "Save task changes, then Run. This workflow runs independently of column automation." : "No workflow is configured. Runs currently use the agent assigned to the task’s board column."}</p>
+      <p className="text-sm text-muted-foreground">{workflowId ? "Save task changes, then Run. Workflow milestones control board status." : "Choose or create a workflow, save the task, then press Run."}</p>
       {!loaded && !error && <p role="status" className="text-sm text-muted-foreground">Loading workflows…</p>}
       {error && <p role="alert" className="text-sm text-destructive">{error} <Button type="button" variant="ghost" size="sm" onClick={() => setAttempt((value) => value + 1)}>Retry</Button></p>}
       <div className="flex flex-wrap gap-2">
@@ -77,7 +78,7 @@ export function TaskWorkflow({ taskId, workflowId, onChange, agents = [], disabl
       </div>
       {!agents.length && <p className="text-sm text-muted-foreground">Create an agent in Agents to add agent steps. Human checkpoints can be used on their own.</p>}
     </div>
-    {draft && <WorkflowEditor key={draft.id} initial={draft} agents={agents} disabled={disabled} save={api.save} onCancel={() => setDraft(null)} onSaved={(workflow) => {
+    {draft && <WorkflowEditor key={draft.id} initial={draft} agents={agents} columns={columns} disabled={disabled} save={api.save} onCancel={() => setDraft(null)} onSaved={(workflow) => {
       setWorkflows((items) => [...items.filter((item) => item.id !== workflow.id), workflow]);
       onChange(workflow.id); setDraft(null);
     }} />}

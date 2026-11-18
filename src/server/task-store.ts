@@ -1,6 +1,7 @@
+import { legacyPipeline, migrateColumnAutomation } from "./workflow-migration.ts";
 import { readReview, saveReview, reviewResult } from "./workflow-review.ts";
-import { listWorkflows, saveWorkflow, WorkflowValidationError } from "./workflow-store.ts";
-import { workflowSteps, type Workflow, type WorkflowExecution, type WorkflowStepSnapshot } from "../domain/workflow.ts";
+import { renameWorkflowStatus, listWorkflows, saveWorkflow, WorkflowValidationError } from "./workflow-store.ts";
+import { defaultStatusMappings, milestoneLabels, workflowSteps, type Workflow, type WorkflowExecution, type WorkflowStepSnapshot } from "../domain/workflow.ts";
 import { workflowProgression, type WorkflowProgression } from "./workflow-progression.ts";
 import { parseWorkspaceSetup, starterAgentProfile } from "../domain/workspace-setup.ts";
 import type { ArtifactReference } from "../domain/artifact.ts";
@@ -167,8 +168,23 @@ export class TaskStore {
     });
   }
 
+  migrateColumnAutomation() {
+    return this.transaction(() => migrateColumnAutomation(this.db));
+  }
+
+  requireWorkflowMode() {
+    const report = this.migrateColumnAutomation();
+    if (report.state === "blocked") throw new PendingRunError(`Finish or stop legacy work before conversion. Affected tasks: ${report.blockedTaskIds.join(", ")}`);
+  }
+
+  private workflowOnly() {
+    return Boolean(this.db.prepare("SELECT 1 FROM settings WHERE workspaceId = workspace_id() AND key = 'workflowMigration'").get());
+  }
+
   boardSnapshot() {
+    const migration = this.migrateColumnAutomation();
     return this.transaction(() => ({
+      migration,
       tasks: this.list(),
       columns: this.listColumns(),
       assignments: this.listColumnAgents(),
@@ -179,7 +195,8 @@ export class TaskStore {
     return this.transaction(() => {
       const columns = this.db.prepare("SELECT id, name FROM board_columns WHERE board_columns.workspaceId = workspace_id() ORDER BY position").all() as { id: string; name: string }[];
       return {
-        format: "todai-configuration", version: 1,
+        format: "todai-configuration", version: this.workflowOnly() ? 2 : 1,
+        ...(this.workflowOnly() ? { workflows: this.listWorkflows() } : {}),
         agents: this.listAgents(), columns: columns.map((column) => ({ ...column })),
         assignments: this.listColumnAgents().map((assignment) => ({
           columnId: columns.find((column) => column.name === assignment.column)!.id,
@@ -198,9 +215,16 @@ export class TaskStore {
     if (!data.agents.length && !data.columns.length)
       throw new ConfigurationValidationError("Select at least one agent or column.");
     return this.transaction(() => {
+      if (data.version === 1 && this.db.prepare("SELECT id FROM runs WHERE workspaceId = workspace_id() AND workflowExecutionId IS NULL AND status IN ('Queued', 'Running') LIMIT 1").get())
+        throw new ConfigurationValidationError("Wait for queued and running legacy runs to finish before importing configuration.");
       if ((columnMode === "replace" || conflictMode === "overwrite") && data.columns.length && this.db.prepare("SELECT id FROM runs WHERE runs.workspaceId = workspace_id() AND status IN ('Queued', 'Running') LIMIT 1").get())
         throw new ConfigurationValidationError("Wait for queued and active runs to finish before replacing or overwriting columns.");
+      if (data.columns.length && (columnMode === "replace" || conflictMode === "overwrite") && this.list().some((task) => task.workflowActive))
+        throw new ConfigurationValidationError("Stop active workflows, including waiting checkpoints, before replacing or overwriting columns.");
       if (columnMode === "replace" && data.columns.length) {
+        const retained = this.listWorkflows().filter((workflow) => conflictMode !== "overwrite" || !data.workflows?.some((item) => item.id === workflow.id));
+        if (retained.some((workflow) => Object.values(workflow.statusMappings ?? {}).some((name) => name !== null && !data.columns.some((column) => column.name === name))))
+          throw new ConfigurationValidationError("Update existing workflow milestones before replacing their status columns.");
         this.db.exec("DELETE FROM column_assignments WHERE workspaceId = workspace_id(); DELETE FROM board_columns WHERE workspaceId = workspace_id();");
       }
       if (conflictMode === "overwrite") {
@@ -227,6 +251,7 @@ export class TaskStore {
           this.db.prepare("DELETE FROM column_assignments WHERE column_assignments.workspaceId = workspace_id() AND column = ?").run(previous);
           this.db.prepare("UPDATE board_columns SET name = ? WHERE board_columns.workspaceId = workspace_id() AND id = ?").run(name, column.id);
           this.db.prepare("UPDATE tasks SET status = ? WHERE tasks.workspaceId = workspace_id() AND status = ?").run(name, previous);
+          renameWorkflowStatus(this.db, previous, name);
           existing[existing.indexOf(previous)] = name;
         } else {
           this.db.prepare("INSERT INTO board_columns (workspaceId, id, name, position) VALUES (workspace_id(), ?, ?, ?)").run(conflictMode === "overwrite" ? column.id : randomUUID(), name, existing.length);
@@ -234,14 +259,30 @@ export class TaskStore {
         }
         columnNames.set(column.id, name);
       }
-      for (const assignment of data.assignments) {
+      for (const workflow of data.workflows ?? []) {
+        const steps = workflowSteps(workflow).map((step) => step.kind === "checkpoint" ? step : ({ ...step, agentId: agentIds.get(step.agentId)!, ...(step.kind === "review" ? { revisionAgentId: agentIds.get(step.revisionAgentId)! } : {}) }));
+        const statusMappings = workflow.statusMappings && Object.fromEntries(Object.entries(workflow.statusMappings).map(([key, name]) => [key, name === null ? null : columnNames.get(data.columns.find((column) => column.name === name)!.id)!]));
+        const imported = { ...workflow, id: conflictMode === "overwrite" ? workflow.id : randomUUID(), statusMappings };
+        try {
+          saveWorkflow(this.db, workflow.steps ? { ...imported, steps } : { ...imported, agentId: steps[0].agentId });
+        } catch (error) { throw new ConfigurationValidationError(error instanceof Error ? error.message : "Invalid workflow."); }
+      }
+      if (this.workflowOnly() && data.assignments.length) {
+        const columns = data.columns.map((column) => columnNames.get(column.id)!);
+        const assignments = data.assignments.map((item) => ({ column: columnNames.get(item.columnId)!, agentId: agentIds.get(item.agentId)! }));
+        const first = columns.find((column) => assignments.some((item) => item.column === column))!;
+        const workflow = legacyPipeline(columns, assignments, first, false);
+        // Map imported default milestones to their renamed destination columns.
+        workflow.statusMappings = Object.fromEntries(Object.entries(defaultStatusMappings(data.columns.map((column) => column.name))).map(([key, name]) => [key, columnNames.get(data.columns.find((column) => column.name === name)!.id)]));
+        saveWorkflow(this.db, workflow);
+      } else for (const assignment of data.assignments) {
         this.assignColumnAgent({ column: columnNames.get(assignment.columnId)!, agentId: agentIds.get(assignment.agentId)! });
       }
       if (columnMode === "replace" && data.columns.length) {
         for (const task of this.list()) this.cancelFeedback(task.id, "Interrupted");
         this.db.prepare("UPDATE tasks SET status = ?, agentStatus = 'Not started' WHERE tasks.workspaceId = workspace_id()").run(columnNames.get(data.columns[0].id)!);
       }
-      return { agents: data.agents.length, columns: data.columns.length, assignments: data.assignments.length };
+      return { agents: data.agents.length, columns: data.columns.length, assignments: data.assignments.length, workflows: data.workflows?.length ?? (this.workflowOnly() && data.assignments.length ? 1 : 0) };
     });
   }
 
@@ -294,6 +335,7 @@ export class TaskStore {
         );
       }
       const name = this.columnName(input, column);
+      renameWorkflowStatus(this.db, column, name);
       this.db
         .prepare("UPDATE board_columns SET name = ? WHERE board_columns.workspaceId = workspace_id() AND name = ?")
         .run(name, column);
@@ -325,6 +367,9 @@ export class TaskStore {
           "Choose an existing column. Reload settings and try again.",
         );
       }
+      if (this.listWorkflows().some((workflow) => Object.values(workflow.statusMappings ?? {}).includes(column)) ||
+          this.list().some((task) => task.workflowActive && Object.values(this.workflowHistory(task.id)[0]?.workflow.statusMappings ?? {}).includes(column)))
+        throw new ColumnValidationError("Change workflow milestones before deleting this status column.");
       if (columns.length === 1)
         throw new ColumnValidationError("Keep at least one board column.");
       if (
@@ -373,6 +418,11 @@ export class TaskStore {
     });
   }
 
+  private hasActiveWorkflow(taskId: string) {
+    return Boolean(this.db.prepare(`SELECT 1 FROM runs WHERE workspaceId = workspace_id() AND taskId = ? AND workflowExecutionId IS NOT NULL AND status IN ('Queued', 'Running')
+      UNION ALL SELECT 1 FROM comments WHERE workspaceId = workspace_id() AND taskId = ? AND workflowExecutionId IS NOT NULL AND feedbackStatus = 'pending' LIMIT 1`).get(taskId, taskId));
+  }
+
   list(): Task[] {
     return (
       this.db
@@ -382,6 +432,7 @@ export class TaskStore {
       const workflowProgress = this.reviewProgress(task);
       return {
         ...task,
+        workflowActive: this.hasActiveWorkflow(task.id),
         ...(workflowProgress ? { workflowProgress } : {}),
         autoWorkflow: Boolean(task.autoWorkflow),
         autoRun: Boolean(task.autoRun),
@@ -438,6 +489,7 @@ export class TaskStore {
       if (previous?.workflowId !== workflowId && (previous?.comments?.some((comment) => comment.feedbackStatus === "pending") || this.history(task.id).some((run) => ["Queued", "Running"].includes(run.status) || (run.status === "Waiting" && previous?.comments?.some((comment) => comment.runId === run.id && comment.feedbackStatus === "pending")))))
         throw new RunValidationError("Finish or stop the current execution before changing workflows.");
       if (previous && previous.status !== task.status) {
+        if (this.hasActiveWorkflow(previous.id)) throw new RunValidationError("Stop the active workflow before moving this task.");
         this.cancelFeedback(task.id, "Interrupted");
         this.db
           .prepare(
@@ -477,11 +529,15 @@ export class TaskStore {
           task.title.trim(),
           task.description,
           task.status,
-          Number(task.autoWorkflow ?? previous?.autoWorkflow ?? false),
-          Number(task.autoRun ?? previous?.autoRun ?? false),
+          Number(!this.workflowOnly() && (task.autoWorkflow ?? previous?.autoWorkflow ?? false)),
+          Number(!this.workflowOnly() && (task.autoRun ?? previous?.autoRun ?? false)),
           workflowId,
         );
-      if (!workflowId && previous?.agentStatus !== "Stopped" && (!previous || previous.status !== task.status) && (task.autoRun ?? previous?.autoRun ?? false)) {
+      if (workflowId && workflowId !== previous?.workflowId) {
+        const ready = this.listWorkflows().find((workflow) => workflow.id === workflowId)?.statusMappings?.todo;
+        if (ready) this.db.prepare("UPDATE tasks SET status = ? WHERE workspaceId = workspace_id() AND id = ?").run(ready, task.id);
+      }
+      if (!this.workflowOnly() && !workflowId && previous?.agentStatus !== "Stopped" && (!previous || previous.status !== task.status) && (task.autoRun ?? previous?.autoRun ?? false)) {
         this.queueAgent(task.id, task.status);
       }
       return this.list().find((item) => item.id === task.id)!;
@@ -493,7 +549,7 @@ export class TaskStore {
   saveWorkflow(input: unknown): Workflow {
     this.assertWorkspaceActive();
     this.assertInputOwnership(input);
-    return this.transaction(() => saveWorkflow(this.db, input));
+    return this.transaction(() => saveWorkflow(this.db, this.workflowOnly() && input && typeof input === "object" ? { ...input, statusMappings: (input as Workflow).statusMappings ?? defaultStatusMappings(this.listColumns()) } : input));
   }
 
   workflowHistory(taskId: string): WorkflowExecution[] {
@@ -529,6 +585,8 @@ export class TaskStore {
     this.assertWorkspaceActive();
     const workflow = this.listWorkflows().find((item) => item.id === task.workflowId);
     if (!workflow) throw new RunValidationError("Choose a workflow with an existing agent before running.");
+    if (this.workflowOnly() && Object.keys(milestoneLabels).some((key) => workflow.statusMappings?.[key as keyof typeof milestoneLabels] === undefined))
+      throw new RunValidationError("Choose each status milestone in the workflow editor, or explicitly keep the current status.");
     const agents = this.listAgents();
     const steps = workflowSteps(workflow).map((step) => {
       if (step.kind === "checkpoint") return { ...step, profile: null };
@@ -546,7 +604,19 @@ export class TaskStore {
     this.queueWorkflowStep(task, id, first);
   }
 
+  private applyMilestone(task: Task, executionId: string, milestone: keyof typeof milestoneLabels) {
+    const row = this.db.prepare("SELECT workflow FROM workflow_executions WHERE id = ? AND workspaceId = workspace_id()").get(executionId);
+    const workflow: Workflow = JSON.parse(row!.workflow as string);
+    const column = workflow.statusMappings?.[milestone];
+    if (column && !this.listColumns().includes(column)) throw new RunValidationError("This execution maps a milestone to a removed status. Choose a new workflow configuration and run again.");
+    if (column) {
+      this.db.prepare("UPDATE tasks SET status = ? WHERE id = ? AND workspaceId = workspace_id()").run(column, task.id);
+      task.status = column;
+    }
+  }
+
   private queueWorkflowStep(task: Task, executionId: string, step: WorkflowStepSnapshot) {
+    this.applyMilestone(task, executionId, step.kind === "checkpoint" || (step.kind === "review" && readReview(this.db, executionId, step.id)?.phase === "intervention") ? "inReview" : "inProgress");
     if (step.kind === "review") {
       this.queueReviewStep(task, executionId, step);
       return;
@@ -605,6 +675,7 @@ export class TaskStore {
       this.db.prepare("UPDATE workflow_executions SET stepId = ? WHERE id = ? AND workspaceId = workspace_id()").run(next.id, execution.id);
       this.queueWorkflowStep(task, execution.id, next);
     } else {
+      this.applyMilestone(task, execution.id, "done");
       this.db.prepare(`UPDATE tasks SET agentStatus = CASE
         WHEN EXISTS (SELECT 1 FROM runs WHERE workspaceId = workspace_id() AND taskId = ? AND status = 'Queued') THEN 'Queued'
         ELSE 'Complete' END WHERE id = ? AND workspaceId = workspace_id()`).run(task.id, task.id);
@@ -642,6 +713,7 @@ export class TaskStore {
         this.queueWorkflow(task);
         return this.list().find((item) => item.id === taskId)!;
       }
+      if (this.workflowOnly()) throw new RunValidationError("Choose a workflow before running this task.");
       if (!this.listColumnAgents().some((assignment) => assignment.column === task.status))
         throw new RunValidationError("Assign an agent to this column before running the task.");
       this.queueAgent(task.id, task.status);
@@ -655,7 +727,7 @@ export class TaskStore {
     return this.transaction(() => {
       const task = this.list().find((item) => item.id === taskId);
       if (!task) throw new RunValidationError("This task no longer exists.");
-      if (!task.comments?.some((comment) => comment.feedbackKind && comment.feedbackStatus === "pending") && !this.history(taskId).some((run) => run.status === "Queued" || run.status === "Running" || (run.workflowExecutionId && run.status === "Waiting" && task.comments?.some((comment) => comment.runId === run.id && comment.feedbackStatus === "pending"))))
+      if (!task.comments?.some((comment) => comment.feedbackStatus === "pending") && !this.history(taskId).some((run) => run.status === "Queued" || run.status === "Running" || (run.workflowExecutionId && run.status === "Waiting" && task.comments?.some((comment) => comment.runId === run.id && comment.feedbackStatus === "pending"))))
         throw new RunValidationError("This task no longer has a queued or running agent.");
       const now = new Date().toISOString();
       this.cancelFeedback(taskId, "Stopped");
@@ -672,7 +744,7 @@ export class TaskStore {
     this.db.prepare(`UPDATE workflow_checkpoints SET status = ? WHERE requestId IN
       (SELECT id FROM comments WHERE workspaceId = workspace_id() AND taskId = ? AND feedbackStatus = 'pending')`).run(status, taskId);
     this.db.prepare(`UPDATE runs SET status = ? WHERE workspaceId = workspace_id() AND taskId = ?
-      AND workflowExecutionId IS NOT NULL AND status = 'Waiting' AND id IN (SELECT runId FROM comments WHERE taskId = ? AND feedbackStatus = 'pending')`).run(status, taskId, taskId);
+      AND status = 'Waiting' AND id IN (SELECT runId FROM comments WHERE taskId = ? AND feedbackStatus = 'pending')`).run(status, taskId, taskId);
     this.db.prepare("UPDATE comments SET feedbackStatus = 'cancelled' WHERE workspaceId = workspace_id() AND taskId = ? AND feedbackStatus = 'pending'").run(taskId);
   }
 
@@ -1196,6 +1268,7 @@ export class TaskStore {
   }
 
   assignColumnAgent(input: unknown): ColumnAssignment | null {
+    if (this.workflowOnly()) throw new AgentValidationError("Choose agents in a workflow; column assignments have been retired.");
     if (!input || typeof input !== "object")
       throw new AgentValidationError("Choose a column and agent.");
     this.assertInputOwnership(input);

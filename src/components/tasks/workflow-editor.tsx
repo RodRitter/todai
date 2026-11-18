@@ -2,19 +2,20 @@
 
 import { useState } from "react";
 import type { AgentProfile } from "@/domain/column-agent";
-import { workflowSteps, type Workflow, type WorkflowStep } from "@/domain/workflow";
+import { defaultStatusMappings, milestoneLabels, workflowSteps, type Workflow, type WorkflowStep, type StatusMappings } from "@/domain/workflow";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 
-export function WorkflowEditor({ initial, agents, disabled, save, onSaved, onCancel }: {
-  initial: Workflow; agents: AgentProfile[]; disabled: boolean;
+export function WorkflowEditor({ initial, agents, columns = [], disabled, save, onSaved, onCancel }: {
+  initial: Workflow; agents: AgentProfile[]; columns?: readonly string[]; disabled: boolean;
   save: (workflow: Workflow) => Promise<Workflow>; onSaved: (workflow: Workflow) => void; onCancel: () => void;
 }) {
   const [name, setName] = useState(initial.name);
   const [steps, setSteps] = useState(() => workflowSteps(initial));
+  const [statusMappings, setStatusMappings] = useState<StatusMappings>(() => initial.statusMappings ?? defaultStatusMappings(columns));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const invalidAgent = (step: WorkflowStep) => step.kind !== "checkpoint" && (!agents.some((agent) => agent.id === step.agentId) || (step.kind === "review" && !agents.some((agent) => agent.id === step.revisionAgentId)));
@@ -33,6 +34,17 @@ export function WorkflowEditor({ initial, agents, disabled, save, onSaved, onCan
     <legend className="px-1 text-sm font-medium">Reusable workflow</legend>
     <p className="text-xs text-muted-foreground">Steps run from top to bottom. Changes apply to future executions; active executions retain their original configuration.</p>
     <div className="space-y-2"><Label htmlFor="workflow-name">Name</Label><Input id="workflow-name" value={name} onChange={(event) => setName(event.target.value)} /></div>
+    {columns.length > 0 && <fieldset className="space-y-2 rounded border p-3">
+      <legend className="px-1 text-sm font-medium">Status milestones</legend>
+      <p className="text-xs text-muted-foreground">Choose a status or explicitly keep the current status for each milestone. Internal agent reviews use the working status.</p>
+      {(Object.entries(milestoneLabels) as [keyof StatusMappings, string][]).map(([key, label]) => <div key={key} className="space-y-1">
+        <Label htmlFor={`milestone-${key}`}>{label}</Label>
+        <NativeSelect id={`milestone-${key}`} value={statusMappings[key] === undefined ? "" : JSON.stringify(statusMappings[key])} onChange={(event) => setStatusMappings((current) => ({ ...current, [key]: JSON.parse(event.target.value) as string | null }))}>
+          <option value="" disabled>Choose a status</option><option value="null">Keep current status</option>
+          {columns.map((column) => <option key={column} value={JSON.stringify(column)}>{column}</option>)}
+        </NativeSelect>
+      </div>)}
+    </fieldset>}
     <ol className="space-y-3" aria-label="Workflow steps">{steps.map((step, index) => <li key={step.id} className="space-y-3 rounded-lg border p-3">
       <div className="flex flex-wrap items-center gap-2"><span className="mr-auto text-sm font-medium">Step {index + 1}{step.kind === "checkpoint" ? " · Human approval" : step.kind === "review" ? " · Review ↔ Revise" : " · Agent"}</span>
         <Button type="button" size="sm" variant="ghost" aria-label={`Move step ${index + 1} up`} disabled={index === 0} onClick={() => move(index, -1)}>↑</Button>
@@ -59,9 +71,9 @@ export function WorkflowEditor({ initial, agents, disabled, save, onSaved, onCan
     <Button type="button" variant="outline" size="sm" onClick={() => setSteps((items) => [...items, { id: crypto.randomUUID(), kind: "checkpoint", instructions: "" }])}>Add human checkpoint</Button>
     <Button type="button" variant="outline" size="sm" onClick={() => setSteps((items) => [...items, { id: crypto.randomUUID(), kind: "review", agentId: agents[0]?.id ?? "", instructions: "", revisionAgentId: agents[0]?.id ?? "", revisionInstructions: "", maxRounds: 3 }])}>Add review section</Button>
     {(error || validation) && <p role="alert" className="text-sm text-destructive">{error || validation}</p>}
-    <div className="flex gap-2"><Button type="button" size="sm" disabled={Boolean(validation)} onClick={async () => {
+    <div className="flex gap-2"><Button type="button" size="sm" disabled={Boolean(validation) || (columns.length > 0 && ["todo", "inProgress", "inReview", "done"].some((key) => statusMappings[key as keyof StatusMappings] === undefined))} onClick={async () => {
       setBusy(true); setError("");
-      try { onSaved(await save({ id: initial.id, name, steps })); } catch (error) { setError(error instanceof Error ? error.message : "Could not save workflow."); } finally { setBusy(false); }
+      try { onSaved(await save({ id: initial.id, name, steps, ...(columns.length ? { statusMappings } : {}) })); } catch (error) { setError(error instanceof Error ? error.message : "Could not save workflow."); } finally { setBusy(false); }
     }}>{busy ? "Saving…" : "Save workflow"}</Button><Button type="button" variant="ghost" size="sm" onClick={onCancel}>Cancel</Button></div>
   </fieldset>;
 }

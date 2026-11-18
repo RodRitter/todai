@@ -144,6 +144,7 @@ test("renaming a column preserves tasks, assignments and queued work across rest
     ]);
     assert.equal(store.list()[0].status, "Backlog");
     assert.deepEqual(store.boardSnapshot(), {
+      migration: { state: "blocked", affectedTaskIds: ["one"], blockedTaskIds: ["one"] },
       tasks: store.list(),
       columns: ["Backlog", "In progress", "In review", "Done"],
       assignments: [{ column: "Backlog", agentId: "planner" }],

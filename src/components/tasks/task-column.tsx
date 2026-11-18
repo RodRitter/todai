@@ -5,7 +5,6 @@ import type { Status } from "@/domain/task";
 
 export type TaskColumnProps = {
   status: Status;
-  agentSelector?: ReactNode;
   isEmpty?: boolean;
   isDropTarget?: boolean;
   canDrop?: boolean;
@@ -17,7 +16,6 @@ export type TaskColumnProps = {
 
 export function TaskColumn({
   status,
-  agentSelector,
   isEmpty = false,
   isDropTarget = false,
   canDrop = false,
@@ -54,7 +52,6 @@ export function TaskColumn({
         <h2 className="min-w-0 text-lg font-semibold wrap-anywhere">
           {status}
         </h2>
-        {agentSelector}
       </div>
       {isEmpty ? (
         <div

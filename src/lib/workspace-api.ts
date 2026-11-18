@@ -6,6 +6,7 @@ import type { AgentProfile, ColumnAssignment, ExecutionTool, ExecutorSettingsDat
 import type { Task } from "@/domain/task";
 
 export type BoardSnapshot = {
+  migration?: { state: "complete" | "blocked"; affectedTaskIds: string[]; blockedTaskIds: string[] };
   tasks: Task[];
   columns: string[];
   assignments: ColumnAssignment[];
@@ -61,11 +62,7 @@ export const agentApi = {
     request<void>(`/api/agents?id=${encodeURIComponent(id)}`, {
       method: "DELETE",
     }),
-  assign: (column: string, agentId: string | null) =>
-    request<ColumnAssignment | null>("/api/column-agents", {
-      method: "PUT",
-      body: { column, agentId },
-    }),
+
 };
 
 export const columnApi = {
@@ -122,5 +119,5 @@ export const workspaceApi = {
 export const configurationApi = {
   get: () => request<import("@/domain/configuration").Configuration>("/api/configuration"),
   import: (data: import("@/domain/configuration").Configuration, columnMode: "add" | "replace" = "add", conflictMode: "copy" | "overwrite" = "copy") =>
-    request<{ agents: number; columns: number; assignments: number }>(`/api/configuration?columns=${columnMode}&conflicts=${conflictMode}`, { method: "POST", body: data }),
+    request<{ agents: number; columns: number; assignments: number; workflows: number }>(`/api/configuration?columns=${columnMode}&conflicts=${conflictMode}`, { method: "POST", body: data }),
 };

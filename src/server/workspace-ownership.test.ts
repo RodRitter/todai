@@ -96,8 +96,8 @@ test("configuration replacement and comments stay in their workspace", () => {
     first.save({ id: "one", title: "First", description: "", status: "To do" });
     first.postComment("one", "Keep this conversation");
     second.save({ id: "two", title: "Second", description: "", status: "To do" });
-    const original = first.exportConfiguration();
     const board = first.boardSnapshot();
+    const original = first.exportConfiguration();
     assert.throws(() => second.importConfiguration(original, "replace", "overwrite"), /workspace/i);
     assert.throws(() => second.postComment("one", "Wrong board"), /workspace/i);
     assert.throws(() => second.addComment({ id: "bad", taskId: "one", body: "Wrong board", createdAt: new Date().toISOString() }), /workspace/i);

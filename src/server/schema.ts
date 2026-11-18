@@ -164,6 +164,8 @@ export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
       const fields = db.prepare(`PRAGMA table_info(${table})`).all();
       if (!fields.some((field) => field.name === "steps")) db.exec(`ALTER TABLE ${table} ADD COLUMN steps TEXT`);
     }
+    if (!db.prepare("PRAGMA table_info(workflows)").all().some((field) => field.name === "statusMappings"))
+      db.exec("ALTER TABLE workflows ADD COLUMN statusMappings TEXT");
     db.exec("COMMIT");
   } catch (error) {
     db.close();

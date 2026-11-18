@@ -21,7 +21,7 @@ test("workflow creation, editing and history are validated and workspace scoped 
   try {
     store.saveAgent({ id: "builder", name: "Builder", tool: "codex", model: "test", effort: "high", instructions: "", permissions: "workspace-write" });
     assert.equal((await PUT(request(workflow))).status, 200);
-    assert.deepEqual(await GET(request()).json(), [workflow]);
+    assert.deepEqual(await GET(request()).json(), [{ ...workflow, statusMappings: { todo: "To do", inProgress: "In progress", inReview: "In review", done: "Done" } }]);
     assert.equal((await PUT(request({ ...workflow, name: "" }))).status, 400);
     assert.equal((await PUT(request(workflow, other.workspaceId))).status, 400);
     assert.deepEqual(await GET(request(undefined, other.workspaceId)).json(), []);

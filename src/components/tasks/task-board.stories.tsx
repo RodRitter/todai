@@ -135,96 +135,6 @@ export const MoveKeepsColumnsStill: Story = {
   },
 };
 
-const reviewer = {
-  id: "reviewer",
-  name: "Reviewer",
-  tool: "codex",
-  model: "custom-model",
-  effort: "high",
-  instructions: "",
-  permissions: "read-only",
-} as const;
-
-export const AssignColumnAgent: Story = {
-  args: { initialTasks: [], initialAgents: [reviewer] },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const body = within(canvasElement.ownerDocument.body);
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Configure agent for In review" }),
-    );
-    let dialog = within(await body.findByRole("dialog"));
-    await userEvent.selectOptions(
-      dialog.getByLabelText("Assigned agent"),
-      "reviewer",
-    );
-    await userEvent.click(
-      dialog.getByRole("button", { name: "Save assignment" }),
-    );
-    await waitFor(() =>
-      expect(body.queryByRole("dialog")).not.toBeInTheDocument(),
-    );
-    await expect(
-      canvas.getByLabelText("Assigned agent: Reviewer"),
-    ).toBeVisible();
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Configure agent for In review" }),
-    );
-    dialog = within(await body.findByRole("dialog"));
-    await expect(dialog.getByLabelText("Assigned agent")).toHaveValue(
-      "reviewer",
-    );
-    await userEvent.selectOptions(dialog.getByLabelText("Assigned agent"), "");
-    await userEvent.click(
-      dialog.getByRole("button", { name: "Save assignment" }),
-    );
-    await waitFor(() =>
-      expect(body.queryByRole("dialog")).not.toBeInTheDocument(),
-    );
-    await expect(
-      within(canvas.getByRole("region", { name: "In review" })).getByText(
-        "No agent assigned",
-      ),
-    ).toBeVisible();
-  },
-};
-
-export const FailedColumnAgentSave: Story = {
-  args: {
-    initialAgents: [reviewer],
-    assignAgent: async () => {
-      throw new Error("Storage unavailable");
-    },
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const body = within(canvasElement.ownerDocument.body);
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Configure agent for Done" }),
-    );
-    const dialog = within(await body.findByRole("dialog"));
-    await userEvent.selectOptions(
-      dialog.getByLabelText("Assigned agent"),
-      "reviewer",
-    );
-    await userEvent.click(
-      dialog.getByRole("button", { name: "Save assignment" }),
-    );
-    await body.findByText(
-      "Could not save assignment. Reload to check available agents, or try again.",
-    );
-    await expect(dialog.getByLabelText("Assigned agent")).toHaveValue(
-      "reviewer",
-    );
-    await userEvent.click(dialog.getByRole("button", { name: "Cancel" }));
-    await expect(
-      within(canvas.getByRole("region", { name: "Done" })).getByText(
-        "No agent assigned",
-      ),
-    ).toBeVisible();
-  },
-};
-
 export const LiveExecution: Story = {
   args: {
     initialTasks: [
@@ -339,3 +249,6 @@ export const ResponsiveColumns: Story = {
     },
   },
 };
+
+export const WorkflowMoveLocked: Story = { args: { initialTasks: [{ ...exampleTasks[0], workflowId: "delivery", workflowActive: true, agentStatus: "Waiting" }] } };
+export const MigrationPending: Story = { args: { initialMigration: { state: "blocked", affectedTaskIds: [exampleTasks[0].id], blockedTaskIds: [exampleTasks[0].id] } } };

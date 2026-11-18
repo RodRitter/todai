@@ -74,3 +74,6 @@ export const ReviewSectionNarrow: Story = {
   ] } },
   decorators: [(Story) => <div className="max-w-72"><Story /></div>],
 };
+
+export const CustomMilestones: Story = { args: { columns: ["Backlog", "Building", "Approval", "Shipped"], initial: { id: "custom", name: "Delivery", steps: [{ id: "build", agentId: "builder", instructions: "Implement" }, { id: "approve", kind: "checkpoint", instructions: "Approve delivery" }] } } };
+export const DefaultMilestones: Story = { args: { columns: ["To do", "In progress", "In review", "Done"] } };

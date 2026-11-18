@@ -21,13 +21,9 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Empty: Story = {};
-export const Assigned: Story = {
+export const Available: Story = {
   args: {
     initialAgents: [reviewer],
-    initialAssignments: [
-      { column: "In review", agentId: "reviewer" },
-      { column: "Done", agentId: "reviewer" },
-    ],
   },
 };
 export const CreateEditDelete: Story = {
@@ -141,11 +137,6 @@ export const CompactList: Story = {
         model: "gpt-6.1-terra",
         permissions: "workspace-write",
       },
-    ],
-    initialAssignments: [
-      { column: "To do", agentId: "planner" },
-      { column: "In review", agentId: "reviewer" },
-      { column: "In progress", agentId: "builder" },
     ],
   },
 };

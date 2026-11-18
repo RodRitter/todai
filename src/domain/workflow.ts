@@ -8,7 +8,9 @@ export type WorkflowStep = { id: string; instructions: string } & (
   | { kind: "review"; agentId: string; revisionAgentId: string; revisionInstructions: string; maxRounds: number }
 );
 export type WorkflowStepSnapshot = WorkflowStep & { profile: AgentProfile | null; revisionProfile?: AgentProfile; review?: ReviewState };
-export type Workflow = { id: string; name: string } & (
+export type StatusMappings = Partial<Record<"todo" | "inProgress" | "inReview" | "done", string | null>>;
+
+export type Workflow = { id: string; name: string; statusMappings?: StatusMappings } & (
   | { steps: WorkflowStep[]; agentId?: never; instructions?: never }
   | { steps?: undefined; agentId: string; instructions: string }
 );
@@ -61,3 +63,17 @@ export const reviewPhaseLabels: Record<ReviewState["phase"], string> = {
   intervention: "Human intervention needed",
   complete: "Approved",
 };
+
+export const milestoneLabels = { todo: "Ready", inProgress: "Working", inReview: "Human review", done: "Completed" } as const;
+export function defaultStatusMappings(columns: readonly string[]): StatusMappings {
+  return Object.fromEntries(Object.entries({ todo: "To do", inProgress: "In progress", inReview: "In review", done: "Done" }).filter(([, name]) => columns.includes(name)));
+}
+
+export function parseStatusMappings(input: unknown, columns: readonly string[]): StatusMappings {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("Choose valid status mappings.");
+  for (const [key, column] of Object.entries(input)) {
+    if (!Object.hasOwn(milestoneLabels, key) || (column !== null && (typeof column !== "string" || !columns.includes(column))))
+      throw new Error(`Milestone ${key}: choose an existing status column or keep the current status.`);
+  }
+  return { ...input } as StatusMappings;
+}

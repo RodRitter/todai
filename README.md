@@ -1,6 +1,6 @@
 # Todai
 
-A local task board for managing work with AI coding agents. Organize tasks, assign agents to columns, and follow their progress from one workspace.
+A local task board for managing work with AI coding agents. Organize tasks by status, choose reusable agent workflows, and follow their progress from one workspace.
 
 Built with Next.js, React, TypeScript, Tailwind CSS, and SQLite.
 
@@ -10,9 +10,9 @@ Built with Next.js, React, TypeScript, Tailwind CSS, and SQLite.
 - Rich text task descriptions and human comments, with @agent mentions and ordered agent replies.
 - Reusable Codex CLI and Claude Code profiles with tool-specific model, effort, instructions, and permissions.
 - Queued agent execution with live status updates and persisted run history.
-- Manual execution by default, with a Run button in each task and optional Auto-run on column entry.
-- Optional auto-workflow to move tasks to the next column after a successful run.
-- JSON import and export of agents, columns, and their assignments.
+- Explicit Run control for reusable workflows, with human checkpoints and bounded review loops.
+- Optional workflow milestones update board status without coupling agents to columns.
+- Versioned JSON import and export of agents, columns, workflows, and status mappings.
 - Workspace artifact library for text, Markdown, file uploads, and external links.
 - Local SQLite storage and a Storybook component explorer.
 
@@ -30,15 +30,17 @@ Open [localhost:3000](http://127.0.0.1:3000).
 1. In **Settings → Workspace**, select your workspace directory.
 2. In **Settings → Executors**, check tool status, test connections, and choose a default executor for new agents.
 3. In **Agents**, choose an executor, model, effort, and permissions.
-4. Assign an agent through a column’s settings, then create or move a task into that column. Open the saved task and press **Run** to queue its agent.
+4. Create a task, choose or create a workflow in its **Workflow** tab, and save. Press **Run** to start it. Moving a task never starts agents.
 
-Add another named workspace in **Settings → Workspace → Add workspace**, then switch using the sidebar selector. Each workspace has its own tasks, agents, columns, assignments, and default executor. Selection lives in the browser URL, so separate tabs can work independently. Switching clears unsaved drafts and leaves queued and active runs in their original directories.
+Add another named workspace in **Settings → Workspace → Add workspace**, then switch using the sidebar selector. Each workspace has its own tasks, agents, columns, workflows, and default executor. Selection lives in the browser URL, so separate tabs can work independently. Switching clears unsaved drafts and leaves queued and active runs in their original directories.
 
 Saved tasks can use a reusable single-step workflow. In the task’s **Workflow** tab, choose **Create workflow**, name it, select an existing agent, and enter step instructions. Save the workflow and task, then press **Run**. Workflows belong to their workspace and run without a column assignment. Edit a selected workflow to change future executions; each execution retains its original workflow and agent configuration.
 
-Expand **Workflow executions** to inspect each attempt’s outcome, result, step instructions, and exact prompt supplied by Todai. Provider instructions and private reasoning are not included. Feedback resumes the same snapshotted step; stopping, failing, or interrupting preserves history. Comment replies remain separate. Workflow-backed tasks bypass column Auto-run and Auto-workflow; tasks without a workflow retain the legacy controls.
+Expand **Workflow executions** to inspect each attempt’s outcome, result, step instructions, and exact prompt supplied by Todai. Provider instructions and private reasoning are not included. Feedback resumes the same snapshotted step; stopping, failing, or interrupting preserves history. Comment replies remain separate. Tasks without a workflow show a chooser before they can run.
 
-Task automation is opt-in. Enable **Auto-run** to start the assigned agent when a task enters a column. Enable **Auto-workflow** to move to the next column after a successful run; the next agent waits for **Run** unless Auto-run is also enabled. Save task edits before pressing Run.
+Workflow milestones can map **Ready**, **Working**, **Human review**, and **Completed** to board statuses. Matching default columns receive To do, In progress, In review, and Done respectively. On custom boards, explicitly select each unmapped milestone or choose **Keep current status**. Selecting a workflow applies Ready; agent steps and internal reviews use Working; checkpoints and review-limit interventions use Human review; successful completion uses Completed. Ordinary agent steps need no individual column assignment. Runs retain their saved mappings, and renaming a column updates references.
+
+Manual moves are disabled while workflow work is queued, running, or waiting. Stop the workflow first; a running process must finish stopping before a move is accepted. Changing the selected workflow is also blocked while work is active.
 
 New boards start with **To do**, **In progress**, **In review**, and **Done**. Customize them in **Settings → Board**.
 
@@ -58,7 +60,9 @@ Agents run one at a time. Keep the server running while they work. Todai is desi
 
 Data is stored in `.todai/tasks.sqlite`. Set `TODAI_DB_PATH` to use another database file. Preserve the database to keep your tasks, profiles, settings, and run history across restarts.
 
-The agent workspace is configured separately in Settings. Configuration exports include selected agents, columns, and assignments; they do not include tasks or workspace paths.
+The agent workspace is configured separately in Settings. Version 2 configuration exports include selected agents, columns, workflows, and milestone mappings; they do not include tasks or workspace paths. A workflow is included only when all its agents and mapped columns are selected. Imports remap references when making copies and reject missing agents or statuses. Replacing columns requires stopping active workflows, including waiting checkpoints, and resolving milestones that would reference removed columns.
+
+On first workspace access after upgrading, drained legacy column pipelines convert transactionally into explicit workflows. Tasks keep their placement and history, and conversion never starts work. Both legacy automatic settings enabled becomes automatic continuation between adjacent assigned columns; unassigned gaps and every other combination retain a human checkpoint before the next agent. Tasks without a current column assignment stay unconfigured. The board reports affected tasks. Queued, running, or waiting legacy work blocks conversion until it finishes or is explicitly stopped. Repeated access and restarts do not duplicate workflows. Unused assigned pipelines remain available as manual workflows. Version 1 imports use the same pipeline conversion with manual checkpoints, because the old export format contains no task-level automation preferences.
 
 Settings tabs can be linked directly with `/settings?tab=general`, `/settings?tab=workspaces`, `/settings?tab=board`, or `/settings?tab=executors`.
 

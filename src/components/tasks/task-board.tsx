@@ -13,26 +13,20 @@ import { useBoardMotion } from "@/hooks/use-board-motion";
 import { statuses, type Status, type Task } from "@/domain/task";
 import { TaskCard } from "./task-card";
 import { TaskColumn } from "./task-column";
-import { ColumnAgentPicker } from "./column-agent-picker";
-import { type AgentProfile, type ColumnAssignment } from "@/domain/column-agent";
+import { type AgentProfile } from "@/domain/column-agent";
 import { TaskEditor } from "./task-editor";
 
 export function TaskBoard({
   columns: initialColumns = statuses,
   initialTasks = [],
+  initialMigration,
   initialAgents = [],
-  initialAssignments = [],
-  assignAgent,
   persistence,
 }: {
   columns?: readonly string[];
   initialTasks?: Task[];
+  initialMigration?: BoardSnapshot["migration"];
   initialAgents?: AgentProfile[];
-  initialAssignments?: ColumnAssignment[];
-  assignAgent?: (
-    column: Status,
-    agentId: string | null,
-  ) => Promise<ColumnAssignment | null>;
   persistence?: {
     list?: () => Promise<Task[] | BoardSnapshot>;
     save: (task: Task) => Promise<Task>;
@@ -46,10 +40,10 @@ export function TaskBoard({
 }) {
   const [agents] = useState(initialAgents);
   const [columns, setColumns] = useState(initialColumns);
-  const [assignments, setAssignments] = useState(initialAssignments);
   const saving = useRef(false);
   const revision = useRef(0);
   const [busy, setBusy] = useState(false);
+  const [migration, setMigration] = useState<BoardSnapshot["migration"]>(initialMigration);
   const [tasks, setTasks] = useState(initialTasks);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Task | null>(null);
@@ -70,9 +64,9 @@ export function TaskBoard({
         if (active && !saving.current && before === revision.current) {
           if (Array.isArray(latest)) setTasks(latest);
           else {
+            setMigration(latest.migration);
             setTasks(latest.tasks);
             setColumns(latest.columns);
-            setAssignments(latest.assignments);
           }
         }
         if (active && errorToast !== undefined) {
@@ -157,6 +151,8 @@ export function TaskBoard({
         aria-label="Task board"
         tabIndex={-1}
       >
+        {migration?.state === "blocked" && <p role="status" className="mb-4 rounded border p-3 text-sm">Workflow conversion is waiting for legacy work to finish or be stopped: {migration.blockedTaskIds.map((id) => tasks.find((task) => task.id === id)?.title ?? id).join(", ")}. No work is started by conversion.</p>}
+        {migration?.state === "complete" && migration.affectedTaskIds.length > 0 && <details className="mb-4 text-sm"><summary>Converted {migration.affectedTaskIds.length} tasks to workflows</summary><p>{migration.affectedTaskIds.map((id) => tasks.find((task) => task.id === id)?.title ?? id).join(", ")}. Task placement and history were preserved. Review each workflow before running it.</p></details>}
         <div
           ref={boardRef}
           className="grid flex-1 grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] items-stretch gap-2"
@@ -167,25 +163,6 @@ export function TaskBoard({
               <TaskColumn
                 key={column}
                 status={column}
-                agentSelector={
-                  <ColumnAgentPicker
-                    column={column}
-                    agents={agents}
-                    agentId={assignments.find((item) => item.column === column)?.agentId}
-                    disabled={busy}
-                    onSave={(agentId) =>
-                      mutate(async () => {
-                        const saved = assignAgent
-                          ? await assignAgent(column, agentId)
-                          : agentId ? { column, agentId } : null;
-                        setAssignments((current) => [
-                          ...current.filter((item) => item.column !== column),
-                          ...(saved ? [saved] : []),
-                        ]);
-                      })
-                    }
-                  />
-                }
                 isEmpty={columnTasks.length === 0}
                 isDropTarget={dropColumn === column}
                 canDrop={!busy && draggedTaskId !== null}
@@ -193,7 +170,7 @@ export function TaskBoard({
                 onDragLeave={() => setDropColumn(null)}
                 onDrop={() => {
                   const task = tasks.find((item) => item.id === draggedTaskId);
-                  if (task && task.status !== column && !saving.current)
+                  if (task && !task.workflowActive && task.status !== column && !saving.current)
                     void notifyOperation(
                       () => saveTask({ ...task, status: column }),
                       {
@@ -214,7 +191,7 @@ export function TaskBoard({
                     onEdit={(task) => {
                       if (!busy) openEditor(task);
                     }}
-                    onDragStart={(dragged) => setDraggedTaskId(dragged.id)}
+                    onDragStart={(dragged) => { if (!dragged.workflowActive) setDraggedTaskId(dragged.id); }}
                     onDragEnd={endDrag}
                   />
                 ))}
@@ -246,7 +223,6 @@ export function TaskBoard({
             const saved = await persistence.answerFeedback!(editing!.id, commentId, body, decision);
             updateTasks((current) => current.map((task) => task.id === saved.id ? saved : task));
           }) : undefined}
-          assignedColumns={assignments.map((assignment) => assignment.column)}
           onRun={persistence?.run ? () => mutate(async () => {
             const saved = await persistence.run!(editing!.id);
             updateTasks((current) => current.map((task) => task.id === saved.id ? saved : task));

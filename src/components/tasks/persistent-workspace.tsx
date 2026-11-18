@@ -74,7 +74,7 @@ export function PersistentWorkspace({
         )}
       </main>
     );
-  const { columns, tasks, assignments } = board;
+  const { columns, tasks } = board;
   if (screen === "settings")
     return (
       <UrlColumnSettings
@@ -104,17 +104,15 @@ export function PersistentWorkspace({
         defaultExecutor={defaultExecutor}
         executorStatuses={executorStatuses}
         initialAgents={agents}
-        initialAssignments={assignments}
         persistence={agentApi}
       />
     );
   return (
     <TaskBoard
       columns={columns}
+      initialMigration={board.migration}
       initialTasks={tasks}
       initialAgents={agents}
-      initialAssignments={assignments}
-      assignAgent={agentApi.assign}
       persistence={taskApi}
     />
   );

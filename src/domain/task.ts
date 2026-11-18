@@ -22,6 +22,7 @@ export type Task = {
   status: Status;
   agentStatus: AgentStatus;
   workflowId?: string | null;
+  workflowActive?: boolean;
   workflowProgress?: { step: number; total: number; round: number; limit: number; phase: "review" | "revise" | "intervention" | "complete" };
   autoWorkflow?: boolean;
   autoRun?: boolean;

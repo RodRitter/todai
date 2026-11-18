@@ -137,8 +137,10 @@ test("queued cancellation, column movement and comment replies cannot progress a
     f.store.stopTask(task.id);
     assert.equal(f.store.workflowHistory(task.id)[0].status, "Stopped");
     f.store.runTask(task.id);
+    assert.throws(() => f.store.save({ ...task, status: "In progress" }), /Stop.*before moving/);
+    f.store.stopTask(task.id);
     f.store.save({ ...task, status: "In progress" });
-    assert.equal(f.store.workflowHistory(task.id)[0].status, "Interrupted");
+    assert.equal(f.store.workflowHistory(task.id)[0].status, "Stopped");
     assert.equal(f.store.claimRun(), undefined);
     f.store.runTask(task.id);
     const run = f.store.claimRun()!;
@@ -155,14 +157,16 @@ test("queued cancellation, column movement and comment replies cannot progress a
   } finally { f.cleanup(); }
 });
 
-test("replacing board configuration terminates cancelled workflow feedback", () => {
+test("replacing board configuration requires stopping waiting workflow feedback first", () => {
   const f = fixture();
   try {
     f.store.saveWorkflow(workflow); f.store.save(task); f.store.runTask(task.id);
     const run = f.store.claimRun()!;
     f.store.finishRun(run.id, "Waiting", "Proceed?", "Yes");
+    assert.throws(() => f.store.importConfiguration(f.store.exportConfiguration(), "replace"), /Stop active workflows/);
+    f.store.stopTask(task.id);
     f.store.importConfiguration(f.store.exportConfiguration(), "replace");
-    assert.equal(f.store.workflowHistory(task.id)[0].status, "Interrupted");
+    assert.equal(f.store.workflowHistory(task.id)[0].status, "Stopped");
     f.store.runTask(task.id);
     assert.equal(f.store.workflowHistory(task.id).filter((execution) => ["Queued", "Running", "Waiting"].includes(execution.status)).length, 1);
   } finally { f.cleanup(); }
