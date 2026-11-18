@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, userEvent, waitFor, within } from "storybook/test";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import type { Artifact, TaskArtifact } from "@/domain/artifact";
 import type { TaskComment } from "@/domain/task";
@@ -74,6 +74,7 @@ export const InlineCitation: Story = {
     await userEvent.click(await canvas.findByRole("option", { name: /Revised design evidence/ }));
     await userEvent.click(canvas.getByRole("button", { name: "Post comment" }));
     await expect(await canvas.findByRole("button", { name: "Revised design evidence" })).toBeVisible();
+    await userEvent.click(canvas.getByRole("textbox", { name: "Your comment" }));
     const toolbar = canvas.getByRole("group", { name: "Your comment formatting" });
     await expect(within(toolbar).getByRole("button", { name: "Attach artifact" })).toBeVisible();
   },
@@ -82,6 +83,7 @@ export const PaperclipLoadError: Story = {
   parameters: { failure: true },
   render: () => <Composer />,
   play: async ({ canvasElement }) => {
+    await userEvent.click(await within(canvasElement).findByRole("textbox", { name: "Your comment" }));
     await userEvent.click(within(canvasElement).getByRole("button", { name: "Attach artifact" }));
     await expect(await within(document.body).findByRole("alert")).toHaveTextContent("Connection lost");
   },
@@ -92,7 +94,26 @@ export const OpenPinnedRevision: Story = {
     await userEvent.click(await within(canvasElement).findByRole("button", { name: /View 1 comment reference/ }));
     await userEvent.click(await within(document.body).findByRole("button", { name: `Open ${first.title}, revision 1` }));
     const dialog = within(await within(document.body).findByRole("dialog"));
-    await expect(await dialog.findByText("Evidence")).toBeVisible();
+    await waitFor(() => expect(dialog.getByText("Evidence")).toBeVisible());
     await expect(dialog.getByText("Revision 1", { exact: true })).toBeInTheDocument();
+  },
+};
+
+export const CitationPreview: Story = {
+  render: () => <TaskComments comments={[{
+    id: "citation", taskId: "task", authorName: "Builder", createdAt: first.createdAt,
+    body: "Review [design evidence](#artifact/evidence/r1) before continuing.",
+    artifacts: [{ artifactId: first.id, revisionId: first.revisionId }],
+  }]} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const citation = canvas.getByRole("button", { name: "design evidence" });
+    await userEvent.hover(citation);
+    await expect(await within(document.body).findByText("Click to open this revision")).toBeVisible();
+    await expect(within(document.body).getByText(/· Revision 1/)).toBeVisible();
+    await userEvent.click(citation);
+    const dialog = within(await within(document.body).findByRole("dialog"));
+    await waitFor(() => expect(dialog.getByText("Evidence")).toBeVisible());
+    await expect(dialog.getByText("Revision 1", { exact: true })).toBeVisible();
   },
 };

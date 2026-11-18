@@ -81,6 +81,16 @@ export function ExecutionActivityView({ state, error = null, busy = false, onAct
               <p className="text-xs text-muted-foreground">{state.active.workspaceName}</p>
               <p className="break-all text-xs text-muted-foreground">{state.active.workspacePath}</p>
             </div> : <p>No agent is running.</p>}
+            {!!state.queued?.length && <div className="space-y-2 border-t pt-3">
+              <h3 className="text-xs font-semibold text-muted-foreground">Queued · {state.queued.length}</h3>
+              <ul className="max-h-48 space-y-3 overflow-y-auto" aria-label="Queued runs">
+                {state.queued.map((run) => <li key={run.runId} className="space-y-0.5 border-l-2 pl-3">
+                  <p className="break-words text-sm font-medium">{run.taskTitle}</p>
+                  <p className="break-words text-xs text-muted-foreground">{run.agentName} · {run.workspaceName}</p>
+                  {run.held && <p className="text-xs text-muted-foreground">On hold · task needs attention</p>}
+                </li>)}
+              </ul>
+            </div>}
             <p className="text-xs text-muted-foreground">{state.paused
               ? "The queue is paused across all workspaces. Stopped tasks need a new Run request; resuming the queue does not restart them."
               : "Stopping a run preserves saved work and pauses the queue across all workspaces."}</p>

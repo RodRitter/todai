@@ -76,9 +76,9 @@ export const HumanComment: Story = {
   render: () => <CommentExample />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole("button", { name: "Post comment" })).toBeDisabled();
     const editor = await canvas.findByRole("textbox", { name: "Your comment" });
     await userEvent.click(editor);
+    await expect(canvas.getByRole("button", { name: "Post comment" })).toBeDisabled();
     await userEvent.type(editor, "@Rev");
     await userEvent.click(await canvas.findByRole("option", { name: /@Reviewer/ }));
     await userEvent.type(editor, "please review this.");
@@ -117,7 +117,15 @@ export const DeleteComment: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "Cancel" }));
     await expect(canvas.getByText("An outdated comment.")).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "Delete comment" }));
-    await userEvent.click(canvas.getByRole("button", { name: "Delete", exact: true }));
+    await userEvent.click(canvas.getByRole("button", { name: /^Delete$/ }));
     await expect(canvas.getByText("No comments yet.")).toBeVisible();
   },
 };
+
+export const Handovers: Story = {
+  args: { comments: [
+    { id: "handover", taskId: "task", authorName: "Builder", body: "Implemented the artifact preview.\n\n- Pinned revisions remain accessible.\n- Keyboard navigation and narrow layouts are supported.\n\nReady for review.", createdAt: "2026-11-18T10:00:00Z" },
+    { id: "human", taskId: "task", authorName: "Human", body: "Keep the task discussion simple and make the saved artifacts easier to inspect.", createdAt: "2026-11-18T09:00:00Z" },
+  ] },
+};
+export const NarrowHandovers: Story = { ...Handovers, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };

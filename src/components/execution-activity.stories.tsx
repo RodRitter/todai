@@ -37,3 +37,8 @@ export const DirectoryConfirmation: Story = {
     { runId: "queued", workspaceName: "Todai", previousPath: "/projects/old", path: "/projects/todai" },
   ] } },
 };
+
+export const QueuedJobs: Story = { args: { state: { ...running, queued: [
+  { runId: "next", taskTitle: "Review the artifact preview", agentName: "Reviewer", workspaceName: "Todai", held: false },
+  { runId: "held", taskTitle: "Update project documentation", agentName: "Writer", workspaceName: "Website", held: true },
+] } } };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Artifact, ArtifactReference, TaskArtifact } from "@/domain/artifact";
+import { artifactCategory, type Artifact, type ArtifactReference, type TaskArtifact } from "@/domain/artifact";
 import { workspaceFetch } from "@/lib/workspace-fetch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -85,7 +85,7 @@ export function CommentAttachments({ references }: { references: ArtifactReferen
   }, [key, attempt]);
   return <div aria-label="Comment attachments" className="space-y-2">
     {error && <div role="alert"><p>{error}</p><Button type="button" size="sm" variant="outline" onClick={() => setAttempt((value) => value + 1)}>Retry attachments</Button></div>}
-    {artifacts.map((artifact) => <div key={artifact.revisionId} className="flex flex-wrap items-center gap-2 text-sm"><span>{artifact.title}{artifact.archived ? " · Archived" : ""}</span><ArtifactOpenButton artifact={artifact} /></div>)}
+    {artifacts.map((artifact) => <div key={artifact.revisionId} className="flex min-w-0 items-center gap-3 rounded-lg border px-3 py-2 text-sm"><Paperclip aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" /><div className="min-w-0 flex-1"><p className="truncate font-medium" title={artifact.title}>{artifact.title}</p><p className="text-xs text-muted-foreground"><span className="capitalize">{artifactCategory(artifact)}</span> · Pinned revision {artifact.revisionNumber}{artifact.archived ? " · Archived" : ""}</p></div><ArtifactOpenButton artifact={artifact} compact /></div>)}
   </div>;
 }
 

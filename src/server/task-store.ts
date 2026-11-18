@@ -557,6 +557,13 @@ export class TaskStore {
       FROM runs JOIN tasks ON tasks.id = runs.taskId JOIN workspaces ON workspaces.id = runs.workspaceId
       WHERE runs.status = 'Running' LIMIT 1`).get();
     return {
+      queued: this.db.prepare(`SELECT runs.id AS runId, tasks.title AS taskTitle,
+        json_extract(runs.profile, '$.name') AS agentName, workspaces.name AS workspaceName,
+        (tasks.agentStatus = 'Stopped' OR EXISTS (SELECT 1 FROM comments
+          WHERE comments.taskId = tasks.id AND comments.feedbackStatus = 'pending')) AS held
+        FROM runs JOIN tasks ON tasks.id = runs.taskId JOIN workspaces ON workspaces.id = runs.workspaceId
+        WHERE runs.status = 'Queued' ORDER BY runs.createdAt, runs.rowid`).all()
+        .map((row) => ({ ...row, held: Boolean(row.held) })) as import("../domain/execution.ts").QueuedRun[],
       directoryChanges: this.queuedDirectoryChanges(),
       paused: Boolean(this.db.prepare("SELECT paused FROM execution_control WHERE id = 1").get()?.paused),
       active: active ? { ...active, stopping: Boolean(active.stopRequested) } as ExecutionState["active"] : null,

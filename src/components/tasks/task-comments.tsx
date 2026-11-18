@@ -6,8 +6,10 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bot, Minus, Plus, Trash2 } from "lucide-react";
+import { Bot, Copy, LoaderCircle, Minus, Plus, Trash2 } from "lucide-react";
 import { Markdown } from "@/components/ui/markdown";
+import { RunHistory } from "./run-history";
+import { toast } from "@/components/ui/toast";
 import { DescriptionEditor } from "./description-editor";
 import type { AgentProfile } from "@/domain/column-agent";
 import type { AgentStatus, TaskComment } from "@/domain/task";
@@ -41,40 +43,26 @@ export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostCo
         </TabsTrigger>
       </TabsList>
       <TabsContent value="comments" forceMount className="space-y-6">
+      {taskId && tab === "comments" && <RunHistory key={taskId} taskId={taskId} />}
       {onPostComment && <CommentInput agents={agents} onPost={onPostComment} agentStatus={agentStatus} />}
       {comments.length || agentStatus === "Running" ? (
         <ol className="space-y-8">
           {agentStatus === "Running" && (
-            <li className="flex gap-3">
-              <div aria-hidden="true" className="bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-full border">
-                <Bot className="size-4" />
-              </div>
-              <div className="min-w-0 space-y-2">
-                <div className="flex min-h-9 items-center gap-3">
-                  <span className="text-sm font-semibold">Agent</span>
-                  <span className="text-xs text-muted-foreground">Working…</span>
-                </div>
-                <div role="status" className="bg-primary/10 ring-primary/15 w-fit rounded-2xl rounded-tl-sm px-4 py-4 ring-1 ring-inset">
-                  <span className="sr-only">The agent is working. Its comment will appear here.</span>
-                  <span aria-hidden="true" className="flex h-3 items-center gap-1.5 text-primary">
-                    {[0, 1, 2].map((dot) => (
-                      <span key={dot} className="size-1.5 animate-pulse rounded-full bg-current motion-reduce:animate-none" style={{ animationDelay: `${dot * 200}ms`, animationDuration: "1.2s" }} />
-                    ))}
-                  </span>
-                </div>
-              </div>
+            <li role="status" className="flex items-center gap-3 rounded-lg bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+              <LoaderCircle aria-hidden="true" className="size-4 shrink-0 animate-spin motion-reduce:animate-none" />
+              <span>The agent is working. Its handover will appear here.</span>
             </li>
           )}
           {[...comments]
             .filter((comment) => !(comment.authorName === "Human" && comment.runId && comments.some((request) => request.runId === comment.runId && request.feedbackStatus)))
             .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
             .map((comment) => (
-              <li key={comment.id} id={`comment-${comment.id}`} className="group/comment grid grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-x-3 gap-y-3">
+              <li key={comment.id} id={`comment-${comment.id}`} className="group/comment grid grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-x-3 gap-y-3 border-b border-border/60 pb-6 last:border-0 last:pb-0">
                 <div
                   className="bg-primary/10 text-primary flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
                   aria-hidden="true"
                 >
-                  {comment.authorName ? (
+                  {comment.authorName === "Human" ? (
                     comment.authorName
                       .trim()
                       .split(/\s+/)
@@ -107,8 +95,8 @@ export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostCo
                     {onDeleteComment && <DeleteComment commentId={comment.id} onDelete={onDeleteComment} disabled={agentStatus === "Running" || agentStatus === "Queued" || comment.feedbackStatus === "pending"} />}
                   </div>
                   <div className={comment.feedbackStatus === "pending"
-                    ? "col-span-2 min-w-0 space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4"
-                    : "col-span-2 min-w-0 space-y-3 text-muted-foreground"}>
+                    ? "col-span-2 min-w-0 space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4 sm:col-start-2 sm:col-span-1"
+                    : "col-span-2 min-w-0 space-y-3 sm:col-start-2 sm:col-span-1"}>
                     {comment.feedbackStatus && (
                       <p className="text-sm font-semibold">
                         {comment.feedbackStatus === "pending" ? "Your feedback is needed" : comment.feedbackStatus === "cancelled" ? "Feedback request · Cancelled" : "Feedback request · Answered"}
@@ -125,6 +113,10 @@ export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostCo
                     {comment.feedbackStatus === "pending" && (
                       <FeedbackInput commentId={comment.id} onAnswer={onAnswerFeedback} />
                     )}
+                    <Button type="button" size="sm" variant="ghost" className="h-7 gap-1.5 px-2 text-xs text-muted-foreground" aria-label="Copy comment" onClick={async () => {
+                      try { await navigator.clipboard.writeText(comment.body); toast.success("Comment copied."); }
+                      catch { toast.error("Could not copy comment."); }
+                    }}><Copy aria-hidden="true" className="size-3.5" />Copy</Button>
                   </div>
                   {comment.feedbackStatus === "answered" && comments.filter((reply) => reply.authorName === "Human" && reply.runId === comment.runId).map((reply) => (
                     <div key={reply.id} className="col-span-2 ml-4 min-w-0 space-y-2 border-l-2 border-border pl-4 sm:ml-9 sm:pl-5">
@@ -182,7 +174,7 @@ function DeleteComment({ commentId, onDelete, disabled }: {
       <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => { setConfirming(false); setError(""); }}>Cancel</Button>
     </div> : <Button type="button" size="icon" variant="ghost" aria-label="Delete comment" title={disabled ? "Finish the agent run and resolve pending feedback before deleting." : "Delete comment"}
       disabled={disabled} onClick={() => setConfirming(true)}
-      className="size-7 text-muted-foreground opacity-0 transition-opacity group-hover/comment:opacity-100 group-focus-within/comment:opacity-100 focus-visible:opacity-100 hover:text-destructive">
+      className="size-7 text-muted-foreground transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/comment:opacity-100 [@media(hover:hover)]:group-focus-within/comment:opacity-100 focus-visible:opacity-100 hover:text-destructive">
       <Trash2 className="size-3.5" />
     </Button>}
     {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
