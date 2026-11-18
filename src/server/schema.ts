@@ -142,6 +142,10 @@ export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
       executionId TEXT NOT NULL REFERENCES workflow_executions(id) ON DELETE CASCADE,
       stepId TEXT NOT NULL, status TEXT NOT NULL
     );`);
+    db.exec(`CREATE TABLE IF NOT EXISTS workflow_reviews (
+      executionId TEXT NOT NULL REFERENCES workflow_executions(id) ON DELETE CASCADE,
+      stepId TEXT NOT NULL, state TEXT NOT NULL, PRIMARY KEY (executionId, stepId)
+    );`);
     if (!columns.some((column) => column.name === "workflowId"))
       db.exec("ALTER TABLE tasks ADD COLUMN workflowId TEXT");
     for (const field of ["workflowExecutionId", "stepInstructions", "prompt", "stepId"]) {

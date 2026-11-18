@@ -48,3 +48,29 @@ export const HumanCheckpoint: Story = {
     ] }));
   },
 };
+
+export const ReviewSection: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "Add review section" }));
+    await expect(canvas.getByLabelText("Review round limit")).toHaveValue(3);
+    await userEvent.type(canvas.getByLabelText("Reviewer instructions"), "Review correctness and accessibility.");
+    await userEvent.type(canvas.getByLabelText("Revision instructions"), "Address every finding and verify.");
+    await userEvent.clear(canvas.getByLabelText("Review round limit"));
+    await userEvent.type(canvas.getByLabelText("Review round limit"), "0");
+    await expect(canvas.getByRole("button", { name: "Save workflow" })).toBeDisabled();
+    await userEvent.clear(canvas.getByLabelText("Review round limit"));
+    await userEvent.type(canvas.getByLabelText("Review round limit"), "3");
+    await userEvent.click(canvas.getByRole("button", { name: "Save workflow" }));
+    await expect(args.save).toHaveBeenCalledWith(expect.objectContaining({ steps: expect.arrayContaining([
+      expect.objectContaining({ kind: "review", agentId: "builder", revisionAgentId: "builder", maxRounds: 3 }),
+    ]) }));
+  },
+};
+export const ReviewSectionNarrow: Story = {
+  args: { initial: { id: "review-loop", name: "Implement and review", steps: [
+    { id: "review", kind: "review", agentId: agent.id, instructions: "Review all acceptance criteria, keyboard navigation, error handling, and evidence. Request changes with precise findings.",
+      revisionAgentId: agent.id, revisionInstructions: "Resolve findings, preserve unrelated changes, and rerun checks.", maxRounds: 3 },
+  ] } },
+  decorators: [(Story) => <div className="max-w-72"><Story /></div>],
+};

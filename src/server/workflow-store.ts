@@ -25,9 +25,19 @@ export function saveWorkflow(db: DatabaseSync, input: unknown): Workflow {
       if (!step.instructions.trim()) throw new WorkflowValidationError(`Step ${index + 1}: describe what the human must review.`);
       return { id: step.id, kind: "checkpoint" as const, instructions: step.instructions };
     }
-    if (step.kind !== undefined && step.kind !== "agent") throw new WorkflowValidationError(`Step ${index + 1}: choose a supported step type.`);
+    if (step.kind !== undefined && step.kind !== "agent" && step.kind !== "review") throw new WorkflowValidationError(`Step ${index + 1}: choose a supported step type.`);
     if (typeof step.agentId !== "string" || !db.prepare("SELECT id FROM agents WHERE id = ? AND workspaceId = workspace_id()").get(step.agentId))
       throw new WorkflowValidationError(`Step ${index + 1}: choose an existing agent in this workspace.`);
+    if (step.kind === "review") {
+      const maxRounds = step.maxRounds ?? 3;
+      if (!Number.isSafeInteger(maxRounds) || maxRounds <= 0)
+        throw new WorkflowValidationError("Enter a positive whole number of review rounds.");
+      if (typeof step.revisionInstructions !== "string" || !step.revisionInstructions.trim() || !step.instructions.trim())
+        throw new WorkflowValidationError("Provide reviewer and revision instructions.");
+      if (typeof step.revisionAgentId !== "string" || !db.prepare("SELECT id FROM agents WHERE id = ? AND workspaceId = workspace_id()").get(step.revisionAgentId))
+        throw new WorkflowValidationError("Choose an existing revision agent in this workspace.");
+      return { id: step.id, kind: "review" as const, agentId: step.agentId, instructions: step.instructions, revisionAgentId: step.revisionAgentId, revisionInstructions: step.revisionInstructions, maxRounds };
+    }
     return { id: step.id, agentId: step.agentId, instructions: step.instructions };
   });
   if (db.prepare("SELECT id FROM workflows WHERE id = ? AND workspaceId <> workspace_id()").get(value.id))

@@ -1,5 +1,8 @@
 "use client";
 
+import { reviewPhaseLabels } from "@/domain/workflow";
+import type { FeedbackDecision } from "@/domain/task";
+
 import type { ArtifactReference } from "@/domain/artifact";
 import { useRef, useState, type FormEvent } from "react";
 import { Bot, CircleDot, CirclePlay, CircleStop, Maximize2, Minimize2, Workflow, Zap } from "lucide-react";
@@ -43,7 +46,7 @@ export type TaskEditorProps = {
   defaultStatus?: Status;
   onOpenChange: (open: boolean) => void;
   onSave: (task: Task) => void | Promise<void>;
-  onAnswerFeedback?: (commentId: string, body: string, decision?: "approve" | "changes-requested") => Promise<void>;
+  onAnswerFeedback?: (commentId: string, body: string, decision?: FeedbackDecision) => Promise<void>;
   onDelete?: (id: string) => void | Promise<void>;
 };
 
@@ -263,7 +266,7 @@ function TaskEditorSession({
               </TooltipProvider>
             )}
           </div>
-          {editing && <div className="col-span-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground"><span>{editing.status}</span><span role="status"><AgentStatus status={editing.agentStatus} /></span></div>}
+          {editing && <div className="col-span-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground"><span>{editing.status}</span>{editing.workflowProgress && <span>Step {editing.workflowProgress.step} of {editing.workflowProgress.total} · Round {editing.workflowProgress.round} of {editing.workflowProgress.limit} · {reviewPhaseLabels[editing.workflowProgress.phase]}</span>}<span role="status"><AgentStatus status={editing.agentStatus} /></span></div>}
         </DialogHeader>
         <form
           ref={formRef}

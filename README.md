@@ -128,3 +128,13 @@ Use **Add human checkpoint** in the workflow editor and describe what needs revi
 Choose **Approve** to continue once, or enter feedback and choose **Request changes** to keep waiting. Requesting changes records your response and opens a fresh decision; it does not automatically run a revision agent or return to an earlier step. Resolve the changes before approving, or stop the workflow and revise it. **Retry current step** reopens a stopped checkpoint using its saved instructions. Queue pause remains a separate control.
 
 Agent questions still use **Submit feedback** and resume the agent step that asked. Activity retains workflow requests, human responses, decisions, and their execution/step references. These records and checkpoint evidence cannot be individually deleted. Waiting states and responses survive restarts; old or duplicate answers cannot advance a later execution.
+
+### Bounded review and revision
+
+Choose **Add review section** in the workflow editor, select reviewer and revision agents, and enter their instructions. The round limit defaults to three. The section repeats **Review → Changes requested → Revise → Review** and exits only on explicit approval.
+
+Reviewers must return JSON with an `outcome` of `approved` or `changes-requested` and a nonempty `findings` string. A successful process exit or ordinary handover is never approval. Invalid output pauses as a failed attempt for explicit retry. Each queued reviewer attempt, including retries and feedback continuations, counts as a round.
+
+At the limit, the workflow waits before running another revision. In **Overview**, choose **Allow one additional round** or **Stop workflow**. An additional round authorizes a revision followed by another review; it does not approve the work or resume a paused queue. Retrying a stopped intervention reopens the same decision.
+
+The task summary and **Workflow** tab show the current step and round. Execution history retains reviewer outcomes, findings, reviewed attempts, and pinned evidence revisions. Failure, cancellation, feedback, and restart recovery retain the section position and original agent settings.

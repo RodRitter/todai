@@ -579,3 +579,44 @@ export const CheckpointSubmitFailure: Story = {
     await expect(await dialog.findByRole("alert")).toHaveTextContent("This feedback request is no longer pending.");
   },
 };
+
+const exhaustedReview = {
+  ...checkpoint, id: "review-limit", feedbackKind: "review-limit" as const,
+  body: "Review round 3 of 3 requested changes. Allow one additional round or stop.\n\nKeyboard focus still needs correction.",
+};
+export const ReviewLimit: Story = {
+  args: { open: true, task: { ...exampleTasks[0], agentStatus: "Waiting", workflowId: "build",
+    workflowProgress: { step: 2, total: 2, round: 3, limit: 3, phase: "intervention" },
+    comments: [implementationEvidence, exhaustedReview] }, onAnswerFeedback: fn() },
+  parameters: { artifactLinks: evidence },
+  play: async ({ canvasElement, args }) => {
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await expect(dialog.getByRole("heading", { name: "Review limit reached" })).toBeVisible();
+    await expect(dialog.queryByRole("button", { name: /^Approve$/ })).not.toBeInTheDocument();
+    await userEvent.click(dialog.getByRole("button", { name: "Allow one additional round" }));
+    await expect(args.onAnswerFeedback).toHaveBeenCalledWith(exhaustedReview.id, "Allow one additional round", "additional-round");
+  },
+};
+export const StopReviewLoop: Story = {
+  ...ReviewLimit,
+  play: async ({ canvasElement, args }) => {
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await userEvent.click(dialog.getByRole("button", { name: "Stop workflow" }));
+    await expect(args.onAnswerFeedback).toHaveBeenCalledWith(exhaustedReview.id, "Stop review loop", "stop");
+  },
+};
+
+export const ReviewInterventionHistory: Story = {
+  ...ReviewLimit,
+  args: { ...ReviewLimit.args, task: { ...exampleTasks[0], workflowId: "build", agentStatus: "Queued", comments: [
+    implementationEvidence, { ...exhaustedReview, feedbackStatus: "answered" },
+    { id: "extra-round-response", taskId: exampleTasks[0].id, authorName: "Human", createdAt: "2026-11-18T12:00:00Z",
+      body: "Correct focus and review again.", decision: "additional-round", responseTo: exhaustedReview.id,
+      workflowExecutionId: exhaustedReview.workflowExecutionId, stepId: exhaustedReview.stepId },
+  ] } },
+  play: async ({ canvasElement }) => {
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await userEvent.click(dialog.getByRole("tab", { name: "Activity" }));
+    await expect(dialog.getByText("Additional round allowed")).toBeVisible();
+  },
+};

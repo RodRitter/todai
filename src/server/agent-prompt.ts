@@ -23,6 +23,6 @@ export function agentPrompt({ run, task, artifacts }: RunRequest) {
     "Previous task comments (chronological):",
     ...(task.comments ?? []).map((comment) => `${comment.createdAt} — ${comment.authorName || "Agent"}\n${comment.body}${comment.recommendation ? `\nRecommendation: ${comment.recommendation}\nFeedback request: ${comment.feedbackStatus}` : ""}`),
     'If you need human feedback before continuing, stop work and make your entire final response a JSON object with exactly this shape: {"type":"feedback_request","question":"Your question with any context needed to resume","recommendation":"Your recommended answer and why"}. Both question and recommendation must be nonempty. Do not wrap the JSON in markdown. This pauses the task until a Human replies; do not claim completion or continue working after requesting feedback. Otherwise finish with your normal handover.',
-    "Work in this project workspace. When no human feedback is needed, finish with a handover summarizing changes, verification, and any unfinished work.",
+    "Work in this project workspace. When no human feedback is needed, follow any final-response format required by the workflow step; otherwise finish with a handover summarizing changes, verification, and any unfinished work.",
   ].join("\n\n");
 }

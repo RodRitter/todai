@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import type { AgentProfile } from "@/domain/column-agent";
-import { workflowSteps, type Workflow, type WorkflowExecution } from "@/domain/workflow";
+import { reviewPhaseLabels, workflowSteps, type Workflow, type WorkflowExecution } from "@/domain/workflow";
 import { workspaceFetch } from "@/lib/workspace-fetch";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Markdown } from "@/components/ui/markdown";
+import { CommentAttachments } from "@/components/artifacts/artifact-attachments";
 import { WorkflowEditor } from "./workflow-editor";
 import { AgentStatus } from "./agent-status";
 
@@ -79,8 +80,9 @@ export function TaskWorkflow({ taskId, workflowId, onChange, agents = [], disabl
       onChange(workflow.id); setDraft(null);
     }} />}
     {selected && <ol className="space-y-2" aria-label="Configured steps">{workflowSteps(selected).map((step, index) => <li key={step.id} className="rounded-lg border p-3 text-sm">
-      <details><summary className="cursor-pointer">{index + 1}. {step.kind === "checkpoint" ? "Human approval" : agents.find((agent) => agent.id === step.agentId)?.name ?? "Agent unavailable"}</summary><pre className="mt-2 whitespace-pre-wrap break-words font-sans">{step.instructions || "No additional step instructions."}</pre></details>
-      {index < workflowSteps(selected).length - 1 && <p className="mt-2 text-xs text-muted-foreground">↓ On {step.kind === "checkpoint" ? "approval" : "success"}, continue to step {index + 2}</p>}
+      <details><summary className="cursor-pointer">{index + 1}. {step.kind === "checkpoint" ? "Human approval" : step.kind === "review" ? "Review ↔ Revise" : agents.find((agent) => agent.id === step.agentId)?.name ?? "Agent unavailable"}</summary><pre className="mt-2 whitespace-pre-wrap break-words font-sans">{step.instructions || "No additional step instructions."}</pre></details>
+      {step.kind === "review" && <p className="mt-2 text-xs text-muted-foreground">Reviewer: {agents.find((agent) => agent.id === step.agentId)?.name ?? "Unavailable"} · Revision agent: {agents.find((agent) => agent.id === step.revisionAgentId)?.name ?? "Unavailable"} · {step.maxRounds} rounds. Changes requested → Revise → Review. Approval exits; limit reached → Human intervention.</p>}
+      {index < workflowSteps(selected).length - 1 && <p className="mt-2 text-xs text-muted-foreground">↓ On {step.kind === "checkpoint" || step.kind === "review" ? "approval" : "success"}, continue to step {index + 2}</p>}
     </li>)}</ol>}
     <div className="space-y-3">
       <h3 className="font-semibold">Workflow executions</h3>
@@ -88,8 +90,20 @@ export function TaskWorkflow({ taskId, workflowId, onChange, agents = [], disabl
       {history.map((execution) => <details key={execution.id} className="rounded-lg border p-3">
         <summary className="cursor-pointer text-sm"><span className="font-medium">{execution.workflow.name}</span> · <AgentStatus status={execution.status} /> <time className="text-xs text-muted-foreground" dateTime={execution.createdAt}>{new Date(execution.createdAt).toLocaleString()}</time></summary>
         <div className="mt-4 space-y-4 text-sm">
-          <ol className="space-y-2" aria-label="Step progress">{(execution.steps ?? workflowSteps(execution.workflow).map((step) => ({ ...step, profile: execution.profile, status: execution.status }))).map((step, index) => <li key={step.id} className="rounded border p-3">
+          <p>Current step: {(execution.steps?.findIndex((step) => step.id === execution.stepId) ?? 0) + 1}</p>
+          <ol className="space-y-2" aria-label="Step progress">{(execution.steps ?? workflowSteps(execution.workflow).map((step) => ({ ...step, profile: execution.profile, review: undefined, status: execution.status }))).map((step, index) => <li key={step.id} className="rounded border p-3">
             <p>{index + 1}. {step.profile?.name ?? "Human approval"} · <AgentStatus status={step.status} />{step.id === execution.stepId && execution.status !== "Complete" ? " · Current step" : ""}</p>
+            {step.review && <div className="space-y-2">
+              <p>Round {step.review.round} of {step.review.limit} · {reviewPhaseLabels[step.review.phase]}{step.review.phase === "intervention" && " — respond in Overview"}</p>
+              {step.review.findings && <Markdown>{step.review.findings}</Markdown>}
+              <ol className="space-y-2" aria-label="Review rounds">{step.review.attempts.map((attempt) => <li key={attempt.runId}>
+                <a href={`#workflow-run-${attempt.runId}`} className="underline">Round {attempt.round} · {attempt.role === "review" ? "Reviewer" : "Revision"} attempt</a>{attempt.outcome && ` · ${attempt.outcome}`}
+                {attempt.reviewedRunId && <p><a className="underline" href={`#workflow-run-${attempt.reviewedRunId}`}>Reviewed attempt</a></p>}
+                {!!attempt.reviewedArtifacts?.length && <div><p>Reviewed revisions</p><CommentAttachments references={attempt.reviewedArtifacts} /></div>}
+                {!!attempt.artifacts?.length && <div><p>Review evidence</p><CommentAttachments references={attempt.artifacts} /></div>}
+                {attempt.findings && <details><summary className="cursor-pointer">Findings</summary><Markdown>{attempt.findings}</Markdown></details>}
+              </li>)}</ol>
+            </div>}
             {step.profile && <p className="text-xs text-muted-foreground">{step.profile.tool} / {step.profile.model}</p>}
             <details><summary className="cursor-pointer">Step instructions used</summary><pre className="mt-2 whitespace-pre-wrap break-words font-sans">{step.instructions || "No additional step instructions."}</pre></details>
           </li>)}</ol>
@@ -102,7 +116,7 @@ export function TaskWorkflow({ taskId, workflowId, onChange, agents = [], disabl
               finally { setRetrying(false); }
             }}>{retrying ? "Retrying…" : "Retry current step"}</Button>
           </div>}
-          <ol className="space-y-4" aria-label="Step attempts">{execution.runs.map((run, index) => <li key={run.id} className="space-y-2 border-t pt-3">
+          <ol className="space-y-4" aria-label="Step attempts">{execution.runs.map((run, index) => <li key={run.id} id={`workflow-run-${run.id}`} className="space-y-2 border-t pt-3">
             <p>{run.stepId && `Step ${workflowSteps(execution.workflow).findIndex((step) => step.id === run.stepId) + 1} · `}Attempt {index + 1} · <AgentStatus status={run.status} /></p>
             {run.prompt !== null ? <details><summary className="cursor-pointer">Exact supplied agent prompt</summary><p className="my-2 text-xs text-muted-foreground">The prompt Todai supplied to the executor. Provider instructions and private reasoning are not included.</p><pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words text-xs">{run.prompt}</pre></details> : <p className="text-xs text-muted-foreground">No prompt was supplied for this attempt yet.</p>}
             {run.summary && <details><summary className="cursor-pointer">Result</summary><div className="mt-2"><Markdown>{run.summary}</Markdown></div></details>}

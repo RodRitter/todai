@@ -1,5 +1,7 @@
 "use client";
 
+import type { FeedbackDecision } from "@/domain/task";
+
 import { ArtifactPicker, CommentAttachments, TaskArtifacts } from "@/components/artifacts/artifact-attachments";
 import type { Artifact, ArtifactReference } from "@/domain/artifact";
 import { useEffect, useId, useRef, useState } from "react";
@@ -21,7 +23,7 @@ export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostCo
   agents?: AgentProfile[];
   onDeleteComment?: (commentId: string) => Promise<void>;
   onPostComment?: (body: string, artifacts?: ArtifactReference[]) => Promise<void>;
-  onAnswerFeedback?: (commentId: string, body: string, decision?: "approve" | "changes-requested") => Promise<void>;
+  onAnswerFeedback?: (commentId: string, body: string, decision?: FeedbackDecision) => Promise<void>;
 }) {
   const [tab, setTab] = useState("comments");
   const [artifactCount, setArtifactCount] = useState(0);
@@ -63,7 +65,7 @@ export function TaskActivity({ comments = [], agentStatus, agents = [], onPostCo
   agents?: AgentProfile[];
   onPostComment?: (body: string, artifacts?: ArtifactReference[]) => Promise<void>;
   onDeleteComment?: (commentId: string) => Promise<void>;
-  onAnswerFeedback?: (commentId: string, body: string, decision?: "approve" | "changes-requested") => Promise<void>;
+  onAnswerFeedback?: (commentId: string, body: string, decision?: FeedbackDecision) => Promise<void>;
   onNavigateFeedback?: (commentId: string) => void;
 }) {
   return <section aria-label="Task discussion" className="space-y-6">
@@ -135,7 +137,7 @@ export function TaskActivity({ comments = [], agentStatus, agents = [], onPostCo
                       </div>
                     )}
                     {comment.feedbackStatus === "pending" && (
-                      onNavigateFeedback ? <Button type="button" variant="outline" onClick={() => onNavigateFeedback(comment.id)}>Reply in Overview</Button> : <FeedbackInput commentId={comment.id} checkpoint={comment.feedbackKind === "checkpoint"} onAnswer={onAnswerFeedback} />
+                      onNavigateFeedback ? <Button type="button" variant="outline" onClick={() => onNavigateFeedback(comment.id)}>Reply in Overview</Button> : <FeedbackInput commentId={comment.id} checkpoint={comment.feedbackKind === "checkpoint"} reviewLimit={comment.feedbackKind === "review-limit"} onAnswer={onAnswerFeedback} />
                     )}
                     <Button type="button" size="sm" variant="ghost" className="h-7 gap-1.5 px-2 text-xs text-muted-foreground" aria-label="Copy comment" onClick={async () => {
                       try { await navigator.clipboard.writeText(comment.body); toast.success("Comment copied."); }
@@ -148,7 +150,7 @@ export function TaskActivity({ comments = [], agentStatus, agents = [], onPostCo
                         {onDeleteComment && !isWorkflowHistoryComment(reply, comments) && <DeleteComment commentId={reply.id} onDelete={onDeleteComment} disabled={agentStatus === "Running" || agentStatus === "Queued"} />}
                       </div>
                       <time className="text-xs text-muted-foreground" dateTime={reply.createdAt}>{new Date(reply.createdAt).toLocaleString()}</time>
-                      {reply.decision && <p className="text-sm font-semibold">{reply.decision === "approve" ? "Approved" : "Changes requested"}</p>}
+                      {reply.decision && <p className="text-sm font-semibold">{({ approve: "Approved", "changes-requested": "Changes requested", "additional-round": "Additional round allowed", stop: "Workflow stopped" })[reply.decision]}</p>}
                       <CommentBody body={reply.body} />
                       {!!reply.artifacts?.length && <CommentAttachments references={reply.artifacts} />}
                     </div>
@@ -184,6 +186,7 @@ function isFeedbackReply(reply: TaskComment, request: TaskComment) {
 }
 
 function feedbackTitle(comment: TaskComment) {
+  if (comment.feedbackKind === "review-limit") return comment.feedbackStatus === "pending" ? "Review limit reached" : `Review intervention · ${comment.feedbackStatus === "cancelled" ? "Stopped" : "Answered"}`;
   const label = comment.feedbackKind === "checkpoint" ? "Human approval" : "Feedback request";
   return comment.feedbackStatus === "pending" ? (comment.feedbackKind === "checkpoint" ? "Your approval is needed" : "Your feedback is needed") : `${label} · ${comment.feedbackStatus === "cancelled" ? "Cancelled" : "Answered"}`;
 }
@@ -194,7 +197,7 @@ function FeedbackOrigin({ comment }: { comment: TaskComment }) {
 
 export function TaskFeedback({ comment, comments = [], onAnswer, onNavigate }: {
   comment: TaskComment; comments?: TaskComment[];
-  onAnswer?: (commentId: string, body: string, decision?: "approve" | "changes-requested") => Promise<void>;
+  onAnswer?: (commentId: string, body: string, decision?: FeedbackDecision) => Promise<void>;
   onNavigate?: (commentId: string) => void;
 }) {
   const evidence = comments.find((item) => item.id === comment.evidenceCommentId);
@@ -215,7 +218,7 @@ export function TaskFeedback({ comment, comments = [], onAnswer, onNavigate }: {
       <p className="text-sm text-muted-foreground">This checkpoint is still waiting. Resolve the requested changes before approving, or stop the workflow to revise it.</p>
       {onNavigate && <Button type="button" variant="outline" size="sm" onClick={() => onNavigate(changes.id)}>View response in Activity</Button>}
     </div>}
-    <FeedbackInput commentId={comment.id} checkpoint={comment.feedbackKind === "checkpoint"} onAnswer={onAnswer} />
+    <FeedbackInput commentId={comment.id} checkpoint={comment.feedbackKind === "checkpoint"} reviewLimit={comment.feedbackKind === "review-limit"} onAnswer={onAnswer} />
     {onNavigate && <Button type="button" variant="ghost" size="sm" onClick={() => onNavigate(comment.id)}>View request in Activity</Button>}
   </section>;
 }
@@ -304,20 +307,21 @@ function ExpandableComment({ body }: { body: string }) {
 }
 
 
-function FeedbackInput({ commentId, onAnswer, checkpoint = false }: {
+function FeedbackInput({ commentId, onAnswer, checkpoint = false, reviewLimit = false }: {
   checkpoint?: boolean;
+  reviewLimit?: boolean;
   commentId: string;
-  onAnswer?: (commentId: string, body: string, decision?: "approve" | "changes-requested") => Promise<void>;
+  onAnswer?: (commentId: string, body: string, decision?: FeedbackDecision) => Promise<void>;
 }) {
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  async function submit(decision?: "approve" | "changes-requested") {
-    if (!onAnswer || (decision !== "approve" && !body.trim()) || busy) return;
+  async function submit(decision?: FeedbackDecision) {
+    if (!onAnswer || (!decision && !body.trim()) || busy) return;
     setBusy(true);
     setError("");
     try {
-      if (decision) await onAnswer(commentId, body.trim() || "Approved", decision);
+      if (decision) await onAnswer(commentId, body.trim() || (decision === "additional-round" ? "Allow one additional round" : decision === "stop" ? "Stop review loop" : "Approved"), decision);
       else await onAnswer(commentId, body.trim());
     }
     catch (error) { setError(error instanceof Error ? error.message : "Could not submit feedback."); }
@@ -331,7 +335,10 @@ function FeedbackInput({ commentId, onAnswer, checkpoint = false }: {
         onChange={(event) => setBody(event.target.value)}
         aria-describedby={error ? `feedback-error-${commentId}` : undefined} />
       {error && <p id={`feedback-error-${commentId}`} role="alert" className="text-sm text-destructive">{error}</p>}
-      {checkpoint ? <div className="flex flex-wrap gap-2">
+      {reviewLimit ? <div className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" disabled={busy || !onAnswer} onClick={() => void submit("additional-round")}>Allow one additional round</Button>
+        <Button type="button" size="sm" variant="outline" disabled={busy || !onAnswer} onClick={() => void submit("stop")}>Stop workflow</Button>
+      </div> : checkpoint ? <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" disabled={busy || !onAnswer} onClick={() => void submit("approve")}>{busy ? "Submitting…" : "Approve"}</Button>
         <Button type="button" size="sm" variant="outline" disabled={busy || !body.trim() || !onAnswer} onClick={() => void submit("changes-requested")}>Request changes</Button>
       </div> : <Button type="button" size="sm" disabled={busy || !body.trim() || !onAnswer} onClick={() => void submit()}>

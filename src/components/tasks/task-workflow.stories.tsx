@@ -55,3 +55,22 @@ export const HumanCheckpoint: Story = { args: { api: { ...api, list: async () =>
     { ...approvalWorkflow.steps![1], profile: null, status: "Waiting" },
   ], runs: [{ ...execution.runs[0], stepId: "implement" }],
 }] } } };
+
+const loop: Workflow = { id: "build", name: "Implement, review and revise", steps: [
+  { id: "implement", agentId: agent.id, instructions: "Implement and verify." },
+  { id: "review", kind: "review", agentId: agent.id, instructions: "Review correctness.", revisionAgentId: agent.id, revisionInstructions: "Address all findings.", maxRounds: 3 },
+] };
+function loopStory(intervention: boolean): Story {
+  return { args: { api: { ...api, list: async () => [loop], history: async () => [{
+    ...execution, workflow: loop, stepId: "review", status: intervention ? "Waiting" : "Running",
+    steps: [
+      { ...loop.steps![0], profile: agent, status: "Complete" },
+      { ...loop.steps![1], profile: agent, revisionProfile: agent, status: intervention ? "Waiting" : "Running",
+        review: { phase: intervention ? "intervention" : "revise", round: intervention ? 3 : 1, limit: 3, findings: "Keyboard focus is lost when the dialog closes. Restore it to the trigger and verify with keyboard-only navigation.",
+          attempts: [{ runId: "review-run", role: "review", round: intervention ? 3 : 1, outcome: "changes-requested", findings: "Restore keyboard focus.", reviewedRunId: "run" }] } },
+    ],
+    runs: [{ ...execution.runs[0], stepId: "implement" }, { ...execution.runs[0], id: "review-run", stepId: "review", summary: '{"outcome":"changes-requested","findings":"Restore keyboard focus."}' }],
+  }] } } };
+}
+export const ReviewRevisionLoop = loopStory(false);
+export const ReviewLimitIntervention = loopStory(true);

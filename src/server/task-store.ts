@@ -1,3 +1,4 @@
+import { readReview, saveReview, reviewResult } from "./workflow-review.ts";
 import { listWorkflows, saveWorkflow, WorkflowValidationError } from "./workflow-store.ts";
 import { workflowSteps, type Workflow, type WorkflowExecution, type WorkflowStepSnapshot } from "../domain/workflow.ts";
 import { workflowProgression, type WorkflowProgression } from "./workflow-progression.ts";
@@ -377,25 +378,38 @@ export class TaskStore {
       this.db
         .prepare("SELECT * FROM tasks WHERE tasks.workspaceId = workspace_id() ORDER BY rowid")
         .all() as unknown as Task[]
-    ).map((task) => ({
-      ...task,
-      autoWorkflow: Boolean(task.autoWorkflow),
-      autoRun: Boolean(task.autoRun),
-      comments: this.db
-        .prepare(
-          `SELECT comments.* FROM comments WHERE comments.workspaceId = workspace_id() AND taskId = ? AND NOT EXISTS (
-            SELECT 1 FROM runs WHERE runs.workspaceId = workspace_id() AND runs.kind = 'intent' AND runs.taskId = comments.taskId
-              AND (runs.id = comments.runId OR (
-                runs.finishedAt = comments.createdAt AND runs.summary = comments.body
-                AND json_extract(runs.profile, '$.name') = comments.authorName
-              ))
-          ) ORDER BY createdAt, rowid`,
-        )
-        .all(task.id).map((row) => {
-          const artifacts = this.db.prepare("SELECT artifactId, revisionId FROM comment_artifacts WHERE commentId = ? ORDER BY artifactId, revisionId").all(row.id).map((ref) => ({ ...ref }));
-          return { ...row, ...(artifacts.length ? { artifacts } : {}) } as TaskComment;
-        }),
-    }));
+    ).map((task) => {
+      const workflowProgress = this.reviewProgress(task);
+      return {
+        ...task,
+        ...(workflowProgress ? { workflowProgress } : {}),
+        autoWorkflow: Boolean(task.autoWorkflow),
+        autoRun: Boolean(task.autoRun),
+        comments: this.db
+          .prepare(
+            `SELECT comments.* FROM comments WHERE comments.workspaceId = workspace_id() AND taskId = ? AND NOT EXISTS (
+              SELECT 1 FROM runs WHERE runs.workspaceId = workspace_id() AND runs.kind = 'intent' AND runs.taskId = comments.taskId
+                AND (runs.id = comments.runId OR (
+                  runs.finishedAt = comments.createdAt AND runs.summary = comments.body
+                  AND json_extract(runs.profile, '$.name') = comments.authorName
+                ))
+            ) ORDER BY createdAt, rowid`,
+          )
+          .all(task.id).map((row) => {
+            const artifacts = this.db.prepare("SELECT artifactId, revisionId FROM comment_artifacts WHERE commentId = ? ORDER BY artifactId, revisionId").all(row.id).map((ref) => ({ ...ref }));
+            return { ...row, ...(artifacts.length ? { artifacts } : {}) } as TaskComment;
+          }),
+      };
+    });
+  }
+
+  private reviewProgress(task: Task): Task["workflowProgress"] {
+    const row = this.db.prepare("SELECT id, stepId, steps, workflow FROM workflow_executions WHERE taskId = ? AND workspaceId = workspace_id() ORDER BY rowid DESC LIMIT 1").get(task.id);
+    if (!row || JSON.parse(row.workflow as string).id !== task.workflowId) return;
+    const review = readReview(this.db, row.id as string, row.stepId as string);
+    if (!review) return;
+    const steps: WorkflowStepSnapshot[] = JSON.parse(row.steps as string);
+    return { step: steps.findIndex((step) => step.id === row.stepId) + 1, total: steps.length, round: review.round, limit: review.limit, phase: review.phase };
   }
 
   save(input: unknown): Task {
@@ -488,9 +502,14 @@ export class TaskStore {
     return this.db.prepare("SELECT * FROM workflow_executions WHERE workspaceId = workspace_id() AND taskId = ? ORDER BY rowid DESC").all(taskId).map((row) => {
       const attempts = runs.filter((run) => run.workflowExecutionId === row.id);
       const checkpoints = this.db.prepare("SELECT stepId, status FROM workflow_checkpoints WHERE executionId = ? ORDER BY rowid").all(row.id);
-      const stepStatus = (step: WorkflowStepSnapshot) => step.kind === "checkpoint"
+      const stepStatus = (step: WorkflowStepSnapshot): RunHistoryEntry["status"] | undefined => {
+        const review = readReview(this.db, row.id as string, step.id);
+        if (review?.phase === "complete") return "Complete";
+        if (review?.phase === "intervention") return checkpoints.filter((item) => item.stepId === step.id).at(-1)?.status as RunHistoryEntry["status"] | undefined;
+        return step.kind === "checkpoint"
         ? checkpoints.filter((item) => item.stepId === step.id).at(-1)?.status as RunHistoryEntry["status"] | undefined
         : attempts.filter((run) => (run.stepId ?? row.stepId) === step.id).at(-1)?.status;
+      };
       const workflow: Workflow = JSON.parse(row.workflow as string);
       const profile: AgentProfile | null = JSON.parse(row.profile as string);
       const snapshots: WorkflowStepSnapshot[] = row.steps
@@ -498,7 +517,7 @@ export class TaskStore {
       return {
         id: row.id as string, taskId, stepId: row.stepId as string,
         workflow, profile, createdAt: row.createdAt as string,
-        steps: snapshots.map((step) => ({ ...step, status: stepStatus(step) ?? "Not started" })),
+        steps: snapshots.map((step) => ({ ...step, review: readReview(this.db, row.id as string, step.id), status: stepStatus(step) ?? "Not started" })),
         status: stepStatus(snapshots.find((step) => step.id === row.stepId)!) ?? "Queued",
         runs: attempts.map((run) => ({ id: run.id, stepId: run.stepId ?? row.stepId as string, agentName: run.profile.name, status: run.status,
           createdAt: run.createdAt, startedAt: run.startedAt, finishedAt: run.finishedAt, summary: run.summary, prompt: run.prompt ?? null })),
@@ -515,7 +534,9 @@ export class TaskStore {
       if (step.kind === "checkpoint") return { ...step, profile: null };
       const profile = agents.find((agent) => agent.id === step.agentId);
       if (!profile) throw new RunValidationError("Choose a workflow with an existing agent before running.");
-      return { ...step, profile };
+      const revisionProfile = step.kind === "review" ? agents.find((agent) => agent.id === step.revisionAgentId) : undefined;
+      if (step.kind === "review" && !revisionProfile) throw new RunValidationError("Choose an existing revision agent.");
+      return { ...step, profile, ...(revisionProfile ? { revisionProfile } : {}) };
     });
     const first = steps[0];
     const id = randomUUID();
@@ -526,19 +547,54 @@ export class TaskStore {
   }
 
   private queueWorkflowStep(task: Task, executionId: string, step: WorkflowStepSnapshot) {
+    if (step.kind === "review") {
+      this.queueReviewStep(task, executionId, step);
+      return;
+    }
     if (step.kind === "checkpoint") {
-      const requestId = randomUUID();
       const evidence = this.list().find((item) => item.id === task.id)?.comments?.filter((comment) =>
         comment.workflowExecutionId === executionId && comment.runId && !comment.feedbackStatus && comment.authorName !== "Human").at(-1);
-      this.addComment({ id: requestId, taskId: task.id, body: step.instructions, createdAt: new Date().toISOString(),
-        evidenceCommentId: evidence?.id, authorName: "Workflow", feedbackStatus: "pending", feedbackKind: "checkpoint", workflowExecutionId: executionId, stepId: step.id });
-      this.db.prepare("INSERT INTO workflow_checkpoints (requestId, executionId, stepId, status) VALUES (?, ?, ?, 'Waiting')").run(requestId, executionId, step.id);
-      this.db.prepare("UPDATE tasks SET agentStatus = 'Waiting' WHERE workspaceId = workspace_id() AND id = ?").run(task.id);
+      this.waitForWorkflowDecision(task.id, executionId, step.id, "checkpoint", step.instructions, evidence?.id);
       return;
     }
     if (!step.profile) throw new RunValidationError("This agent step has no saved profile.");
     this.queueProfileRun({ taskId: task.id, column: task.status, profile: step.profile,
       workflowExecutionId: executionId, stepId: step.id, stepInstructions: step.instructions });
+    this.db.prepare("UPDATE tasks SET agentStatus = 'Queued' WHERE workspaceId = workspace_id() AND id = ?").run(task.id);
+  }
+
+  private waitForWorkflowDecision(taskId: string, executionId: string, stepId: string, feedbackKind: NonNullable<TaskComment["feedbackKind"]>, body: string, evidenceCommentId?: string) {
+    const requestId = randomUUID();
+    this.addComment({ id: requestId, taskId, body, createdAt: new Date().toISOString(),
+      evidenceCommentId, authorName: "Workflow", feedbackStatus: "pending", feedbackKind, workflowExecutionId: executionId, stepId });
+    this.db.prepare("INSERT INTO workflow_checkpoints (requestId, executionId, stepId, status) VALUES (?, ?, ?, 'Waiting')").run(requestId, executionId, stepId);
+    this.db.prepare("UPDATE tasks SET agentStatus = 'Waiting' WHERE workspaceId = workspace_id() AND id = ?").run(taskId);
+  }
+
+  private queueReviewStep(task: Task, executionId: string, step: WorkflowStepSnapshot & { kind: "review" }) {
+    const state = readReview(this.db, executionId, step.id) ?? { phase: "review" as const, round: 0, limit: step.maxRounds, findings: "", attempts: [] };
+    if (state.phase === "intervention") {
+      const evidence = this.list().find((item) => item.id === task.id)?.comments?.filter((comment) => comment.runId === state.attempts.at(-1)?.runId).at(-1);
+      this.waitForWorkflowDecision(task.id, executionId, step.id, "review-limit",
+        `Review round ${state.round} of ${state.limit} requested changes. Allow one additional round or stop.\n\n${state.findings}`, evidence?.id);
+      return;
+    }
+    const role = state.phase === "revise" ? "revise" : "review";
+    if (role === "review") state.round++;
+    const previous = state.attempts.at(-1);
+    const reviewedRunId = role === "review" && previous?.role === "review" ? previous.reviewedRunId
+      : this.history(task.id).filter((run) => run.workflowExecutionId === executionId && !run.kind && run.status === "Complete" &&
+        !state.attempts.some((attempt) => attempt.runId === run.id && attempt.role === "review")).at(-1)?.id;
+    const evidence = this.list().find((item) => item.id === task.id)?.comments?.find((comment) => comment.runId === reviewedRunId && !comment.responseTo);
+    const reviewedArtifacts = role === "review" && previous?.role === "review" ? previous.reviewedArtifacts ?? [] : evidence?.artifacts ?? [];
+    const instructions = role === "review"
+      ? step.instructions + '\n\nReturn only JSON: {"outcome":"approved" or "changes-requested","findings":"Nonempty review findings"}. Successful execution is not approval. You may request human feedback using the feedback_request envelope.'
+      : step.revisionInstructions + "\n\nReviewer findings:\n" + state.findings;
+    const profile = role === "review" ? step.profile : step.revisionProfile;
+    if (!profile) throw new RunValidationError("This review section has no saved agent profile.");
+    const runId = this.queueProfileRun({ taskId: task.id, column: task.status, profile, workflowExecutionId: executionId, stepId: step.id, stepInstructions: instructions });
+    state.attempts.push({ runId, role, round: state.round, ...(role === "review" ? { reviewedRunId, reviewedArtifacts } : {}) });
+    saveReview(this.db, executionId, step.id, state);
     this.db.prepare("UPDATE tasks SET agentStatus = 'Queued' WHERE workspaceId = workspace_id() AND id = ?").run(task.id);
   }
 
@@ -598,7 +654,7 @@ export class TaskStore {
     return this.transaction(() => {
       const task = this.list().find((item) => item.id === taskId);
       if (!task) throw new RunValidationError("This task no longer exists.");
-      if (!task.comments?.some((comment) => comment.feedbackKind === "checkpoint" && comment.feedbackStatus === "pending") && !this.history(taskId).some((run) => run.status === "Queued" || run.status === "Running" || (run.workflowExecutionId && run.status === "Waiting" && task.comments?.some((comment) => comment.runId === run.id && comment.feedbackStatus === "pending"))))
+      if (!task.comments?.some((comment) => comment.feedbackKind && comment.feedbackStatus === "pending") && !this.history(taskId).some((run) => run.status === "Queued" || run.status === "Running" || (run.workflowExecutionId && run.status === "Waiting" && task.comments?.some((comment) => comment.runId === run.id && comment.feedbackStatus === "pending"))))
         throw new RunValidationError("This task no longer has a queued or running agent.");
       const now = new Date().toISOString();
       this.cancelFeedback(taskId, "Stopped");
@@ -809,6 +865,22 @@ export class TaskStore {
       }
       if (status === "Waiting" && (!summary.trim() || !recommendation?.trim()))
         throw new FeedbackValidationError("Feedback requests require a question and recommendation.");
+      const review = run.workflowExecutionId && run.stepId ? readReview(this.db, run.workflowExecutionId, run.stepId) : undefined;
+      const attempt = review?.attempts.find((attempt) => attempt.runId === run.id);
+      if (status === "Complete" && review && attempt?.role === "review") {
+        const result = reviewResult(summary);
+        attempt.outcome = result?.outcome ?? "invalid";
+        attempt.findings = result?.findings ?? summary;
+        attempt.artifacts = artifacts;
+        if (!result) {
+          status = "Failed";
+          summary = "Invalid reviewer outcome. Retry the current step with explicit approved or changes-requested JSON and nonempty findings.\n\n" + summary;
+        } else {
+          review.findings = result.findings;
+          if (result.outcome === "approved") review.phase = "complete";
+        }
+        saveReview(this.db, run.workflowExecutionId!, run.stepId!, review);
+      }
       const finishedAt = new Date().toISOString();
       this.db
         .prepare(
@@ -834,7 +906,14 @@ export class TaskStore {
       }
       if (status === "Complete" && run.workflowExecutionId && !run.kind) {
         const execution = this.workflowHistory(task.id).find((item) => item.id === run.workflowExecutionId)!;
-        if (execution.stepId === (run.stepId ?? execution.stepId)) this.advanceWorkflow(task, execution);
+        if (execution.stepId === (run.stepId ?? execution.stepId)) {
+          const step = execution.steps!.find((step) => step.id === execution.stepId)!;
+          if (step.kind === "review" && review && review.phase !== "complete") {
+            review.phase = attempt?.role === "revise" ? "review" : review.round >= review.limit ? "intervention" : "revise";
+            saveReview(this.db, execution.id, step.id, review);
+            this.queueWorkflowStep(task, execution.id, step);
+          } else this.advanceWorkflow(task, execution);
+        }
       }
       this.applyProgression(task.id, workflowProgression({
         event: "run-finished",
@@ -878,6 +957,7 @@ export class TaskStore {
       const task = this.list().find((item) => item.id === taskId);
       const request = task?.comments?.find((item) => item.id === commentId && item.feedbackStatus === "pending");
       if (!request) throw new FeedbackValidationError("This feedback request is no longer pending. Reload the task.");
+      if (task && request.feedbackKind === "review-limit") return this.answerReviewLimit(task, request, body.trim(), decision);
       if (task && request?.feedbackKind === "checkpoint") return this.answerCheckpoint(task, request, body.trim(), decision);
       if (decision !== undefined) throw new FeedbackValidationError("Agent questions require a freeform reply, not an approval decision.");
       const run = request && this.history(taskId).find((item) => item.id === request.runId);
@@ -885,10 +965,37 @@ export class TaskStore {
         throw new FeedbackValidationError("This feedback request is no longer pending. Reload the task.");
       this.db.prepare("UPDATE comments SET feedbackStatus = 'answered' WHERE comments.workspaceId = workspace_id() AND id = ?").run(commentId);
       this.addComment({ id: randomUUID(), taskId, body: body.trim(), createdAt: new Date().toISOString(), authorName: "Human", runId: run.id, responseTo: request.id, workflowExecutionId: run.workflowExecutionId, stepId: run.stepId });
-      this.applyProgression(taskId, workflowProgression({ event: "feedback-answered", task, run }));
+      const execution = run.workflowExecutionId ? this.workflowHistory(taskId).find((item) => item.id === run.workflowExecutionId) : undefined;
+      const step = execution?.steps?.find((step) => step.id === run.stepId);
+      if (step?.kind === "review") this.queueWorkflowStep(task, execution!.id, step);
+      else this.applyProgression(taskId, workflowProgression({ event: "feedback-answered", task, run }));
       this.db.prepare("UPDATE tasks SET agentStatus = 'Queued' WHERE tasks.workspaceId = workspace_id() AND id = ?").run(taskId);
       return this.list().find((item) => item.id === taskId)!;
     });
+  }
+
+  private answerReviewLimit(task: Task, request: TaskComment, body: string, decision: unknown): Task {
+    const execution = this.workflowHistory(task.id)[0];
+    const step = execution?.steps?.find((step) => step.id === execution.stepId);
+    if (!execution || execution.id !== request.workflowExecutionId || execution.stepId !== request.stepId || execution.status !== "Waiting" || step?.kind !== "review" || step.review?.phase !== "intervention")
+      throw new FeedbackValidationError("This feedback request is no longer pending. Reload the task.");
+    if (decision !== "additional-round" && decision !== "stop")
+      throw new FeedbackValidationError("Choose an additional round or stop.");
+    if (decision === "stop") this.cancelFeedback(task.id, "Stopped");
+    else {
+      this.db.prepare("UPDATE comments SET feedbackStatus = 'answered' WHERE id = ?").run(request.id);
+      this.db.prepare("UPDATE workflow_checkpoints SET status = 'Complete' WHERE requestId = ?").run(request.id);
+    }
+    this.addComment({ id: randomUUID(), taskId: task.id, body, createdAt: new Date().toISOString(), authorName: "Human",
+      responseTo: request.id, workflowExecutionId: execution.id, stepId: step.id, decision });
+    if (decision === "stop") this.db.prepare("UPDATE tasks SET agentStatus = 'Stopped' WHERE id = ? AND workspaceId = workspace_id()").run(task.id);
+    else {
+      step.review.limit = Math.max(step.review.limit, step.review.round) + 1;
+      step.review.phase = "revise";
+      saveReview(this.db, execution.id, step.id, step.review);
+      this.queueWorkflowStep(task, execution.id, step);
+    }
+    return this.list().find((item) => item.id === task.id)!;
   }
 
   private answerCheckpoint(task: Task, request: TaskComment, body: string, decision: unknown): Task {
@@ -971,8 +1078,10 @@ export class TaskStore {
 
   private queueProfileRun({ taskId, column, profile, kind, commentId, replyPlan, createdAt = new Date().toISOString(), workflowExecutionId, stepInstructions, stepId }: Pick<AgentRun, "taskId" | "column" | "profile"> & Partial<Pick<AgentRun, "kind" | "commentId" | "replyPlan" | "createdAt" | "workflowExecutionId" | "stepInstructions" | "stepId">>) {
     this.assertWorkspaceActive();
+    const runId = randomUUID();
     this.db.prepare("INSERT INTO runs (workspaceId, workspacePath, id, taskId, column, profile, status, createdAt, kind, commentId, replyPlan, workflowExecutionId, stepInstructions, stepId) VALUES (workspace_id(), (SELECT path FROM workspaces WHERE id = workspace_id()), ?, ?, ?, ?, 'Queued', ?, ?, ?, ?, ?, ?, ?)")
-      .run(randomUUID(), taskId, column, JSON.stringify(profile), createdAt, kind ?? null, commentId ?? null, replyPlan ? JSON.stringify(replyPlan) : null, workflowExecutionId ?? null, stepInstructions ?? null, stepId ?? null);
+      .run(runId, taskId, column, JSON.stringify(profile), createdAt, kind ?? null, commentId ?? null, replyPlan ? JSON.stringify(replyPlan) : null, workflowExecutionId ?? null, stepInstructions ?? null, stepId ?? null);
+    return runId;
   }
 
   delete(id: string) {

@@ -1,5 +1,7 @@
 "use client";
 
+import type { FeedbackDecision } from "@/domain/task";
+
 import type { ArtifactReference } from "@/domain/artifact";
 import { useEffect, useRef, useState, type SetStateAction } from "react";
 import { Plus } from "lucide-react";
@@ -39,7 +41,7 @@ export function TaskBoard({
     stop?: (taskId: string) => Promise<Task>;
     deleteComment?: (taskId: string, commentId: string) => Promise<Task>;
     postComment?: (taskId: string, body: string, artifacts?: ArtifactReference[]) => Promise<Task>;
-    answerFeedback?: (taskId: string, commentId: string, body: string, decision?: "approve" | "changes-requested") => Promise<Task>;
+    answerFeedback?: (taskId: string, commentId: string, body: string, decision?: FeedbackDecision) => Promise<Task>;
   };
 }) {
   const [agents] = useState(initialAgents);
