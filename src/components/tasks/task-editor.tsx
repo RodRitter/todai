@@ -2,8 +2,11 @@
 
 import type { ArtifactReference } from "@/domain/artifact";
 import { useRef, useState, type FormEvent } from "react";
-import { Bot, CircleDot, CirclePlay, CircleStop, Workflow, Zap } from "lucide-react";
-import { TaskComments } from "./task-comments";
+import { Bot, CircleDot, CirclePlay, CircleStop, Maximize2, Minimize2, Workflow, Zap } from "lucide-react";
+import { TaskActivity, TaskFeedback, TaskResult } from "./task-comments";
+import { TaskArtifacts } from "@/components/artifacts/artifact-attachments";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RunHistory } from "./run-history";
 import { AgentStatus } from "./agent-status";
 import { DescriptionField } from "./description-field";
 import { notifyOperation } from "@/components/ui/toast";
@@ -68,6 +71,31 @@ function TaskEditorSession({
   onDeleteComment,
   agents,
 }: TaskEditorProps) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const [tab, setTab] = useState("overview");
+  const [expanded, setExpanded] = useState(false);
+  const pendingFeedback = editing?.comments?.filter((comment) => comment.feedbackStatus === "pending") ?? [];
+  const latestResult = editing?.comments?.filter((comment) => comment.authorName !== "Human" && !comment.feedbackStatus).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
+  function navigateRecord(nextTab: string, id: string) {
+    setTab(nextTab);
+    requestAnimationFrame(() => {
+      const record = document.getElementById(id);
+      record?.focus({ preventScroll: true });
+      record?.scrollIntoView({ block: "nearest" });
+    });
+  }
+  function toggleExpansion() {
+    const panel = formRef.current?.querySelector<HTMLElement>('[data-state="active"][role="tabpanel"]');
+    const top = panel?.getBoundingClientRect().top ?? 0;
+    const anchor = panel && panel.scrollTop > 0
+      ? Array.from(panel.querySelectorAll<HTMLElement>("p, h2, h3, h4, textarea, li")).find((element) => element.getBoundingClientRect().bottom > top)
+      : undefined;
+    const offset = anchor ? anchor.getBoundingClientRect().top - top : 0;
+    setExpanded((value) => !value);
+    requestAnimationFrame(() => {
+      if (panel && anchor) panel.scrollTop += anchor.getBoundingClientRect().top - panel.getBoundingClientRect().top - offset;
+    });
+  }
   const pendingRun =
     editing?.agentStatus === "Queued" || editing?.agentStatus === "Running";
   const draftId = useRef<string | null>(null);
@@ -170,11 +198,14 @@ function TaskEditorSession({
         }
       }}
     >
-      <DialogContent closeDisabled={busy} aria-describedby={undefined} size="large" className="h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden pb-0">
+      <DialogContent closeDisabled={busy} aria-describedby={undefined} size={expanded ? "expanded" : "large"} className="h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden pb-0">
         <DialogHeader className="grid-cols-[minmax(0,1fr)_auto_2.25rem] [&>button]:col-start-3 [&>button]:row-start-1">
           <DialogTitle className="col-start-1 text-left">{editing ? "Task details" : "Create task"}</DialogTitle>
 
           <div className="col-start-2 row-start-1 flex items-center gap-2">
+            <Button type="button" variant="ghost" size="icon" aria-label={expanded ? "Collapse task details" : "Expand task details"} aria-pressed={expanded} onClick={toggleExpansion}>
+              {expanded ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
+            </Button>
             {editing && onRun && !pendingRun && (
               <TooltipProvider>
                 <Tooltip>
@@ -228,14 +259,24 @@ function TaskEditorSession({
               </TooltipProvider>
             )}
           </div>
+          {editing && <div className="col-span-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground"><span>{editing.status}</span><span role="status"><AgentStatus status={editing.agentStatus} /></span></div>}
         </DialogHeader>
         <form
+          ref={formRef}
           onSubmit={saveTask}
           key={editing?.id ?? "new"}
           className="-mx-6 min-h-0 min-w-0"
         >
           <fieldset disabled={busy} className="flex h-full min-h-0 min-w-0 flex-col">
-            <div className="min-h-0 flex-1 space-y-7 overflow-y-auto px-6 pb-6">
+            <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
+              {editing && <TabsList aria-label="Task workspace" className="mx-6 mb-4 grid h-auto shrink-0 grid-cols-4">
+                <TabsTrigger value="overview" className="px-1">Overview{pendingFeedback.length > 0 && <span className="ml-1 size-2 shrink-0 rounded-full bg-primary" aria-label="Needs feedback" />}</TabsTrigger>
+                <TabsTrigger value="workflow" className="px-1">Workflow</TabsTrigger>
+                <TabsTrigger value="activity" className="px-1">Activity</TabsTrigger>
+                <TabsTrigger value="artifacts" className="px-1">Artifacts</TabsTrigger>
+              </TabsList>}
+              <TabsContent value="overview" forceMount {...(!editing ? { role: "region", "aria-labelledby": undefined, "aria-label": "Task details" } : {})} className="min-h-0 flex-1 space-y-7 overflow-y-auto px-6 pb-6">
+              {pendingFeedback.map((comment) => <TaskFeedback key={comment.id} comment={comment} onAnswer={onAnswerFeedback} />)}
               <div className="space-y-2">
                 <input type="hidden" name="title" value={title} />
                 {isEditingTitle ? <>
@@ -385,8 +426,22 @@ function TaskEditorSession({
                   </>
                 )}
               </div>
-              {editing && <TaskComments taskId={editing.id} comments={editing.comments} agentStatus={editing.agentStatus} onAnswerFeedback={onAnswerFeedback} agents={agents} onPostComment={onPostComment} onDeleteComment={onDeleteComment} />}
-            </div>
+              {!pendingFeedback.length && latestResult && <TaskResult comment={latestResult} onNavigate={() => navigateRecord("activity", `comment-${latestResult.id}`)} />}
+              </TabsContent>
+              {editing && <>
+                <TabsContent value="workflow" forceMount className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-6">
+                  <section className="space-y-2"><h3 className="font-semibold">Workflow</h3><p className="text-sm text-muted-foreground">No workflow is configured. Runs currently use the agent assigned to the task’s board column.</p><AgentStatus status={editing.agentStatus} /></section>
+                  <RunHistory taskId={editing.id} />
+                </TabsContent>
+                <TabsContent value="activity" forceMount className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-6">
+                  <RunHistory taskId={editing.id} />
+                  <TaskActivity comments={editing.comments} agentStatus={editing.agentStatus} agents={agents} onPostComment={onPostComment} onDeleteComment={onDeleteComment} onNavigateFeedback={(id) => navigateRecord("overview", `feedback-request-${id}`)} />
+                </TabsContent>
+                <TabsContent value="artifacts" forceMount className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+                  <TaskArtifacts taskId={editing.id} commentsKey={JSON.stringify((editing.comments ?? []).map((comment) => comment.id))} onNavigateComment={(id) => navigateRecord("activity", `comment-${id}`)} />
+                </TabsContent>
+              </>}
+            </Tabs>
             <DialogFooter className="z-10 shrink-0 flex-row flex-wrap items-center justify-end gap-2 border-t bg-background px-6 py-4">
               {editing && onDelete && (
                 <Button

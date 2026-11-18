@@ -44,6 +44,29 @@ export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostCo
       </TabsList>
       <TabsContent value="comments" forceMount className="space-y-6">
       {taskId && tab === "comments" && <RunHistory key={taskId} taskId={taskId} />}
+      <TaskActivity comments={comments} agentStatus={agentStatus} agents={agents} onPostComment={onPostComment} onDeleteComment={onDeleteComment} onAnswerFeedback={onAnswerFeedback} />
+      </TabsContent>
+      <TabsContent value="artifacts" forceMount>
+        {taskId ? <TaskArtifacts onCountChange={setArtifactCount} taskId={taskId} commentsKey={JSON.stringify(comments.map((comment) => comment.id))} onNavigateComment={(commentId) => {
+          setTab("comments");
+          requestAnimationFrame(() => document.getElementById(`comment-${commentId}`)?.scrollIntoView({ block: "nearest" }));
+        }} /> : <p className="text-sm text-muted-foreground">No linked artifacts yet.</p>}
+      </TabsContent>
+    </section>
+    </Tabs>
+  );
+}
+
+export function TaskActivity({ comments = [], agentStatus, agents = [], onPostComment, onDeleteComment, onAnswerFeedback, onNavigateFeedback }: {
+  comments?: TaskComment[];
+  agentStatus?: AgentStatus;
+  agents?: AgentProfile[];
+  onPostComment?: (body: string, artifacts?: ArtifactReference[]) => Promise<void>;
+  onDeleteComment?: (commentId: string) => Promise<void>;
+  onAnswerFeedback?: (commentId: string, body: string) => Promise<void>;
+  onNavigateFeedback?: (commentId: string) => void;
+}) {
+  return <section aria-label="Task discussion" className="space-y-6">
       {onPostComment && <CommentInput agents={agents} onPost={onPostComment} agentStatus={agentStatus} />}
       {comments.length || agentStatus === "Running" ? (
         <ol className="space-y-8">
@@ -57,7 +80,7 @@ export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostCo
             .filter((comment) => !(comment.authorName === "Human" && comment.runId && comments.some((request) => request.runId === comment.runId && request.feedbackStatus)))
             .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
             .map((comment) => (
-              <li key={comment.id} id={`comment-${comment.id}`} className="group/comment grid grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-x-3 gap-y-3 border-b border-border/60 pb-6 last:border-0 last:pb-0">
+              <li key={comment.id} id={`comment-${comment.id}`} tabIndex={-1} className="group/comment grid grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-x-3 gap-y-3 border-b border-border/60 pb-6 last:border-0 last:pb-0">
                 <div
                   className="bg-primary/10 text-primary flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
                   aria-hidden="true"
@@ -111,7 +134,7 @@ export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostCo
                       </div>
                     )}
                     {comment.feedbackStatus === "pending" && (
-                      <FeedbackInput commentId={comment.id} onAnswer={onAnswerFeedback} />
+                      onNavigateFeedback ? <Button type="button" variant="outline" onClick={() => onNavigateFeedback(comment.id)}>Reply in Overview</Button> : <FeedbackInput commentId={comment.id} onAnswer={onAnswerFeedback} />
                     )}
                     <Button type="button" size="sm" variant="ghost" className="h-7 gap-1.5 px-2 text-xs text-muted-foreground" aria-label="Copy comment" onClick={async () => {
                       try { await navigator.clipboard.writeText(comment.body); toast.success("Comment copied."); }
@@ -119,12 +142,13 @@ export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostCo
                     }}><Copy aria-hidden="true" className="size-3.5" />Copy</Button>
                   </div>
                   {comment.feedbackStatus === "answered" && comments.filter((reply) => reply.authorName === "Human" && reply.runId === comment.runId).map((reply) => (
-                    <div key={reply.id} className="col-span-2 ml-4 min-w-0 space-y-2 border-l-2 border-border pl-4 sm:ml-9 sm:pl-5">
+                    <div key={reply.id} id={`comment-${reply.id}`} tabIndex={-1} className="col-span-2 ml-4 min-w-0 space-y-2 border-l-2 border-border pl-4 sm:ml-9 sm:pl-5">
                       <div className="flex items-center gap-3"><p className="text-sm font-semibold">Human</p>
                         {onDeleteComment && <DeleteComment commentId={reply.id} onDelete={onDeleteComment} disabled={agentStatus === "Running" || agentStatus === "Queued"} />}
                       </div>
                       <time className="text-xs text-muted-foreground" dateTime={reply.createdAt}>{new Date(reply.createdAt).toLocaleString()}</time>
                       <CommentBody body={reply.body} />
+                      {!!reply.artifacts?.length && <CommentAttachments references={reply.artifacts} />}
                     </div>
                   ))}
                 </div>
@@ -139,16 +163,29 @@ export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostCo
           </p>
         </div>
       )}
-      </TabsContent>
-      <TabsContent value="artifacts" forceMount>
-        {taskId ? <TaskArtifacts onCountChange={setArtifactCount} taskId={taskId} commentsKey={JSON.stringify(comments.map((comment) => comment.id))} onNavigateComment={(commentId) => {
-          setTab("comments");
-          requestAnimationFrame(() => document.getElementById(`comment-${commentId}`)?.scrollIntoView({ block: "nearest" }));
-        }} /> : <p className="text-sm text-muted-foreground">No linked artifacts yet.</p>}
-      </TabsContent>
-    </section>
-    </Tabs>
-  );
+
+  </section>;
+}
+
+export function TaskResult({ comment, onNavigate }: { comment: TaskComment; onNavigate: () => void }) {
+  return <section aria-label="Latest result" className="space-y-3">
+    <h3 className="text-sm font-semibold">Latest result</h3>
+    <p className="text-xs text-muted-foreground">{comment.authorName || "Agent"} · <time dateTime={comment.createdAt}>{new Date(comment.createdAt).toLocaleString()}</time></p>
+    <Markdown>{comment.body}</Markdown>
+    {!!comment.artifacts?.length && <CommentAttachments references={comment.artifacts} />}
+    <Button type="button" variant="outline" size="sm" onClick={onNavigate}>View in Activity</Button>
+  </section>;
+}
+
+export function TaskFeedback({ comment, onAnswer }: { comment: TaskComment; onAnswer?: (commentId: string, body: string) => Promise<void> }) {
+  return <section id={`feedback-request-${comment.id}`} tabIndex={-1} aria-label="Pending feedback" className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
+    <h3 className="font-semibold">Your feedback is needed</h3>
+    <p className="text-xs text-muted-foreground">{comment.authorName || "Agent"} · <time dateTime={comment.createdAt}>{new Date(comment.createdAt).toLocaleString()}</time></p>
+    <Markdown>{comment.body}</Markdown>
+    {comment.recommendation && <div className="space-y-1"><h4 className="text-sm font-semibold">Recommendation</h4><Markdown>{comment.recommendation}</Markdown></div>}
+    {!!comment.artifacts?.length && <CommentAttachments references={comment.artifacts} />}
+    <FeedbackInput commentId={comment.id} onAnswer={onAnswer} />
+  </section>;
 }
 
 function DeleteComment({ commentId, onDelete, disabled }: {
