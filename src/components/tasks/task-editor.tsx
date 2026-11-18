@@ -1,10 +1,12 @@
 "use client";
 
+import { OutstandingFindings, ReviewHistory } from "./review-history";
+import type { WorkflowExecution } from "@/domain/workflow";
 import { reviewPhaseLabels } from "@/domain/workflow";
 import type { FeedbackDecision } from "@/domain/task";
 
 import type { ArtifactReference } from "@/domain/artifact";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Bot, CircleDot, CirclePlay, CircleStop, Maximize2, Minimize2, Workflow, Zap } from "lucide-react";
 import { TaskActivity, TaskFeedback, TaskResult } from "./task-comments";
 import { TaskArtifacts } from "@/components/artifacts/artifact-attachments";
@@ -76,18 +78,32 @@ function TaskEditorSession({
   agents,
 }: TaskEditorProps) {
   const formRef = useRef<HTMLFormElement>(null);
+  const [workflowHistory, setWorkflowHistory] = useState<WorkflowExecution[]>([]);
+  const [navigationVersion, setNavigationVersion] = useState(0);
+  const [selectedRecord, setSelectedRecord] = useState<string>();
   const [tab, setTab] = useState("overview");
   const [expanded, setExpanded] = useState(false);
   const pendingFeedback = editing?.comments?.filter((comment) => comment.feedbackStatus === "pending") ?? [];
   const latestResult = editing?.comments?.filter((comment) => comment.authorName !== "Human" && !comment.feedbackStatus).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
   function navigateRecord(nextTab: string, id: string) {
+    setSelectedRecord(id);
+    setNavigationVersion((value) => value + 1);
     setTab(nextTab);
-    requestAnimationFrame(() => {
-      const record = document.getElementById(id);
-      record?.focus({ preventScroll: true });
-      record?.scrollIntoView({ block: "nearest" });
-    });
   }
+  useEffect(() => {
+    if (!selectedRecord || !formRef.current) return;
+    const root = formRef.current;
+    function reveal() {
+      const record = document.getElementById(selectedRecord!);
+      if (!record || !record.getClientRects().length) return false;
+      record.focus({ preventScroll: true });
+      record.scrollIntoView({ block: "nearest" });
+      return true;
+    }
+    const observer = new MutationObserver(() => { if (reveal()) observer.disconnect(); });
+    if (!reveal()) observer.observe(root, { childList: true, subtree: true, attributes: true });
+    return () => observer.disconnect();
+  }, [selectedRecord, navigationVersion]);
   function toggleExpansion() {
     const panel = formRef.current?.querySelector<HTMLElement>('[data-state="active"][role="tabpanel"]');
     const top = panel?.getBoundingClientRect().top ?? 0;
@@ -283,6 +299,7 @@ function TaskEditorSession({
                 <TabsTrigger value="artifacts" className="px-1">Artifacts</TabsTrigger>
               </TabsList>}
               <TabsContent value="overview" forceMount {...(!editing ? { role: "region", "aria-labelledby": undefined, "aria-label": "Task details" } : {})} className="min-h-0 flex-1 space-y-7 overflow-y-auto px-6 pb-6">
+              {editing && <OutstandingFindings executions={workflowHistory} onNavigate={(id) => navigateRecord("activity", id)} />}
               {pendingFeedback.map((comment) => <TaskFeedback key={comment.id} comment={comment} comments={editing?.comments} onAnswer={onAnswerFeedback} onNavigate={(id) => navigateRecord("activity", `comment-${id}`)} />)}
               <div className="space-y-2">
                 <input type="hidden" name="title" value={title} />
@@ -437,12 +454,13 @@ function TaskEditorSession({
               </TabsContent>
               {editing && <>
                 <TabsContent value="workflow" forceMount className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-6">
-                  <TaskWorkflow taskId={editing.id} workflowId={workflowId} onChange={setWorkflowId} agents={agents} disabled={busy || pendingRun || editing.agentStatus === "Waiting"} />
+                  <TaskWorkflow onHistory={setWorkflowHistory} taskId={editing.id} workflowId={workflowId} onChange={setWorkflowId} agents={agents} disabled={busy || pendingRun || editing.agentStatus === "Waiting"} />
                   <RunHistory taskId={editing.id} />
                 </TabsContent>
                 <TabsContent value="activity" forceMount className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-6">
                   <RunHistory taskId={editing.id} />
-                  <TaskActivity comments={editing.comments} agentStatus={editing.agentStatus} agents={agents} onPostComment={onPostComment} onDeleteComment={onDeleteComment} onNavigateFeedback={(id) => navigateRecord("overview", `feedback-request-${id}`)} />
+                  <ReviewHistory navigationVersion={navigationVersion} executions={workflowHistory} comments={editing.comments ?? []} selectedRecord={selectedRecord} onNavigate={(id) => navigateRecord("activity", id)} onNavigateFeedback={(id) => navigateRecord("overview", `feedback-request-${id}`)} />
+                  <TaskActivity selectedCommentId={selectedRecord?.replace(/^comment-/, "")} comments={editing.comments?.filter((comment) => !workflowHistory.some((execution) => execution.id === comment.workflowExecutionId && execution.steps?.some((step) => step.id === comment.stepId)))} agentStatus={editing.agentStatus} agents={agents} onPostComment={onPostComment} onDeleteComment={onDeleteComment} onNavigateFeedback={(id) => navigateRecord("overview", `feedback-request-${id}`)} />
                 </TabsContent>
                 <TabsContent value="artifacts" forceMount className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
                   <TaskArtifacts taskId={editing.id} commentsKey={JSON.stringify((editing.comments ?? []).map((comment) => comment.id))} onNavigateComment={(id) => navigateRecord("activity", `comment-${id}`)} />

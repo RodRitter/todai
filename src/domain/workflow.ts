@@ -30,7 +30,14 @@ export type WorkflowExecution = {
   runs: (RunHistoryEntry & { stepId?: string; prompt: string | null })[];
 };
 
+export type FindingUpdate = { id: string; body?: string; status: "outstanding" | "resolved"; note: string };
+export type ReviewFinding = {
+  id: string; body: string; status: "outstanding" | "resolved"; introducedRunId: string;
+  dispositions: { runId: string; round: number; status: "outstanding" | "resolved"; note: string }[];
+};
+
 export type ReviewState = {
+  findingRecords?: ReviewFinding[];
   phase: "review" | "revise" | "intervention" | "complete";
   round: number;
   limit: number;
@@ -42,6 +49,7 @@ export type ReviewState = {
     reviewedRunId?: string;
     outcome?: "approved" | "changes-requested" | "invalid";
     findings?: string;
+    findingUpdates?: FindingUpdate[];
     artifacts?: ArtifactReference[];
     reviewedArtifacts?: ArtifactReference[];
   }[];

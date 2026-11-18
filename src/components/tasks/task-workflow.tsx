@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Markdown } from "@/components/ui/markdown";
 import { CommentAttachments } from "@/components/artifacts/artifact-attachments";
+import { HistoryGroup, HistoryPage } from "./review-history";
 import { WorkflowEditor } from "./workflow-editor";
 import { AgentStatus } from "./agent-status";
 
@@ -25,13 +26,14 @@ const workflowApi = {
   save: (workflow: Workflow) => request<Workflow>("/api/workflows", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(workflow) }),
 };
 
-export function TaskWorkflow({ taskId, workflowId, onChange, agents = [], disabled, api = workflowApi }: {
+export function TaskWorkflow({ taskId, workflowId, onChange, agents = [], disabled, onHistory, api = workflowApi }: {
   taskId: string;
   workflowId: string | null;
   onChange: (id: string | null) => void;
   agents?: AgentProfile[];
   disabled: boolean;
   api?: typeof workflowApi;
+  onHistory?: (history: WorkflowExecution[]) => void;
 }) {
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [history, setHistory] = useState<WorkflowExecution[]>([]);
@@ -47,7 +49,7 @@ export function TaskWorkflow({ taskId, workflowId, onChange, agents = [], disabl
     async function refresh() {
       try {
         const [definitions, executions] = await Promise.all([api.list(controller.signal), api.history(taskId, controller.signal)]);
-        if (!controller.signal.aborted) { setWorkflows(definitions); setHistory(executions); setLoaded(true); setError(""); }
+        if (!controller.signal.aborted) { setWorkflows(definitions); setHistory(executions); onHistory?.(executions); setLoaded(true); setError(""); }
       } catch (error) {
         if (!controller.signal.aborted) setError(error instanceof Error ? error.message : "Could not load workflows.");
       } finally {
@@ -56,7 +58,7 @@ export function TaskWorkflow({ taskId, workflowId, onChange, agents = [], disabl
     }
     void refresh();
     return () => { controller.abort(); clearTimeout(timer); };
-  }, [taskId, api, attempt]);
+  }, [taskId, api, attempt, onHistory]);
 
   return <section className="space-y-4" aria-label="Task workflow">
     <div className="space-y-2">
@@ -87,8 +89,7 @@ export function TaskWorkflow({ taskId, workflowId, onChange, agents = [], disabl
     <div className="space-y-3">
       <h3 className="font-semibold">Workflow executions</h3>
       {loaded && !history.length && <p className="text-sm text-muted-foreground">No workflow executions yet.</p>}
-      {history.map((execution) => <details key={execution.id} className="rounded-lg border p-3">
-        <summary className="cursor-pointer text-sm"><span className="font-medium">{execution.workflow.name}</span> · <AgentStatus status={execution.status} /> <time className="text-xs text-muted-foreground" dateTime={execution.createdAt}>{new Date(execution.createdAt).toLocaleString()}</time></summary>
+      {<HistoryPage label="executions" items={history} render={(execution) => <HistoryGroup key={execution.id} title={<><span className="font-medium">{execution.workflow.name}</span> · <AgentStatus status={execution.status} /> <time className="text-xs text-muted-foreground" dateTime={execution.createdAt}>{new Date(execution.createdAt).toLocaleString()}</time></>}>
         <div className="mt-4 space-y-4 text-sm">
           <p>Current step: {(execution.steps?.findIndex((step) => step.id === execution.stepId) ?? 0) + 1}</p>
           <ol className="space-y-2" aria-label="Step progress">{(execution.steps ?? workflowSteps(execution.workflow).map((step) => ({ ...step, profile: execution.profile, review: undefined, status: execution.status }))).map((step, index) => <li key={step.id} className="rounded border p-3">
@@ -122,7 +123,7 @@ export function TaskWorkflow({ taskId, workflowId, onChange, agents = [], disabl
             {run.summary && <details><summary className="cursor-pointer">Result</summary><div className="mt-2"><Markdown>{run.summary}</Markdown></div></details>}
           </li>)}</ol>
         </div>
-      </details>)}
+      </HistoryGroup>} />}
     </div>
   </section>;
 }

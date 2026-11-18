@@ -138,3 +138,11 @@ Reviewers must return JSON with an `outcome` of `approved` or `changes-requested
 At the limit, the workflow waits before running another revision. In **Overview**, choose **Allow one additional round** or **Stop workflow**. An additional round authorizes a revision followed by another review; it does not approve the work or resume a paused queue. Retrying a stopped intervention reopens the same decision.
 
 The task summary and **Workflow** tab show the current step and round. Execution history retains reviewer outcomes, findings, reviewed attempts, and pinned evidence revisions. Failure, cancellation, feedback, and restart recovery retain the section position and original agent settings.
+
+### Reading review history
+
+**Overview** links outstanding findings to their records in **Activity**, with access to pinned review artifacts. Activity groups work by execution, step, and review round. Older rounds start collapsed; findings, rounds, executions, and discussion load incrementally. Open **Full original content** for the original handover and supplied prompt. Unrelated discussion remains below workflow activity. Tab switches keep expanded history and reading positions.
+
+Reviewer results can include `findingUpdates`: an array of `{ "id": "focus", "body": "Restore keyboard focus", "status": "outstanding", "note": "Reproduced with Escape" }`. New IDs must be unique within the review section. Later reviewers reuse an ID, omit `body`, and supply an explicit `outstanding` or `resolved` disposition with verification notes. Omitted findings remain unchanged; revision-agent claims cannot resolve them. Approval fails while any tracked finding remains outstanding. A changes-requested result using the older string-only format creates a single tracked finding for that attempt. Active older loops receive stable outstanding records from their original changes-requested reports before resuming. Completed historical records retain their original summaries without inferred dispositions.
+
+Each review keeps the attempt and exact artifact revisions it reviewed. Publishing a newer artifact revision does not change this evidence.

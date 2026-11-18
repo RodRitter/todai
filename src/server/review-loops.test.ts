@@ -18,7 +18,7 @@ function fixture(maxRounds = 3) {
   store.runTask("task");
   return { store, path, cleanup() { store.close(); rmSync(directory, { recursive: true, force: true }); } };
 }
-const approved = JSON.stringify({ outcome: "approved", findings: "All checks passed." });
+function approved(store: TaskStore) { return JSON.stringify({ outcome: "approved", findings: "All checks passed.", findingUpdates: (store.workflowHistory("task")[0].steps?.[0].review?.findingRecords ?? []).map((item) => ({ id: item.id, status: "resolved", note: "Verified keyboard navigation" })) }); }
 const changes = JSON.stringify({ outcome: "changes-requested", findings: "Fix keyboard focus." });
 
 test("explicit reviewer approval exits the section once and preserves the decision", async () => {
@@ -26,7 +26,7 @@ test("explicit reviewer approval exits the section once and preserves the decisi
   try {
     const run = f.store.claimRun()!;
     assert.match(run.stepInstructions!, /approved/);
-    f.store.finishRun(run.id, "Complete", approved);
+    f.store.finishRun(run.id, "Complete", approved(f.store));
     f.store.finishRun(run.id, "Complete", changes);
     const execution = f.store.workflowHistory("task")[0];
     assert.equal(execution.stepId, "publish");
@@ -49,7 +49,7 @@ test("changes requested run revisions with findings and repeat review until expl
         assert.match(run.stepInstructions!, /Fix keyboard focus/);
         return "Fixed keyboard focus";
       }
-      return ++reviews === 3 ? approved : changes;
+      return ++reviews === 3 ? approved(f.store) : changes;
     }).drain();
     const execution = f.store.workflowHistory("task")[0];
     assert.equal(execution.status, "Complete");
@@ -107,7 +107,7 @@ test("reviewer feedback resumes the snapshotted reviewer and counts every attemp
     f.store.answerFeedback("task", question.id, "Use WCAG");
     const resumed = f.store.claimRun()!;
     assert.equal(resumed.profile.model, "test");
-    f.store.finishRun(resumed.id, "Complete", approved);
+    f.store.finishRun(resumed.id, "Complete", approved(f.store));
     const execution = f.store.workflowHistory("task")[0];
     assert.equal(execution.steps![0].review!.round, 2);
     assert.equal(execution.steps![0].review!.attempts[1].outcome, "approved");
@@ -127,7 +127,7 @@ for (const output of ["Looks good", '{"outcome":"approved"}', '{"outcome":"maybe
       assert.equal(execution.steps![0].review!.attempts[0].outcome, "invalid");
       f.store.retryWorkflow("task", execution.id);
       const retry = f.store.claimRun()!;
-      f.store.finishRun(retry.id, "Complete", approved);
+      f.store.finishRun(retry.id, "Complete", approved(f.store));
       assert.equal(f.store.workflowHistory("task")[0].stepId, "publish");
     } finally { f.cleanup(); }
   });
@@ -145,7 +145,7 @@ for (const role of ["review", "revise"]) {
         const run = f.store.claimRun()!;
         if (outcome === "Stopped") f.store.stopTask("task");
         f.store.finishRun(run.id, outcome, "Work preserved");
-        f.store.finishRun(run.id, "Complete", approved);
+        f.store.finishRun(run.id, "Complete", approved(f.store));
         const before = f.store.workflowHistory("task")[0];
         assert.equal(before.status, outcome);
         assert.equal(before.steps![0].review!.phase, role);
@@ -153,7 +153,7 @@ for (const role of ["review", "revise"]) {
         f.store.retryWorkflow("task", before.id);
         const retry = f.store.claimRun()!;
         assert.equal(retry.stepInstructions, run.stepInstructions);
-        f.store.finishRun(retry.id, "Complete", role === "review" ? approved : "Fixed");
+        f.store.finishRun(retry.id, "Complete", role === "review" ? approved(f.store) : "Fixed");
         assert.equal(f.store.workflowHistory("task")[0].stepId, role === "review" ? "publish" : "review");
       } finally { f.cleanup(); }
     });
@@ -235,7 +235,7 @@ test("review records pin reviewed attempts and nominated revisions across retrie
     f.store.deleteComment("task", handover.id);
     f.store.retryWorkflow("task", first.workflowExecutionId!);
     const retry = f.store.claimRun()!;
-    f.store.finishRun(retry.id, "Complete", approved, undefined, undefined, [pinned]);
+    f.store.finishRun(retry.id, "Complete", approved(f.store), undefined, undefined, [pinned]);
     library.revise(artifact.id, { title: "Evidence", type: "text", content: "Version two", creator: "Human" });
     const attempts = f.store.workflowHistory("task")[0].steps![0].review!.attempts;
     assert.equal(attempts.at(-1)!.reviewedRunId, revision.id);
@@ -250,5 +250,84 @@ test("task summary exposes the current step, role and round while review is acti
     const run = f.store.claimRun()!;
     f.store.finishRun(run.id, "Complete", changes);
     assert.deepEqual(f.store.list()[0].workflowProgress, { step: 1, total: 2, round: 1, limit: 3, phase: "revise" });
+  } finally { f.cleanup(); }
+});
+
+test("findings remain outstanding until a reviewer explicitly verifies them across rounds and restart", () => {
+  const f = fixture();
+  try {
+    const first = f.store.claimRun()!;
+    f.store.finishRun(first.id, "Complete", JSON.stringify({ outcome: "changes-requested", findings: "Fix focus", findingUpdates: [{ id: "focus", body: "Dialog loses keyboard focus", status: "outstanding", note: "Reproduced with Escape" }] }));
+    const revision = f.store.claimRun()!;
+    assert.match(revision.stepInstructions!, /focus/);
+    f.store.finishRun(revision.id, "Complete", "Fixed everything");
+    assert.equal(f.store.workflowHistory("task")[0].steps![0].review!.findingRecords?.[0].status, "outstanding");
+    const second = f.store.claimRun()!;
+    f.store.finishRun(second.id, "Complete", JSON.stringify({ outcome: "approved", findings: "Looks good" }));
+    assert.equal(f.store.workflowHistory("task")[0].status, "Failed");
+    f.store.retryWorkflow("task", first.workflowExecutionId!);
+    const retry = f.store.claimRun()!;
+    f.store.finishRun(retry.id, "Complete", JSON.stringify({ outcome: "approved", findings: "Verified", findingUpdates: [{ id: "focus", status: "resolved", note: "Escape restores focus to trigger" }] }));
+    const reopened = new TaskStore(f.path);
+    try {
+      const review = reopened.workflowHistory("task")[0].steps![0].review!;
+      assert.equal(review.findingRecords![0].id, "focus");
+      assert.equal(review.findingRecords![0].status, "resolved");
+      assert.equal(review.findingRecords![0].introducedRunId, first.id);
+      assert.deepEqual(review.findingRecords![0].dispositions.map((item) => item.runId), [first.id, retry.id]);
+      assert.equal(review.attempts.at(-1)!.reviewedRunId, revision.id);
+    } finally { reopened.close(); }
+  } finally { f.cleanup(); }
+});
+
+test("later findings retain omitted outstanding findings and reject invalid dispositions atomically", () => {
+  const f = fixture(10);
+  try {
+    const initial = f.store.claimRun()!;
+    f.store.finishRun(initial.id, "Complete", JSON.stringify({ outcome: "changes-requested", findings: "Focus", findingUpdates: [{ id: "focus", body: "Restore focus", status: "outstanding", note: "Reproduced" }] }));
+    f.store.finishRun(f.store.claimRun()!.id, "Complete", "Fixed");
+    const later = f.store.claimRun()!;
+    f.store.finishRun(later.id, "Complete", JSON.stringify({ outcome: "changes-requested", findings: "New issue", findingUpdates: [{ id: "contrast", body: "Improve contrast", status: "outstanding", note: "Measured" }] }));
+    const records = f.store.workflowHistory("task")[0].steps![0].review!.findingRecords!;
+    assert.deepEqual(records.map((item) => [item.id, item.status]), [["focus", "outstanding"], ["contrast", "outstanding"]]);
+    f.store.finishRun(f.store.claimRun()!.id, "Complete", "Both fixed");
+    for (const invalid of [
+      [{ id: "focus", status: "resolved", note: "Verified" }, { id: "missing", status: "resolved", note: "Verified" }],
+      [{ id: "focus", status: "resolved", note: "Verified" }, { id: "focus", status: "outstanding", note: "Duplicate" }],
+      [{ id: "focus", status: "resolved", note: " " }],
+      [{ id: "focus", body: "Different issue", status: "resolved", note: "Verified" }],
+    ]) {
+      const run = f.store.claimRun()!;
+      f.store.finishRun(run.id, "Complete", JSON.stringify({ outcome: "approved", findings: "Verified", findingUpdates: invalid }));
+      assert.equal(f.store.workflowHistory("task")[0].status, "Failed");
+      assert.deepEqual(f.store.workflowHistory("task")[0].steps![0].review!.findingRecords, records);
+      f.store.retryWorkflow("task", initial.workflowExecutionId!);
+    }
+  } finally { f.cleanup(); }
+});
+
+test("active pre-tracking histories require explicit verification after restart", async () => {
+  const f = fixture();
+  try {
+    const first = f.store.claimRun()!;
+    f.store.finishRun(first.id, "Complete", changes);
+    // Seed the persisted representation from before finding tracking existed.
+    const { DatabaseSync } = await import("node:sqlite");
+    const legacy = new DatabaseSync(f.path);
+    const row = legacy.prepare("SELECT state FROM workflow_reviews WHERE executionId = ?").get(first.workflowExecutionId!)!;
+    const state = JSON.parse(row.state as string);
+    delete state.findingRecords;
+    legacy.prepare("UPDATE workflow_reviews SET state = ? WHERE executionId = ?").run(JSON.stringify(state), first.workflowExecutionId!);
+    legacy.close();
+    const reopened = new TaskStore(f.path);
+    try {
+      reopened.finishRun(reopened.claimRun()!.id, "Complete", "Fixed");
+      const reviewer = reopened.claimRun()!;
+      reopened.finishRun(reviewer.id, "Complete", JSON.stringify({ outcome: "approved", findings: "Looks good" }));
+      assert.equal(reopened.workflowHistory("task")[0].status, "Failed");
+      const finding = reopened.workflowHistory("task")[0].steps![0].review!.findingRecords![0];
+      assert.equal(finding.status, "outstanding");
+      assert.equal(finding.introducedRunId, first.id);
+    } finally { reopened.close(); }
   } finally { f.cleanup(); }
 });

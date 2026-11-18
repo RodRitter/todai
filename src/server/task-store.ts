@@ -588,11 +588,12 @@ export class TaskStore {
     const evidence = this.list().find((item) => item.id === task.id)?.comments?.find((comment) => comment.runId === reviewedRunId && !comment.responseTo);
     const reviewedArtifacts = role === "review" && previous?.role === "review" ? previous.reviewedArtifacts ?? [] : evidence?.artifacts ?? [];
     const instructions = role === "review"
-      ? step.instructions + '\n\nReturn only JSON: {"outcome":"approved" or "changes-requested","findings":"Nonempty review findings"}. Successful execution is not approval. You may request human feedback using the feedback_request envelope.'
+      ? step.instructions + '\n\nReturn only JSON: {"outcome":"approved" or "changes-requested","findings":"Nonempty review summary","findingUpdates":[{"id":"stable-finding-id","body":"New finding description","status":"outstanding" or "resolved","note":"Reviewer evidence or verification"}]}. Use a unique id for each new finding and reuse it in later dispositions; omit body for existing findings. Resolve only after verifying the fix. Omission never resolves a finding. Approval requires all findings resolved. Successful execution is not approval. You may request human feedback using the feedback_request envelope.'
       : step.revisionInstructions + "\n\nReviewer findings:\n" + state.findings;
+    const findingContext = "\n\nFinding records (preserve identities):\n" + JSON.stringify(state.findingRecords ?? []) + "\nReviewed attempt: " + (reviewedRunId ?? "No preceding attempt") + "\nPinned reviewed artifacts: " + JSON.stringify(reviewedArtifacts);
     const profile = role === "review" ? step.profile : step.revisionProfile;
     if (!profile) throw new RunValidationError("This review section has no saved agent profile.");
-    const runId = this.queueProfileRun({ taskId: task.id, column: task.status, profile, workflowExecutionId: executionId, stepId: step.id, stepInstructions: instructions });
+    const runId = this.queueProfileRun({ taskId: task.id, column: task.status, profile, workflowExecutionId: executionId, stepId: step.id, stepInstructions: instructions + findingContext });
     state.attempts.push({ runId, role, round: state.round, ...(role === "review" ? { reviewedRunId, reviewedArtifacts } : {}) });
     saveReview(this.db, executionId, step.id, state);
     this.db.prepare("UPDATE tasks SET agentStatus = 'Queued' WHERE workspaceId = workspace_id() AND id = ?").run(task.id);
@@ -868,15 +869,17 @@ export class TaskStore {
       const review = run.workflowExecutionId && run.stepId ? readReview(this.db, run.workflowExecutionId, run.stepId) : undefined;
       const attempt = review?.attempts.find((attempt) => attempt.runId === run.id);
       if (status === "Complete" && review && attempt?.role === "review") {
-        const result = reviewResult(summary);
+        const result = reviewResult(summary, review, run.id);
         attempt.outcome = result?.outcome ?? "invalid";
         attempt.findings = result?.findings ?? summary;
         attempt.artifacts = artifacts;
         if (!result) {
           status = "Failed";
-          summary = "Invalid reviewer outcome. Retry the current step with explicit approved or changes-requested JSON and nonempty findings.\n\n" + summary;
+          summary = "Invalid reviewer outcome. Retry the current step with explicit approved or changes-requested JSON and valid finding dispositions. Outstanding findings require explicit reviewer verification before approval.\n\n" + summary;
         } else {
           review.findings = result.findings;
+          review.findingRecords = result.findingRecords;
+          attempt.findingUpdates = result.findingUpdates;
           if (result.outcome === "approved") review.phase = "complete";
         }
         saveReview(this.db, run.workflowExecutionId!, run.stepId!, review);

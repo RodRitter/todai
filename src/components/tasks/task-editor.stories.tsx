@@ -1,3 +1,4 @@
+import type { WorkflowExecution } from "@/domain/workflow";
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
@@ -33,6 +34,7 @@ const meta = {
     const original = globalThis.fetch;
     globalThis.fetch = async (input, options) => {
       const url = new URL(String(input), "http://localhost");
+      if (url.pathname === "/api/workflows") return Response.json(url.searchParams.has("taskId") ? context.parameters.workflowHistory ?? [] : []);
       if (url.pathname === "/api/tasks/run") return Response.json([]);
       if (url.pathname === "/api/artifacts/links") return Response.json(context.parameters.artifactLinks ?? []);
       if (url.pathname === "/api/artifacts" && url.searchParams.has("id")) {
@@ -620,3 +622,53 @@ export const ReviewInterventionHistory: Story = {
     await expect(dialog.getByText("Additional round allowed")).toBeVisible();
   },
 };
+
+const denseExecution: WorkflowExecution = {
+  id: "dense-execution", taskId: exampleTasks[0].id, stepId: "review", workflow: { id: "dense-workflow", name: "Release review", steps: [{ id: "review", agentId: "reviewer", instructions: "Review the release" }] },
+  profile: null, createdAt: "2026-11-18T10:00:00Z", status: "Waiting",
+  steps: [{ id: "review", agentId: "reviewer", instructions: "Review", profile: null, status: "Waiting", review: {
+    phase: "intervention", round: 16, limit: 16, findings: "Outstanding accessibility findings",
+    findingRecords: Array.from({ length: 24 }, (_, i) => ({ id: `F${i + 1}`, body: `Accessibility finding ${i + 1}: restore focus and confirm keyboard navigation.\n\n${"Detailed reproduction and expected behavior. ".repeat(30)}`, status: i < 12 ? "outstanding" : "resolved", introducedRunId: "dense-review-1", dispositions: [{ runId: "dense-review-1", round: 1, status: "outstanding", note: "Reproduced in the first round" }, ...(i < 12 ? [] : [{ runId: "dense-review-16", round: 16, status: "resolved" as const, note: "Verified with keyboard" }])] })),
+    attempts: Array.from({ length: 16 }, (_, i) => [
+      { runId: `dense-review-${i + 1}`, role: "review" as const, round: i + 1, outcome: "changes-requested" as const, findings: "Review original content", ...(i ? { reviewedRunId: `dense-revise-${i}` } : {}), reviewedArtifacts: evidence.map((item) => ({ artifactId: item.artifact.id, revisionId: item.artifact.revisionId })) },
+      { runId: `dense-revise-${i + 1}`, role: "revise" as const, round: i + 1 },
+    ]).flat(),
+  } }],
+  runs: Array.from({ length: 16 }, (_, i) => ["review", "revise"].map((role) => ({ id: `dense-${role}-${i + 1}`, stepId: "review", agentName: role, status: "Complete" as const, createdAt: "2026-11-18T10:00:00Z", startedAt: null, finishedAt: null, summary: `Original ${role} round ${i + 1}.\n\n${"Detailed results with independent evidence. ".repeat(40)}`, prompt: "Original supplied instructions" }))).flat(),
+};
+export const DenseReviewHistory: Story = {
+  args: { open: true, task: { ...exampleTasks[0], workflowId: "dense-workflow", comments: [
+    ...denseExecution.runs.map((run) => ({ id: `comment-${run.id}`, taskId: exampleTasks[0].id, runId: run.id, workflowExecutionId: denseExecution.id, stepId: "review", authorName: run.agentName, createdAt: run.createdAt, body: run.summary! })),
+    { id: "unrelated", taskId: exampleTasks[0].id, authorName: "Human", createdAt: "2026-11-18T12:00:00Z", body: "Unrelated launch discussion remains accessible." },
+  ] } },
+  parameters: { workflowHistory: [denseExecution], artifactLinks: evidence },
+  play: async ({ canvasElement }) => {
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await userEvent.click(dialog.getByRole("tab", { name: "Activity" }));
+    await expect(canvasElement.ownerDocument.getElementById("review-run-dense-review-1")).toBeNull();
+    await userEvent.click(dialog.getByRole("tab", { name: "Overview" }));
+    await userEvent.click(await dialog.findByRole("button", { name: /Show more findings/ }));
+    await userEvent.click(await dialog.findByRole("button", { name: /^F12: Accessibility/ }));
+    await expect(dialog.getByRole("tab", { name: "Activity" })).toHaveAttribute("data-state", "active");
+    const finding = await waitFor(() => {
+      const element = canvasElement.ownerDocument.getElementById("finding-dense-execution-review-F12");
+      expect(element).toBeVisible();
+      return element!;
+    });
+    await userEvent.click(within(finding).getByRole("button", { name: "Original finding and evidence" }));
+    const attempt = await waitFor(() => {
+      const element = canvasElement.ownerDocument.getElementById("review-run-dense-review-1");
+      expect(element).toBeVisible();
+      return element!;
+    });
+    await expect(finding).toBeInTheDocument();
+    await userEvent.click(dialog.getByRole("tab", { name: "Overview" }));
+    await userEvent.click(dialog.getByRole("tab", { name: "Activity" }));
+    await expect(attempt).toBeVisible();
+    await expect(finding).toBeInTheDocument();
+    await userEvent.click(within(attempt).getByText("Exact artifact revisions"));
+    await userEvent.click(await within(attempt).findByRole("button", { name: /Open Launch evidence 1:.*revision 1/ }));
+    await expect(await within(canvasElement.ownerDocument.body).findByText("Evidence for the launch decision.")).toBeVisible();
+  },
+};
+export const DenseReviewHistoryNarrow: Story = { ...DenseReviewHistory, play: undefined, globals: { viewport: { value: "mobile1" } } };

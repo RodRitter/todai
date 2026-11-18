@@ -59,7 +59,7 @@ export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostCo
   );
 }
 
-export function TaskActivity({ comments = [], agentStatus, agents = [], onPostComment, onDeleteComment, onAnswerFeedback, onNavigateFeedback }: {
+export function TaskActivity({ comments = [], agentStatus, agents = [], onPostComment, onDeleteComment, onAnswerFeedback, onNavigateFeedback, selectedCommentId }: {
   comments?: TaskComment[];
   agentStatus?: AgentStatus;
   agents?: AgentProfile[];
@@ -67,8 +67,16 @@ export function TaskActivity({ comments = [], agentStatus, agents = [], onPostCo
   onDeleteComment?: (commentId: string) => Promise<void>;
   onAnswerFeedback?: (commentId: string, body: string, decision?: FeedbackDecision) => Promise<void>;
   onNavigateFeedback?: (commentId: string) => void;
+  selectedCommentId?: string;
 }) {
+  const [visibleCount, setVisibleCount] = useState(20);
+  const ordered = [...comments].filter((comment) => !comments.some((request) => request.feedbackStatus && isFeedbackReply(comment, request)))
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  const targetIndex = ordered.findIndex((comment) => comment.id === selectedCommentId || comments.some((reply) => reply.id === selectedCommentId && isFeedbackReply(reply, comment)));
+  const count = Math.max(visibleCount, targetIndex + 1);
+  if (count > visibleCount) setVisibleCount(count);
   return <section aria-label="Task discussion" className="space-y-6">
+      {ordered.length > count && <Button type="button" variant="outline" size="sm" onClick={() => setVisibleCount(count + 20)}>Show older discussion ({ordered.length - count} remaining)</Button>}
       {onPostComment && <CommentInput agents={agents} onPost={onPostComment} agentStatus={agentStatus} />}
       {comments.length || agentStatus === "Running" ? (
         <ol className="space-y-8">
@@ -78,9 +86,7 @@ export function TaskActivity({ comments = [], agentStatus, agents = [], onPostCo
               <span>The agent is working. Its handover will appear here.</span>
             </li>
           )}
-          {[...comments]
-            .filter((comment) => !comments.some((request) => request.feedbackStatus && isFeedbackReply(comment, request)))
-            .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+          {ordered.slice(0, count)
             .map((comment) => (
               <li key={comment.id} id={`comment-${comment.id}`} tabIndex={-1} className="group/comment grid grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-x-3 gap-y-3 border-b border-border/60 pb-6 last:border-0 last:pb-0">
                 <div
