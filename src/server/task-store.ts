@@ -1,3 +1,4 @@
+import { workflowProgression, type WorkflowProgression } from "./workflow-progression.ts";
 import { parseWorkspaceSetup, starterAgentProfile } from "../domain/workspace-setup.ts";
 import type { ArtifactReference } from "../domain/artifact.ts";
 import { artifactMentions } from "./artifact-mentions.ts";
@@ -687,11 +688,15 @@ export class TaskStore {
           "UPDATE runs SET status = ?, finishedAt = ?, summary = ? WHERE runs.workspaceId = workspace_id() AND id = ?",
         )
         .run(status, finishedAt, summary, runId);
-      if (run.kind && (status === "Complete" || (status === "Failed" && run.kind === "reply"))) {
-        const remaining = replyPlan ?? run.replyPlan ?? [];
-        const [next, ...rest] = remaining;
-        if (next) this.queueCommentRun(run.taskId, run.column, next, "reply", run.commentId!, rest, run.createdAt);
-      }
+      const task = this.list().find((task) => task.id === run.taskId)!;
+      this.applyProgression(task.id, workflowProgression({
+        event: "run-finished",
+        task,
+        run: { ...run, status, summary, finishedAt },
+        columns: this.listColumns(),
+        hasQueuedRun: this.history(run.taskId).some((item) => item.status === "Queued"),
+        replyPlan,
+      }));
       this.db
         .prepare(
           `UPDATE tasks SET agentStatus = CASE
@@ -715,27 +720,19 @@ export class TaskStore {
         });
         if (status === "Complete" || status === "Waiting") this.attachCommentArtifacts(commentId, artifacts);
       }
-      const task = this.list().find((task) => task.id === run.taskId);
-      if (
-        status === "Complete" &&
-        !run.kind &&
-        !this.history(run.taskId).some((item) => item.status === "Queued") &&
-        task?.autoWorkflow &&
-        task.status === run.column
-      ) {
-        const columns = this.listColumns();
-        const index = columns.indexOf(task.status);
-        const nextColumn = index >= 0 ? columns[index + 1] : undefined;
-        if (nextColumn) {
-          this.db
-            .prepare(
-              "UPDATE tasks SET status = ? WHERE tasks.workspaceId = workspace_id() AND id = ?",
-            )
-            .run(nextColumn, task.id);
-          if (task.autoRun) this.queueAgent(task.id, nextColumn);
-        }
-      }
     });
+  }
+
+  // Called only inside the completion/feedback transaction. History guards make
+  // repeated completion and feedback submissions no-ops or validation errors.
+  private applyProgression(taskId: string, progression: WorkflowProgression) {
+    if (progression.action === "advance") {
+      this.db.prepare("UPDATE tasks SET status = ? WHERE tasks.workspaceId = workspace_id() AND id = ?")
+        .run(progression.column, taskId);
+      if (progression.autoRun) this.queueAgent(taskId, progression.column);
+    } else if (progression.action === "queue") {
+      this.queueProfileRun(taskId, progression.column, progression.profile, progression.kind, progression.commentId, progression.replyPlan, progression.createdAt);
+    }
   }
 
   answerFeedback(taskId: unknown, commentId: unknown, body: unknown): Task {
@@ -752,8 +749,7 @@ export class TaskStore {
         throw new FeedbackValidationError("This feedback request is no longer pending. Reload the task.");
       this.db.prepare("UPDATE comments SET feedbackStatus = 'answered' WHERE comments.workspaceId = workspace_id() AND id = ?").run(commentId);
       this.addComment({ id: randomUUID(), taskId, body: body.trim(), createdAt: new Date().toISOString(), authorName: "Human", runId: run.id });
-      this.db.prepare("INSERT INTO runs (workspaceId, workspacePath, id, taskId, column, profile, status, createdAt, kind, commentId, replyPlan) VALUES (workspace_id(), (SELECT path FROM workspaces WHERE id = workspace_id()), ?, ?, ?, ?, 'Queued', ?, ?, ?, ?)")
-        .run(randomUUID(), taskId, task.status, JSON.stringify(run.profile), run.createdAt, run.kind ?? null, run.commentId ?? null, run.replyPlan ? JSON.stringify(run.replyPlan) : null);
+      this.applyProgression(taskId, workflowProgression({ event: "feedback-answered", task, run }));
       this.db.prepare("UPDATE tasks SET agentStatus = 'Queued' WHERE tasks.workspaceId = workspace_id() AND id = ?").run(taskId);
       return this.list().find((item) => item.id === taskId)!;
     });
@@ -796,7 +792,7 @@ export class TaskStore {
       this.addComment({ id: commentId, taskId, body: body.trim(), createdAt: new Date().toISOString(), authorName: "Human" });
       this.attachCommentArtifacts(commentId, attachments);
       if (profiles.length) {
-        this.queueCommentRun(taskId, task.status, intentProfile(this.getDefaultExecutor()), "intent", commentId, profiles);
+        this.queueProfileRun(taskId, task.status, intentProfile(this.getDefaultExecutor()), "intent", commentId, profiles);
         if (task.agentStatus !== "Running" && task.agentStatus !== "Waiting")
           this.db.prepare("UPDATE tasks SET agentStatus = 'Queued' WHERE tasks.workspaceId = workspace_id() AND id = ?").run(taskId);
       }
@@ -816,10 +812,10 @@ export class TaskStore {
     }
   }
 
-  private queueCommentRun(taskId: string, column: string, profile: AgentProfile, kind: "intent" | "reply", commentId: string, replyPlan: AgentProfile[], createdAt = new Date().toISOString()) {
+  private queueProfileRun(taskId: string, column: string, profile: AgentProfile, kind: AgentRun["kind"], commentId: AgentRun["commentId"], replyPlan: AgentRun["replyPlan"], createdAt = new Date().toISOString()) {
     this.assertWorkspaceActive();
     this.db.prepare("INSERT INTO runs (workspaceId, workspacePath, id, taskId, column, profile, status, createdAt, kind, commentId, replyPlan) VALUES (workspace_id(), (SELECT path FROM workspaces WHERE id = workspace_id()), ?, ?, ?, ?, 'Queued', ?, ?, ?, ?)")
-      .run(randomUUID(), taskId, column, JSON.stringify(profile), createdAt, kind, commentId, JSON.stringify(replyPlan));
+      .run(randomUUID(), taskId, column, JSON.stringify(profile), createdAt, kind ?? null, commentId ?? null, replyPlan ? JSON.stringify(replyPlan) : null);
   }
 
   delete(id: string) {
