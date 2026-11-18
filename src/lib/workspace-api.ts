@@ -41,8 +41,8 @@ export const taskApi = {
     request<Task>("/api/tasks/comments", { method: "DELETE", body: { taskId, commentId } }),
   postComment: (taskId: string, body: string, artifacts?: ArtifactReference[]) =>
     request<Task>("/api/tasks/comments", { method: "POST", body: { taskId, body, artifacts } }),
-  answerFeedback: (taskId: string, commentId: string, body: string) =>
-    request<Task>("/api/tasks/feedback", { method: "POST", body: { taskId, commentId, body } }),
+  answerFeedback: (taskId: string, commentId: string, body: string, decision?: "approve" | "changes-requested") =>
+    request<Task>("/api/tasks/feedback", { method: "POST", body: { taskId, commentId, body, decision } }),
   list: () => request<BoardSnapshot>("/api/tasks?workspace=true"),
   save: (task: Task) =>
     request<Task>("/api/tasks", { method: "PUT", body: task }),

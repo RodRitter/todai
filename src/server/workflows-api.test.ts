@@ -74,3 +74,33 @@ test("workflow creation, editing and history are validated and workspace scoped 
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("checkpoint decisions require explicit outcomes and reject stale or foreign HTTP requests", async () => {
+  const { POST: answer } = await import("../app/api/tasks/feedback/route.ts");
+  const directory = mkdtempSync(join(tmpdir(), "todai-checkpoint-api-"));
+  const previous = process.env.TODAI_DB_PATH;
+  process.env.TODAI_DB_PATH = join(directory, "tasks.sqlite");
+  const store = new TaskStore(process.env.TODAI_DB_PATH);
+  try {
+    const other = store.createWorkspace("Other", directory);
+    store.saveWorkflow({ id: "approval", name: "Approval", steps: [{ id: "review", kind: "checkpoint", instructions: "Review work" }] });
+    store.save({ id: "task", title: "Review", description: "", status: "To do", workflowId: "approval" });
+    store.runTask("task");
+    const pending = store.list()[0].comments!.find((comment) => comment.feedbackStatus === "pending")!;
+    const request = (decision?: string, workspaceId = store.workspaceId) => new Request("http://localhost/api/tasks/feedback", {
+      method: "POST", headers: { "X-Todai-Workspace": workspaceId }, body: JSON.stringify({ taskId: "task", commentId: pending.id, body: "Reviewed", decision }),
+    });
+    assert.equal((await answer(request())).status, 409);
+    assert.equal((await answer(request("approve", other.id))).status, 400);
+    assert.equal((await answer(request("approve"))).status, 200);
+    assert.equal(store.workflowHistory("task")[0].status, "Complete");
+    store.runTask("task");
+    assert.equal((await answer(request("approve"))).status, 409);
+    assert.equal(store.workflowHistory("task")[0].status, "Waiting");
+  } finally {
+    await new Promise((resolve) => setImmediate(resolve));
+    store.close();
+    if (previous === undefined) delete process.env.TODAI_DB_PATH; else process.env.TODAI_DB_PATH = previous;
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

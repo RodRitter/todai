@@ -43,7 +43,7 @@ export type TaskEditorProps = {
   defaultStatus?: Status;
   onOpenChange: (open: boolean) => void;
   onSave: (task: Task) => void | Promise<void>;
-  onAnswerFeedback?: (commentId: string, body: string) => Promise<void>;
+  onAnswerFeedback?: (commentId: string, body: string, decision?: "approve" | "changes-requested") => Promise<void>;
   onDelete?: (id: string) => void | Promise<void>;
 };
 
@@ -280,7 +280,7 @@ function TaskEditorSession({
                 <TabsTrigger value="artifacts" className="px-1">Artifacts</TabsTrigger>
               </TabsList>}
               <TabsContent value="overview" forceMount {...(!editing ? { role: "region", "aria-labelledby": undefined, "aria-label": "Task details" } : {})} className="min-h-0 flex-1 space-y-7 overflow-y-auto px-6 pb-6">
-              {pendingFeedback.map((comment) => <TaskFeedback key={comment.id} comment={comment} onAnswer={onAnswerFeedback} />)}
+              {pendingFeedback.map((comment) => <TaskFeedback key={comment.id} comment={comment} comments={editing?.comments} onAnswer={onAnswerFeedback} onNavigate={(id) => navigateRecord("activity", `comment-${id}`)} />)}
               <div className="space-y-2">
                 <input type="hidden" name="title" value={title} />
                 {isEditingTitle ? <>

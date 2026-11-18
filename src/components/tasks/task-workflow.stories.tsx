@@ -43,3 +43,15 @@ export const MultiStepFailed = sequenceStory("Failed");
 export const InterruptedRecovery = sequenceStory("Interrupted");
 export const Cancelled = sequenceStory("Stopped");
 export const InProgress = sequenceStory("Running");
+
+const approvalWorkflow: Workflow = { id: "build", name: "Build and approve", steps: [
+  { id: "implement", agentId: agent.id, instructions: "Implement and verify." },
+  { id: "approval", kind: "checkpoint", instructions: "Review results and pinned artifact revisions." },
+] };
+export const HumanCheckpoint: Story = { args: { api: { ...api, list: async () => [approvalWorkflow], history: async () => [{
+  ...execution, workflow: approvalWorkflow, stepId: "approval", status: "Waiting",
+  steps: [
+    { ...approvalWorkflow.steps![0], profile: agent, status: "Complete" },
+    { ...approvalWorkflow.steps![1], profile: null, status: "Waiting" },
+  ], runs: [{ ...execution.runs[0], stepId: "implement" }],
+}] } } };

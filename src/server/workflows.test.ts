@@ -296,3 +296,156 @@ test("feedback and queued cancellation keep the active step and respect queue pa
     assert.equal(f.store.workflowHistory(task.id)[0].status, "Stopped");
   } finally { f.cleanup(); }
 });
+
+test("a checkpoint waits durably without an agent and approval advances exactly once", () => {
+  const f = fixture();
+  try {
+    f.store.saveWorkflow({ id: "build", name: "Approve then build", steps: [
+      { id: "approval", kind: "checkpoint", instructions: "Review the plan before implementation." },
+      { id: "implement", agentId: "builder", instructions: "Implement the approved plan" },
+    ] });
+    f.store.save(task); f.store.runTask(task.id);
+    assert.equal(f.store.claimRun(), undefined);
+    assert.equal(f.store.history(task.id).length, 0);
+    const pending = f.store.list()[0].comments!.find((comment) => comment.feedbackStatus === "pending")!;
+    assert.equal(pending.feedbackKind, "checkpoint");
+    assert.equal(pending.body, "Review the plan before implementation.");
+    const reopened = new TaskStore(f.path);
+    try {
+      assert.equal(reopened.workflowHistory(task.id)[0].status, "Waiting");
+      assert.equal(reopened.list()[0].agentStatus, "Waiting");
+      reopened.answerFeedback(task.id, pending.id, "Plan looks good", "approve");
+      assert.throws(() => reopened.answerFeedback(task.id, pending.id, "Duplicate", "approve"), /no longer pending/);
+      const run = reopened.claimRun()!;
+      assert.equal(run.stepId, "implement");
+      reopened.finishRun(run.id, "Complete", "Built");
+      assert.deepEqual(reopened.workflowHistory(task.id)[0].steps?.map((step) => step.status), ["Complete", "Complete"]);
+    } finally { reopened.close(); }
+  } finally { f.cleanup(); }
+});
+
+test("changes requested preserve evidence and wait for a fresh explicit decision across restart", () => {
+  const f = fixture();
+  try {
+    f.store.saveWorkflow({ id: "build", name: "Build then approve", steps: [
+      { id: "implement", agentId: "builder", instructions: "Build" },
+      { id: "approval", kind: "checkpoint", instructions: "Review the implementation and evidence." },
+    ] });
+    f.store.save(task); f.store.runTask(task.id);
+    const run = f.store.claimRun()!;
+    f.store.finishRun(run.id, "Complete", "Implemented with verified results.");
+    const comments = f.store.list()[0].comments!;
+    const pending = comments.find((comment) => comment.feedbackStatus === "pending")!;
+    const result = comments.find((comment) => comment.runId === run.id)!;
+    assert.equal(pending.evidenceCommentId, result.id);
+    assert.equal(pending.workflowExecutionId, run.workflowExecutionId);
+    assert.throws(() => f.store.answerFeedback(task.id, pending.id, "Looks fine"), /Choose Approve/);
+    f.store.answerFeedback(task.id, pending.id, "Fix the keyboard focus", "changes-requested");
+    assert.throws(() => f.store.answerFeedback(task.id, pending.id, "Duplicate", "changes-requested"), /no longer pending/);
+    const reopened = new TaskStore(f.path);
+    try {
+      assert.equal(reopened.claimRun(), undefined);
+      assert.equal(reopened.workflowHistory(task.id)[0].status, "Waiting");
+      const records = reopened.list()[0].comments!;
+      const response = records.find((comment) => comment.responseTo === pending.id)!;
+      assert.equal(response.authorName, "Human");
+      assert.equal(response.decision, "changes-requested");
+      assert.equal(response.body, "Fix the keyboard focus");
+      const current = records.find((comment) => comment.feedbackStatus === "pending")!;
+      assert.notEqual(current.id, pending.id);
+      assert.equal(current.evidenceCommentId, result.id);
+      reopened.answerFeedback(task.id, current.id, "Verified the correction", "approve");
+      assert.equal(reopened.workflowHistory(task.id)[0].status, "Complete");
+      assert.equal(reopened.list()[0].agentStatus, "Complete");
+      assert.equal(reopened.history(task.id).length, 1);
+    } finally { reopened.close(); }
+  } finally { f.cleanup(); }
+});
+
+test("stopped checkpoints recover explicitly and old answers cannot advance a new execution", () => {
+  const f = fixture();
+  try {
+    f.store.saveWorkflow({ id: "build", name: "Approvals", steps: [
+      { id: "first", kind: "checkpoint", instructions: "Review plan" },
+      { id: "second", kind: "checkpoint", instructions: "Review release" },
+    ] });
+    f.store.save(task); f.store.runTask(task.id);
+    const request = f.store.list()[0].comments!.find((comment) => comment.feedbackStatus === "pending")!;
+    assert.throws(() => f.store.save({ ...task, workflowId: null }), /Finish or stop/);
+    f.store.stopTask(task.id);
+    const execution = f.store.workflowHistory(task.id)[0];
+    assert.equal(execution.status, "Stopped");
+    f.store.pauseExecution();
+    f.store.retryWorkflow(task.id, execution.id);
+    assert.equal(f.store.list()[0].agentStatus, "Waiting");
+    assert.equal(f.store.executionState().paused, true);
+    assert.throws(() => f.store.answerFeedback(task.id, request.id, "Old", "approve"), /no longer pending/);
+    const retry = f.store.list()[0].comments!.find((comment) => comment.feedbackStatus === "pending")!;
+    f.store.answerFeedback(task.id, retry.id, "Approved", "approve");
+    assert.equal(f.store.workflowHistory(task.id)[0].stepId, "second");
+    assert.equal(f.store.workflowHistory(task.id)[0].status, "Waiting");
+    f.store.stopTask(task.id); f.store.runTask(task.id);
+    assert.throws(() => f.store.answerFeedback(task.id, retry.id, "Old", "approve"), /no longer pending/);
+    assert.equal(f.store.workflowHistory(task.id)[0].stepId, "first");
+    assert.equal(f.store.claimRun(), undefined);
+    assert.throws(() => f.store.deleteComment(task.id, retry.id), /workflow history/i);
+  } finally { f.cleanup(); }
+});
+
+test("agent questions resume their step and checkpoint evidence keeps exact artifact revisions", async () => {
+  const { ArtifactStore } = await import("./artifact-store.ts");
+  const f = fixture();
+  const library = new ArtifactStore(f.path, f.store.workspaceId);
+  try {
+    f.store.saveWorkflow({ id: "build", name: "Build then approve", steps: [
+      { id: "implement", agentId: "builder", instructions: "Build" },
+      { id: "approval", kind: "checkpoint", instructions: "Review results" },
+    ] });
+    const artifact = library.create({ title: "Verification", type: "text", content: "Verified revision", creator: "Builder" });
+    const pinned = { artifactId: artifact.id, revisionId: artifact.revisionId };
+    f.store.save(task); f.store.runTask(task.id);
+    const first = f.store.claimRun()!;
+    f.store.finishRun(first.id, "Waiting", "Which option?", "Use option A", undefined, [pinned]);
+    const question = f.store.list()[0].comments!.find((comment) => comment.feedbackStatus === "pending")!;
+    assert.throws(() => f.store.answerFeedback(task.id, question.id, "Approved", "approve"), /freeform reply/);
+    f.store.answerFeedback(task.id, question.id, "Use option B");
+    const resumed = f.store.claimRun()!;
+    assert.equal(resumed.stepId, "implement");
+    f.store.finishRun(resumed.id, "Complete", "Built option B", undefined, undefined, [pinned]);
+    f.store.finishRun(resumed.id, "Complete", "Duplicate");
+    library.revise(artifact.id, { title: "Verification", type: "text", content: "Later revision", creator: "Human" });
+    const comments = f.store.list()[0].comments!;
+    const checkpoint = comments.find((comment) => comment.feedbackStatus === "pending")!;
+    assert.equal(checkpoint.feedbackKind, "checkpoint");
+    assert.deepEqual(comments.find((comment) => comment.id === checkpoint.evidenceCommentId)!.artifacts, [pinned]);
+    assert.equal(comments.filter((comment) => comment.feedbackKind === "checkpoint").length, 1);
+    assert.throws(() => f.store.deleteComment(task.id, checkpoint.evidenceCommentId!), /workflow history/);
+    assert.equal(f.store.claimRun(), undefined);
+  } finally { library.close(); f.cleanup(); }
+});
+
+test("existing workflow questions gain originating execution context when the database is upgraded", async () => {
+  const { DatabaseSync } = await import("node:sqlite");
+  const f = fixture();
+  try {
+    f.store.saveWorkflow(workflow); f.store.save(task); f.store.runTask(task.id);
+    const run = f.store.claimRun()!;
+    f.store.finishRun(run.id, "Waiting", "Proceed?", "Use option A");
+    // Recreate the pre-checkpoint comment schema as the migration fixture.
+    const legacy = new DatabaseSync(f.path);
+    try {
+      for (const column of ["workflowExecutionId", "stepId", "responseTo", "decision", "feedbackKind", "evidenceCommentId"])
+        legacy.exec(`ALTER TABLE comments DROP COLUMN ${column}`);
+    } finally { legacy.close(); }
+    const reopened = new TaskStore(f.path);
+    try {
+      const question = reopened.list()[0].comments!.find((comment) => comment.feedbackStatus === "pending")!;
+      assert.equal(question.workflowExecutionId, run.workflowExecutionId);
+      assert.equal(question.stepId, run.stepId);
+      reopened.answerFeedback(task.id, question.id, "Proceed with A");
+      const reply = reopened.list()[0].comments!.find((comment) => comment.responseTo === question.id)!;
+      assert.equal(reply.workflowExecutionId, question.workflowExecutionId);
+      assert.equal(reopened.claimRun()!.stepId, run.stepId);
+    } finally { reopened.close(); }
+  } finally { f.cleanup(); }
+});

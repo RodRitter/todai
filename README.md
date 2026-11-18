@@ -120,3 +120,11 @@ Keep changes focused, add tests for new behavior, and run lint, type checks, and
 In a task’s **Workflow** tab, create or edit a reusable workflow. Add agent steps, set instructions for each step, and use the up/down controls to order them. Steps connect automatically and execute from top to bottom. Save the workflow and task selection, then **Run** to start a new execution.
 
 Successful steps advance exactly once. The Workflow tab shows persisted step progress, configuration snapshots, supplied prompts, attempts, and results. Failed, interrupted, or stopped executions stay paused. **Retry current step** continues the latest execution using its original configuration and existing workspace files; it preserves completed steps and does not roll back files. **Run** starts a new execution from the beginning. After a server restart, abandoned running steps become interrupted and require explicit retry. Resuming a paused queue alone does not restart stopped tasks; retrying a task does not resume the queue.
+
+### Human approval checkpoints
+
+Use **Add human checkpoint** in the workflow editor and describe what needs review. Checkpoints can appear before, between, or after agent steps. Reaching one saves a waiting state without starting another agent. In **Overview**, inspect the question, the preceding result, and its pinned artifact revisions. **View evidence in Activity** opens the original handover.
+
+Choose **Approve** to continue once, or enter feedback and choose **Request changes** to keep waiting. Requesting changes records your response and opens a fresh decision; it does not automatically run a revision agent or return to an earlier step. Resolve the changes before approving, or stop the workflow and revise it. **Retry current step** reopens a stopped checkpoint using its saved instructions. Queue pause remains a separate control.
+
+Agent questions still use **Submit feedback** and resume the agent step that asked. Activity retains workflow requests, human responses, decisions, and their execution/step references. These records and checkpoint evidence cannot be individually deleted. Waiting states and responses survive restarts; old or duplicate answers cannot advance a later execution.

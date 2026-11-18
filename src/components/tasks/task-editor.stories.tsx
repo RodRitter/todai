@@ -515,3 +515,67 @@ export const FeedbackReplyArtifact: Story = {
     await waitFor(() => expect(canvasElement.ownerDocument.getElementById("comment-human-decision")).toHaveFocus());
   },
 };
+
+const implementationEvidence = {
+  id: "implementation-evidence", taskId: exampleTasks[0].id, authorName: "Builder",
+  createdAt: "2026-11-18T09:00:00Z", workflowExecutionId: "execution-approval", stepId: "implement", runId: "implementation-run",
+  body: "## Implementation ready for review\n\n" + Array.from({ length: 8 }, (_, index) => `### Verification ${index + 1}\n\nConfirmed persistence, cancellation, workspace isolation, and keyboard navigation. The attached revision contains the exact results used for this handover.`).join("\n\n"),
+  artifacts: evidence.map((item) => ({ artifactId: item.artifact.id, revisionId: item.artifact.revisionId })),
+};
+const checkpoint = {
+  ...decision, id: "human-checkpoint", authorName: "Workflow", feedbackKind: "checkpoint" as const,
+  workflowExecutionId: "execution-approval", stepId: "approval", evidenceCommentId: implementationEvidence.id,
+  body: "## Approve the implementation?\n\nReview the saved verification results and pinned revisions before approving.\n\n" + Array.from({ length: 6 }, (_, index) => `- Review requirement ${index + 1}: confirm the observed result matches the intended behavior and that the documented limitations are acceptable.`).join("\n"),
+};
+export const HumanApproval: Story = {
+  args: { open: true, task: { ...exampleTasks[0], agentStatus: "Waiting", workflowId: "build", comments: [implementationEvidence, checkpoint] }, onAnswerFeedback: fn() },
+  parameters: { artifactLinks: evidence },
+  play: async ({ canvasElement, args }) => {
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await expect(dialog.getByRole("heading", { name: "Your approval is needed" })).toBeVisible();
+    await expect(dialog.queryByRole("button", { name: "Submit feedback" })).not.toBeInTheDocument();
+    await expect(dialog.getByRole("button", { name: "Request changes" })).toBeDisabled();
+    await userEvent.click(dialog.getByRole("button", { name: "View evidence in Activity" }));
+    await waitFor(() => expect(canvasElement.ownerDocument.getElementById(`comment-${implementationEvidence.id}`)).toHaveFocus());
+    await userEvent.click(dialog.getByRole("button", { name: "Reply in Overview" }));
+    await userEvent.click(dialog.getByRole("button", { name: "Approve" }));
+    await expect(args.onAnswerFeedback).toHaveBeenCalledWith(checkpoint.id, "Approved", "approve");
+  },
+};
+export const RequestCheckpointChanges: Story = {
+  ...HumanApproval,
+  play: async ({ canvasElement, args }) => {
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await userEvent.type(dialog.getByLabelText("Your feedback"), "Fix keyboard focus before approval.");
+    await userEvent.click(dialog.getByRole("button", { name: "Request changes" }));
+    await expect(args.onAnswerFeedback).toHaveBeenCalledWith(checkpoint.id, "Fix keyboard focus before approval.", "changes-requested");
+  },
+};
+const requestedChanges = {
+  id: "requested-changes", taskId: exampleTasks[0].id, authorName: "Human", createdAt: "2026-11-18T11:00:00Z",
+  responseTo: checkpoint.id, workflowExecutionId: checkpoint.workflowExecutionId, stepId: checkpoint.stepId,
+  decision: "changes-requested" as const, body: "Fix keyboard focus before approval. Keep the verified revision available for comparison.",
+};
+export const CheckpointStillWaiting: Story = {
+  ...HumanApproval,
+  args: { ...HumanApproval.args, task: { ...exampleTasks[0], agentStatus: "Waiting", workflowId: "build", comments: [
+    implementationEvidence, { ...checkpoint, feedbackStatus: "answered" }, requestedChanges,
+    { ...checkpoint, id: "fresh-checkpoint", createdAt: "2026-11-18T11:00:01Z" },
+  ] } },
+  play: async ({ canvasElement }) => {
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await expect(dialog.getByRole("heading", { name: "Changes requested by Human" })).toBeVisible();
+    await userEvent.click(dialog.getByRole("button", { name: "View response in Activity" }));
+    await waitFor(() => expect(canvasElement.ownerDocument.getElementById(`comment-${requestedChanges.id}`)).toHaveFocus());
+    await expect(dialog.getByText("Changes requested", { exact: true })).toBeVisible();
+  },
+};
+export const CheckpointSubmitFailure: Story = {
+  ...RequestCheckpointChanges,
+  args: { ...HumanApproval.args, onAnswerFeedback: fn(async () => { throw new Error("This feedback request is no longer pending. Reload the task."); }) },
+  play: async ({ canvasElement }) => {
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await userEvent.click(dialog.getByRole("button", { name: "Approve" }));
+    await expect(await dialog.findByRole("alert")).toHaveTextContent("This feedback request is no longer pending.");
+  },
+};

@@ -1,13 +1,13 @@
-import { withTaskStore } from "@/server/database";
-import { execution } from "@/server/execution";
-import { FeedbackValidationError } from "@/server/task-store";
+import { withTaskStore } from "../../../../server/database.ts";
+import { execution } from "../../../../server/execution.ts";
+import { FeedbackValidationError } from "../../../../server/task-store.ts";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
-    const { taskId, commentId, body } = await request.json();
-    const task = withTaskStore(request, (store) => store.answerFeedback(taskId, commentId, body));
+    const { taskId, commentId, body, decision } = await request.json();
+    const task = withTaskStore(request, (store) => store.answerFeedback(taskId, commentId, body, decision));
     execution();
     return Response.json(task);
   } catch (error) {

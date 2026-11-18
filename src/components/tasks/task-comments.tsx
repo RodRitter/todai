@@ -12,7 +12,7 @@ import { RunHistory } from "./run-history";
 import { toast } from "@/components/ui/toast";
 import { DescriptionEditor } from "./description-editor";
 import type { AgentProfile } from "@/domain/column-agent";
-import type { AgentStatus, TaskComment } from "@/domain/task";
+import { isWorkflowHistoryComment, type AgentStatus, type TaskComment } from "@/domain/task";
 
 export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostComment, onDeleteComment, agents = [], agentStatus }: {
   taskId?: string;
@@ -21,7 +21,7 @@ export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostCo
   agents?: AgentProfile[];
   onDeleteComment?: (commentId: string) => Promise<void>;
   onPostComment?: (body: string, artifacts?: ArtifactReference[]) => Promise<void>;
-  onAnswerFeedback?: (commentId: string, body: string) => Promise<void>;
+  onAnswerFeedback?: (commentId: string, body: string, decision?: "approve" | "changes-requested") => Promise<void>;
 }) {
   const [tab, setTab] = useState("comments");
   const [artifactCount, setArtifactCount] = useState(0);
@@ -63,7 +63,7 @@ export function TaskActivity({ comments = [], agentStatus, agents = [], onPostCo
   agents?: AgentProfile[];
   onPostComment?: (body: string, artifacts?: ArtifactReference[]) => Promise<void>;
   onDeleteComment?: (commentId: string) => Promise<void>;
-  onAnswerFeedback?: (commentId: string, body: string) => Promise<void>;
+  onAnswerFeedback?: (commentId: string, body: string, decision?: "approve" | "changes-requested") => Promise<void>;
   onNavigateFeedback?: (commentId: string) => void;
 }) {
   return <section aria-label="Task discussion" className="space-y-6">
@@ -77,7 +77,7 @@ export function TaskActivity({ comments = [], agentStatus, agents = [], onPostCo
             </li>
           )}
           {[...comments]
-            .filter((comment) => !(comment.authorName === "Human" && comment.runId && comments.some((request) => request.runId === comment.runId && request.feedbackStatus)))
+            .filter((comment) => !comments.some((request) => request.feedbackStatus && isFeedbackReply(comment, request)))
             .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
             .map((comment) => (
               <li key={comment.id} id={`comment-${comment.id}`} tabIndex={-1} className="group/comment grid grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-x-3 gap-y-3 border-b border-border/60 pb-6 last:border-0 last:pb-0">
@@ -115,16 +115,17 @@ export function TaskActivity({ comments = [], agentStatus, agents = [], onPostCo
                         minute: "2-digit",
                       })}
                     </time>
-                    {onDeleteComment && <DeleteComment commentId={comment.id} onDelete={onDeleteComment} disabled={agentStatus === "Running" || agentStatus === "Queued" || comment.feedbackStatus === "pending"} />}
+                    {onDeleteComment && !isWorkflowHistoryComment(comment, comments) && <DeleteComment commentId={comment.id} onDelete={onDeleteComment} disabled={agentStatus === "Running" || agentStatus === "Queued" || comment.feedbackStatus === "pending"} />}
                   </div>
                   <div className={comment.feedbackStatus === "pending"
                     ? "col-span-2 min-w-0 space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4 sm:col-start-2 sm:col-span-1"
                     : "col-span-2 min-w-0 space-y-3 sm:col-start-2 sm:col-span-1"}>
                     {comment.feedbackStatus && (
                       <p className="text-sm font-semibold">
-                        {comment.feedbackStatus === "pending" ? "Your feedback is needed" : comment.feedbackStatus === "cancelled" ? "Feedback request · Cancelled" : "Feedback request · Answered"}
+                        {feedbackTitle(comment)}
                       </p>
                     )}
+                    {comment.workflowExecutionId && <FeedbackOrigin comment={comment} />}
                     {comment.feedbackStatus ? <Markdown>{comment.body}</Markdown> : <CommentBody body={comment.body} />}
                     {!!comment.artifacts?.length && <CommentAttachments references={comment.artifacts} />}
                     {comment.recommendation && (
@@ -134,19 +135,20 @@ export function TaskActivity({ comments = [], agentStatus, agents = [], onPostCo
                       </div>
                     )}
                     {comment.feedbackStatus === "pending" && (
-                      onNavigateFeedback ? <Button type="button" variant="outline" onClick={() => onNavigateFeedback(comment.id)}>Reply in Overview</Button> : <FeedbackInput commentId={comment.id} onAnswer={onAnswerFeedback} />
+                      onNavigateFeedback ? <Button type="button" variant="outline" onClick={() => onNavigateFeedback(comment.id)}>Reply in Overview</Button> : <FeedbackInput commentId={comment.id} checkpoint={comment.feedbackKind === "checkpoint"} onAnswer={onAnswerFeedback} />
                     )}
                     <Button type="button" size="sm" variant="ghost" className="h-7 gap-1.5 px-2 text-xs text-muted-foreground" aria-label="Copy comment" onClick={async () => {
                       try { await navigator.clipboard.writeText(comment.body); toast.success("Comment copied."); }
                       catch { toast.error("Could not copy comment."); }
                     }}><Copy aria-hidden="true" className="size-3.5" />Copy</Button>
                   </div>
-                  {comment.feedbackStatus === "answered" && comments.filter((reply) => reply.authorName === "Human" && reply.runId === comment.runId).map((reply) => (
+                  {comment.feedbackStatus && comments.filter((reply) => isFeedbackReply(reply, comment)).map((reply) => (
                     <div key={reply.id} id={`comment-${reply.id}`} tabIndex={-1} className="col-span-2 ml-4 min-w-0 space-y-2 border-l-2 border-border pl-4 sm:ml-9 sm:pl-5">
                       <div className="flex items-center gap-3"><p className="text-sm font-semibold">Human</p>
-                        {onDeleteComment && <DeleteComment commentId={reply.id} onDelete={onDeleteComment} disabled={agentStatus === "Running" || agentStatus === "Queued"} />}
+                        {onDeleteComment && !isWorkflowHistoryComment(reply, comments) && <DeleteComment commentId={reply.id} onDelete={onDeleteComment} disabled={agentStatus === "Running" || agentStatus === "Queued"} />}
                       </div>
                       <time className="text-xs text-muted-foreground" dateTime={reply.createdAt}>{new Date(reply.createdAt).toLocaleString()}</time>
+                      {reply.decision && <p className="text-sm font-semibold">{reply.decision === "approve" ? "Approved" : "Changes requested"}</p>}
                       <CommentBody body={reply.body} />
                       {!!reply.artifacts?.length && <CommentAttachments references={reply.artifacts} />}
                     </div>
@@ -177,14 +179,44 @@ export function TaskResult({ comment, onNavigate }: { comment: TaskComment; onNa
   </section>;
 }
 
-export function TaskFeedback({ comment, onAnswer }: { comment: TaskComment; onAnswer?: (commentId: string, body: string) => Promise<void> }) {
+function isFeedbackReply(reply: TaskComment, request: TaskComment) {
+  return reply.responseTo ? reply.responseTo === request.id : reply.authorName === "Human" && Boolean(reply.runId) && reply.runId === request.runId;
+}
+
+function feedbackTitle(comment: TaskComment) {
+  const label = comment.feedbackKind === "checkpoint" ? "Human approval" : "Feedback request";
+  return comment.feedbackStatus === "pending" ? (comment.feedbackKind === "checkpoint" ? "Your approval is needed" : "Your feedback is needed") : `${label} · ${comment.feedbackStatus === "cancelled" ? "Cancelled" : "Answered"}`;
+}
+
+function FeedbackOrigin({ comment }: { comment: TaskComment }) {
+  return <p className="text-xs text-muted-foreground break-all">Execution {comment.workflowExecutionId} · Step {comment.stepId}</p>;
+}
+
+export function TaskFeedback({ comment, comments = [], onAnswer, onNavigate }: {
+  comment: TaskComment; comments?: TaskComment[];
+  onAnswer?: (commentId: string, body: string, decision?: "approve" | "changes-requested") => Promise<void>;
+  onNavigate?: (commentId: string) => void;
+}) {
+  const evidence = comments.find((item) => item.id === comment.evidenceCommentId);
+  const changes = comment.feedbackKind === "checkpoint" ? comments.filter((item) => item.workflowExecutionId === comment.workflowExecutionId && item.stepId === comment.stepId && item.decision === "changes-requested").at(-1) : undefined;
   return <section id={`feedback-request-${comment.id}`} tabIndex={-1} aria-label="Pending feedback" className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
-    <h3 className="font-semibold">Your feedback is needed</h3>
+    <h3 className="font-semibold">{feedbackTitle(comment)}</h3>
     <p className="text-xs text-muted-foreground">{comment.authorName || "Agent"} · <time dateTime={comment.createdAt}>{new Date(comment.createdAt).toLocaleString()}</time></p>
+    {comment.workflowExecutionId && <FeedbackOrigin comment={comment} />}
     <Markdown>{comment.body}</Markdown>
     {comment.recommendation && <div className="space-y-1"><h4 className="text-sm font-semibold">Recommendation</h4><Markdown>{comment.recommendation}</Markdown></div>}
     {!!comment.artifacts?.length && <CommentAttachments references={comment.artifacts} />}
-    <FeedbackInput commentId={comment.id} onAnswer={onAnswer} />
+    {evidence && <div className="space-y-2 rounded-lg border p-3"><h4 className="text-sm font-semibold">Review evidence</h4>
+      <Markdown>{evidence.body}</Markdown>
+      {!!evidence.artifacts?.length && <CommentAttachments references={evidence.artifacts} />}
+      {onNavigate && <Button type="button" variant="outline" size="sm" onClick={() => onNavigate(evidence.id)}>View evidence in Activity</Button>}
+    </div>}
+    {changes && <div className="space-y-2"><h4 className="text-sm font-semibold">Changes requested by {changes.authorName}</h4><Markdown>{changes.body}</Markdown>
+      <p className="text-sm text-muted-foreground">This checkpoint is still waiting. Resolve the requested changes before approving, or stop the workflow to revise it.</p>
+      {onNavigate && <Button type="button" variant="outline" size="sm" onClick={() => onNavigate(changes.id)}>View response in Activity</Button>}
+    </div>}
+    <FeedbackInput commentId={comment.id} checkpoint={comment.feedbackKind === "checkpoint"} onAnswer={onAnswer} />
+    {onNavigate && <Button type="button" variant="ghost" size="sm" onClick={() => onNavigate(comment.id)}>View request in Activity</Button>}
   </section>;
 }
 
@@ -272,18 +304,22 @@ function ExpandableComment({ body }: { body: string }) {
 }
 
 
-function FeedbackInput({ commentId, onAnswer }: {
+function FeedbackInput({ commentId, onAnswer, checkpoint = false }: {
+  checkpoint?: boolean;
   commentId: string;
-  onAnswer?: (commentId: string, body: string) => Promise<void>;
+  onAnswer?: (commentId: string, body: string, decision?: "approve" | "changes-requested") => Promise<void>;
 }) {
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  async function submit() {
-    if (!onAnswer || !body.trim() || busy) return;
+  async function submit(decision?: "approve" | "changes-requested") {
+    if (!onAnswer || (decision !== "approve" && !body.trim()) || busy) return;
     setBusy(true);
     setError("");
-    try { await onAnswer(commentId, body.trim()); }
+    try {
+      if (decision) await onAnswer(commentId, body.trim() || "Approved", decision);
+      else await onAnswer(commentId, body.trim());
+    }
     catch (error) { setError(error instanceof Error ? error.message : "Could not submit feedback."); }
     finally { setBusy(false); }
   }
@@ -291,13 +327,16 @@ function FeedbackInput({ commentId, onAnswer }: {
     <div className="space-y-2">
       <label htmlFor={`feedback-${commentId}`} className="text-sm font-medium">Your feedback</label>
       <Textarea id={`feedback-${commentId}`} value={body} disabled={busy}
-        placeholder="Share your feedback to continue…"
+        placeholder={checkpoint ? "Explain requested changes or add an approval note…" : "Share your feedback to continue…"}
         onChange={(event) => setBody(event.target.value)}
         aria-describedby={error ? `feedback-error-${commentId}` : undefined} />
       {error && <p id={`feedback-error-${commentId}`} role="alert" className="text-sm text-destructive">{error}</p>}
-      <Button type="button" size="sm" disabled={busy || !body.trim() || !onAnswer} onClick={() => void submit()}>
+      {checkpoint ? <div className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" disabled={busy || !onAnswer} onClick={() => void submit("approve")}>{busy ? "Submitting…" : "Approve"}</Button>
+        <Button type="button" size="sm" variant="outline" disabled={busy || !body.trim() || !onAnswer} onClick={() => void submit("changes-requested")}>Request changes</Button>
+      </div> : <Button type="button" size="sm" disabled={busy || !body.trim() || !onAnswer} onClick={() => void submit()}>
         {busy ? "Submitting…" : "Submit feedback"}
-      </Button>
+      </Button>}
     </div>
   );
 }

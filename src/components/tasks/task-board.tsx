@@ -39,7 +39,7 @@ export function TaskBoard({
     stop?: (taskId: string) => Promise<Task>;
     deleteComment?: (taskId: string, commentId: string) => Promise<Task>;
     postComment?: (taskId: string, body: string, artifacts?: ArtifactReference[]) => Promise<Task>;
-    answerFeedback?: (taskId: string, commentId: string, body: string) => Promise<Task>;
+    answerFeedback?: (taskId: string, commentId: string, body: string, decision?: "approve" | "changes-requested") => Promise<Task>;
   };
 }) {
   const [agents] = useState(initialAgents);
@@ -240,8 +240,8 @@ export function TaskBoard({
             const saved = await persistence.postComment!(editing!.id, body, artifacts);
             updateTasks((current) => current.map((task) => task.id === saved.id ? saved : task));
           }) : undefined}
-          onAnswerFeedback={persistence?.answerFeedback ? (commentId, body) => mutate(async () => {
-            const saved = await persistence.answerFeedback!(editing!.id, commentId, body);
+          onAnswerFeedback={persistence?.answerFeedback ? (commentId, body, decision) => mutate(async () => {
+            const saved = await persistence.answerFeedback!(editing!.id, commentId, body, decision);
             updateTasks((current) => current.map((task) => task.id === saved.id ? saved : task));
           }) : undefined}
           assignedColumns={assignments.map((assignment) => assignment.column)}

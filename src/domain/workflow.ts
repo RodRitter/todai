@@ -1,7 +1,11 @@
 import type { AgentProfile } from "./column-agent.ts";
 import type { RunHistoryEntry } from "./execution.ts";
 
-export type WorkflowStep = { id: string; agentId: string; instructions: string };
+export type WorkflowStep = { id: string; instructions: string } & (
+  | { kind?: "agent"; agentId: string }
+  | { kind: "checkpoint"; agentId?: never }
+);
+export type WorkflowStepSnapshot = WorkflowStep & { profile: AgentProfile | null };
 export type Workflow = { id: string; name: string } & (
   | { steps: WorkflowStep[]; agentId?: never; instructions?: never }
   | { steps?: undefined; agentId: string; instructions: string }
@@ -17,9 +21,9 @@ export type WorkflowExecution = {
   taskId: string;
   stepId: string;
   workflow: Workflow;
-  profile: AgentProfile;
+  profile: AgentProfile | null;
   createdAt: string;
   status: RunHistoryEntry["status"];
-  steps?: (WorkflowStep & { profile: AgentProfile; status: RunHistoryEntry["status"] | "Not started" })[];
+  steps?: (WorkflowStepSnapshot & { status: RunHistoryEntry["status"] | "Not started" })[];
   runs: (RunHistoryEntry & { stepId?: string; prompt: string | null })[];
 };

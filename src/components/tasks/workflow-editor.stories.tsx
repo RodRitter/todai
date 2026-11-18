@@ -33,3 +33,18 @@ export const ComposeSteps: Story = {
 export const EmptySequence: Story = { args: { initial: { id: "empty", name: "Empty", steps: [] } } };
 export const UnavailableAgent: Story = { args: { agents: [] } };
 export const Narrow: Story = { decorators: [(Story) => <div className="max-w-72"><Story /></div>] };
+
+export const HumanCheckpoint: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "Add human checkpoint" }));
+    await userEvent.type(canvas.getByLabelText("Review instructions"), "Review the evidence before publishing.");
+    await userEvent.click(canvas.getByRole("button", { name: "Move step 3 up" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Save workflow" }));
+    await expect(args.save).toHaveBeenCalledWith(expect.objectContaining({ steps: [
+      { id: "build", agentId: "builder", instructions: "Build the feature" },
+      { id: expect.any(String), kind: "checkpoint", instructions: "Review the evidence before publishing." },
+      { id: "review", agentId: "builder", instructions: "Review the result" },
+    ] }));
+  },
+};

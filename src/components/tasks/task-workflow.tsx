@@ -69,18 +69,18 @@ export function TaskWorkflow({ taskId, workflowId, onChange, agents = [], disabl
       {!loaded && !error && <p role="status" className="text-sm text-muted-foreground">Loading workflows…</p>}
       {error && <p role="alert" className="text-sm text-destructive">{error} <Button type="button" variant="ghost" size="sm" onClick={() => setAttempt((value) => value + 1)}>Retry</Button></p>}
       <div className="flex flex-wrap gap-2">
-        <Button type="button" size="sm" variant="outline" disabled={disabled || !loaded || !agents.length} onClick={() => setDraft({ id: crypto.randomUUID(), name: "", agentId: agents[0]?.id ?? "", instructions: "" })}>Create workflow</Button>
+        <Button type="button" size="sm" variant="outline" disabled={disabled || !loaded} onClick={() => setDraft({ id: crypto.randomUUID(), name: "", steps: [] })}>Create workflow</Button>
         {selected && <Button type="button" size="sm" variant="ghost" disabled={disabled} onClick={() => setDraft({ ...selected })}>Edit workflow</Button>}
       </div>
-      {!agents.length && <p className="text-sm text-muted-foreground">Create an agent in Agents before configuring a workflow.</p>}
+      {!agents.length && <p className="text-sm text-muted-foreground">Create an agent in Agents to add agent steps. Human checkpoints can be used on their own.</p>}
     </div>
     {draft && <WorkflowEditor key={draft.id} initial={draft} agents={agents} disabled={disabled} save={api.save} onCancel={() => setDraft(null)} onSaved={(workflow) => {
       setWorkflows((items) => [...items.filter((item) => item.id !== workflow.id), workflow]);
       onChange(workflow.id); setDraft(null);
     }} />}
     {selected && <ol className="space-y-2" aria-label="Configured steps">{workflowSteps(selected).map((step, index) => <li key={step.id} className="rounded-lg border p-3 text-sm">
-      <details><summary className="cursor-pointer">{index + 1}. {agents.find((agent) => agent.id === step.agentId)?.name ?? "Agent unavailable"}</summary><pre className="mt-2 whitespace-pre-wrap break-words font-sans">{step.instructions || "No additional step instructions."}</pre></details>
-      {index < workflowSteps(selected).length - 1 && <p className="mt-2 text-xs text-muted-foreground">↓ On success, continue to step {index + 2}</p>}
+      <details><summary className="cursor-pointer">{index + 1}. {step.kind === "checkpoint" ? "Human approval" : agents.find((agent) => agent.id === step.agentId)?.name ?? "Agent unavailable"}</summary><pre className="mt-2 whitespace-pre-wrap break-words font-sans">{step.instructions || "No additional step instructions."}</pre></details>
+      {index < workflowSteps(selected).length - 1 && <p className="mt-2 text-xs text-muted-foreground">↓ On {step.kind === "checkpoint" ? "approval" : "success"}, continue to step {index + 2}</p>}
     </li>)}</ol>}
     <div className="space-y-3">
       <h3 className="font-semibold">Workflow executions</h3>
@@ -89,8 +89,8 @@ export function TaskWorkflow({ taskId, workflowId, onChange, agents = [], disabl
         <summary className="cursor-pointer text-sm"><span className="font-medium">{execution.workflow.name}</span> · <AgentStatus status={execution.status} /> <time className="text-xs text-muted-foreground" dateTime={execution.createdAt}>{new Date(execution.createdAt).toLocaleString()}</time></summary>
         <div className="mt-4 space-y-4 text-sm">
           <ol className="space-y-2" aria-label="Step progress">{(execution.steps ?? workflowSteps(execution.workflow).map((step) => ({ ...step, profile: execution.profile, status: execution.status }))).map((step, index) => <li key={step.id} className="rounded border p-3">
-            <p>{index + 1}. {step.profile.name} · <AgentStatus status={step.status} />{step.id === execution.stepId && execution.status !== "Complete" ? " · Current step" : ""}</p>
-            <p className="text-xs text-muted-foreground">{step.profile.tool} / {step.profile.model}</p>
+            <p>{index + 1}. {step.profile?.name ?? "Human approval"} · <AgentStatus status={step.status} />{step.id === execution.stepId && execution.status !== "Complete" ? " · Current step" : ""}</p>
+            {step.profile && <p className="text-xs text-muted-foreground">{step.profile.tool} / {step.profile.model}</p>}
             <details><summary className="cursor-pointer">Step instructions used</summary><pre className="mt-2 whitespace-pre-wrap break-words font-sans">{step.instructions || "No additional step instructions."}</pre></details>
           </li>)}</ol>
           {execution.id === history[0]?.id && workflowId === execution.workflow.id && ["Failed", "Interrupted", "Stopped"].includes(execution.status) && <div className="space-y-2">

@@ -6,8 +6,8 @@ import { statuses } from "../domain/task.ts";
 
 // Keep schema creation and legacy migrations together, in their original order.
 export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
-  const fresh = !db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'tasks'").get();
   db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
+  const fresh = !db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'tasks'").get();
   db.exec(`
       CREATE TABLE IF NOT EXISTS execution_control (
         id INTEGER PRIMARY KEY CHECK (id = 1), paused INTEGER NOT NULL DEFAULT 0
@@ -69,7 +69,7 @@ export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
             WHERE runs.taskId = comments.taskId AND runs.finishedAt = comments.createdAt AND runs.summary = comments.body) = 1;
         `);
     }
-    for (const column of ["recommendation", "feedbackStatus", "runId"]) {
+    for (const column of ["recommendation", "feedbackStatus", "runId", "feedbackKind", "workflowExecutionId", "stepId", "responseTo", "decision", "evidenceCommentId"]) {
       if (!commentColumns.some((item) => item.name === column))
         db.exec(`ALTER TABLE comments ADD COLUMN ${column} TEXT`);
     }
@@ -137,12 +137,25 @@ export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
       taskId TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
       stepId TEXT NOT NULL, workflow TEXT NOT NULL, profile TEXT NOT NULL, createdAt TEXT NOT NULL
     );`);
+    db.exec(`CREATE TABLE IF NOT EXISTS workflow_checkpoints (
+      requestId TEXT PRIMARY KEY REFERENCES comments(id) ON DELETE CASCADE,
+      executionId TEXT NOT NULL REFERENCES workflow_executions(id) ON DELETE CASCADE,
+      stepId TEXT NOT NULL, status TEXT NOT NULL
+    );`);
     if (!columns.some((column) => column.name === "workflowId"))
       db.exec("ALTER TABLE tasks ADD COLUMN workflowId TEXT");
     for (const field of ["workflowExecutionId", "stepInstructions", "prompt", "stepId"]) {
       if (!runColumns.some((column) => column.name === field))
         db.exec(`ALTER TABLE runs ADD COLUMN ${field} TEXT`);
     }
+    // Questions and handovers created before checkpoint support already link to runs.
+    // Preserve that provenance in the records shared by Overview and Activity.
+    db.exec(`UPDATE comments SET
+      workflowExecutionId = (SELECT workflowExecutionId FROM runs WHERE runs.id = comments.runId AND runs.workspaceId = comments.workspaceId),
+      stepId = (SELECT COALESCE(runs.stepId, workflow_executions.stepId) FROM runs
+        JOIN workflow_executions ON workflow_executions.id = runs.workflowExecutionId
+        WHERE runs.id = comments.runId AND runs.workspaceId = comments.workspaceId)
+      WHERE workflowExecutionId IS NULL AND runId IN (SELECT id FROM runs WHERE workflowExecutionId IS NOT NULL);`);
     for (const table of ["workflows", "workflow_executions"]) {
       const fields = db.prepare(`PRAGMA table_info(${table})`).all();
       if (!fields.some((field) => field.name === "steps")) db.exec(`ALTER TABLE ${table} ADD COLUMN steps TEXT`);
