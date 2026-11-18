@@ -34,7 +34,8 @@ const meta = {
     const original = globalThis.fetch;
     globalThis.fetch = async (input, options) => {
       const url = new URL(String(input), "http://localhost");
-      if (url.pathname === "/api/workflows") return Response.json(url.searchParams.has("taskId") ? context.parameters.workflowHistory ?? [] : []);
+      if (url.pathname === "/api/workflows/default") return Response.json(context.parameters.workflowDefault ?? { workflowId: null, available: false });
+      if (url.pathname === "/api/workflows") return Response.json(url.searchParams.has("taskId") ? context.parameters.workflowHistory ?? [] : context.parameters.workflows ?? []);
       if (url.pathname === "/api/tasks/run") return Response.json([]);
       if (url.pathname === "/api/artifacts/links") return Response.json(context.parameters.artifactLinks ?? []);
       if (url.pathname === "/api/artifacts" && url.searchParams.has("id")) {
@@ -674,3 +675,22 @@ export const DenseReviewHistory: Story = {
 export const DenseReviewHistoryNarrow: Story = { ...DenseReviewHistory, play: undefined, globals: { viewport: { value: "mobile1" } } };
 
 export const LegacyFeedbackBeforeConversion: Story = { args: { open: true, task: { ...exampleTasks[0], workflowId: null, agentStatus: "Waiting", comments: [{ id: "legacy-question", taskId: exampleTasks[0].id, body: "Which option should I use?", createdAt: "2026-11-18T10:00:00Z", feedbackStatus: "pending" }] }, onStop: fn() } };
+
+export const CreateWithWorkspaceDefault: Story = {
+  parameters: {
+    workflows: [{ id: "starter", name: "Single agent", agentId: "builder", instructions: "Complete the task" }],
+    workflowDefault: { workflowId: "starter", available: true },
+  },
+  play: async ({ canvasElement, args }) => {
+    await userEvent.click(within(canvasElement).getByRole("button", { name: "New task" }));
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await waitFor(() => expect(dialog.getByLabelText("Workflow")).toHaveDisplayValue("Workspace default: Single agent"));
+    await userEvent.type(dialog.getByLabelText("Title"), "Implement the change");
+    await userEvent.click(dialog.getByRole("button", { name: "Create task" }));
+    await expect(args.onSave).toHaveBeenCalledWith(expect.objectContaining({ title: "Implement the change", workflowId: undefined }));
+  },
+};
+export const CreateWithUnavailableDefault: Story = {
+  args: { open: true },
+  parameters: { workflowDefault: { workflowId: "removed", available: false } },
+};

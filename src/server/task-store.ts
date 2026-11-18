@@ -141,6 +141,31 @@ export class TaskStore {
     return this.db.prepare("SELECT id, name, path FROM workspaces WHERE id = workspace_id()").get() as Workspace;
   }
 
+  getDefaultWorkflow() {
+    const workflowId = this.db.prepare("SELECT value FROM settings WHERE key = 'defaultWorkflow' AND workspaceId = workspace_id()").get()?.value as string | undefined;
+    const workflow = this.listWorkflows().find((item) => item.id === workflowId);
+    const agents = this.listAgents();
+    const available = Boolean(workflow && workflowSteps(workflow).every((step) => step.kind === "checkpoint" ||
+      (agents.some((agent) => agent.id === step.agentId) && (step.kind !== "review" || agents.some((agent) => agent.id === step.revisionAgentId)))) &&
+      (!this.workflowOnly() || Object.keys(milestoneLabels).every((key) => {
+        const column = workflow.statusMappings?.[key as keyof typeof milestoneLabels];
+        return column === null || (typeof column === "string" && this.listColumns().includes(column));
+      })));
+    return { workflowId: workflowId ?? null, available };
+  }
+
+  setDefaultWorkflow(value: unknown) {
+    return this.transaction(() => {
+      if (value === null) this.db.prepare("DELETE FROM settings WHERE key = 'defaultWorkflow' AND workspaceId = workspace_id()").run();
+      else {
+        if (typeof value !== "string") throw new WorkflowValidationError("Choose an available workflow in this workspace.");
+        this.db.prepare("INSERT INTO settings (key, value, workspaceId) VALUES ('defaultWorkflow', ?, workspace_id()) ON CONFLICT(workspaceId, key) DO UPDATE SET value = excluded.value").run(value);
+        if (!this.getDefaultWorkflow().available) throw new WorkflowValidationError("Choose an available workflow with valid agents and status milestones in this workspace.");
+      }
+      return this.getDefaultWorkflow();
+    });
+  }
+
   getDefaultExecutor() {
     const value = this.db.prepare("SELECT value FROM settings WHERE key = 'defaultExecutor' AND workspaceId = workspace_id()").get()?.value;
     return value === undefined ? "codex" as const : parseExecutionTool(value);
@@ -483,7 +508,7 @@ export class TaskStore {
     return this.transaction(() => {
       this.assertOwnership("tasks", task.id);
       const previous = this.list().find((item) => item.id === task.id);
-      const workflowId = task.workflowId === undefined ? previous?.workflowId ?? null : task.workflowId;
+      const workflowId = task.workflowId === undefined ? (previous ? previous.workflowId ?? null : this.getDefaultWorkflow().available ? this.getDefaultWorkflow().workflowId : null) : task.workflowId;
       if (workflowId !== null && (typeof workflowId !== "string" || !this.listWorkflows().some((item) => item.id === workflowId)))
         throw new WorkflowValidationError("Choose an existing workflow in this workspace.");
       if (previous?.workflowId !== workflowId && (previous?.comments?.some((comment) => comment.feedbackStatus === "pending") || this.history(task.id).some((run) => ["Queued", "Running"].includes(run.status) || (run.status === "Waiting" && previous?.comments?.some((comment) => comment.runId === run.id && comment.feedbackStatus === "pending")))))

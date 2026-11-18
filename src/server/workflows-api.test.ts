@@ -104,3 +104,30 @@ test("checkpoint decisions require explicit outcomes and reject stale or foreign
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("workspace default HTTP settings persist, isolate workspaces and reject foreign workflows", async () => {
+  const { GET: getDefault, PUT: putDefault } = await import("../app/api/workflows/default/route.ts");
+  const directory = mkdtempSync(join(tmpdir(), "todai-default-api-"));
+  const previous = process.env.TODAI_DB_PATH;
+  process.env.TODAI_DB_PATH = join(directory, "tasks.sqlite");
+  const store = new TaskStore(process.env.TODAI_DB_PATH);
+  try {
+    const other = store.createWorkspace("Other", directory);
+    store.saveWorkflow({ id: "approval", name: "Approval", steps: [{ id: "approve", kind: "checkpoint", instructions: "Approve" }] });
+    const request = (workspaceId = store.workspaceId, workflowId: unknown = "approval") => new Request("http://localhost/api/workflows/default", { method: "PUT", headers: { "X-Todai-Workspace": workspaceId }, body: JSON.stringify({ workflowId }) });
+    assert.equal((await putDefault(request())).status, 200);
+    assert.deepEqual(await getDefault(request()).json(), { workflowId: "approval", available: true });
+    assert.equal((await putDefault(request(other.id))).status, 400);
+    assert.deepEqual(await getDefault(request(other.id)).json(), { workflowId: null, available: false });
+    assert.equal((await putDefault(request(store.workspaceId, "missing"))).status, 400);
+    assert.equal(store.getDefaultWorkflow().workflowId, "approval");
+    const isolated = new TaskStore(process.env.TODAI_DB_PATH, other.id);
+    try { assert.equal(isolated.save({ id: "other", title: "Other", description: "", status: "To do" }).workflowId, null); } finally { isolated.close(); }
+    assert.equal((await putDefault(request(store.workspaceId, null))).status, 200);
+    assert.equal(getDefault(new Request("http://localhost/api/workflows/default")).status, 400);
+  } finally {
+    store.close();
+    if (previous === undefined) delete process.env.TODAI_DB_PATH; else process.env.TODAI_DB_PATH = previous;
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

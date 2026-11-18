@@ -11,6 +11,7 @@ import { Bot, CircleDot, CirclePlay, CircleStop, Maximize2, Minimize2 } from "lu
 import { TaskActivity, TaskFeedback, TaskResult } from "./task-comments";
 import { TaskArtifacts } from "@/components/artifacts/artifact-attachments";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { NewTaskWorkflow } from "./new-task-workflow";
 import { TaskWorkflow } from "./task-workflow";
 import { RunHistory } from "./run-history";
 import { AgentStatus } from "./agent-status";
@@ -126,7 +127,7 @@ function TaskEditorSession({
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [workflowId, setWorkflowId] = useState(editing?.workflowId ?? null);
+  const [workflowId, setWorkflowId] = useState<string | null | undefined>(editing ? editing.workflowId ?? null : undefined);
   const [title, setTitle] = useState(editing?.title ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
   const [savedDescription, setSavedDescription] = useState(
@@ -288,6 +289,7 @@ function TaskEditorSession({
                 <TabsTrigger value="artifacts" className="px-1">Artifacts</TabsTrigger>
               </TabsList>}
               <TabsContent value="overview" forceMount {...(!editing ? { role: "region", "aria-labelledby": undefined, "aria-label": "Task details" } : {})} className="min-h-0 flex-1 space-y-7 overflow-y-auto px-6 pb-6">
+              {!editing && <NewTaskWorkflow value={workflowId} onChange={setWorkflowId} agents={agents ?? []} columns={columns} disabled={busy} />}
               {editing && <OutstandingFindings executions={workflowHistory} onNavigate={(id) => navigateRecord("activity", id)} />}
               {pendingFeedback.map((comment) => <TaskFeedback key={comment.id} comment={comment} comments={editing?.comments} onAnswer={onAnswerFeedback} onNavigate={(id) => navigateRecord("activity", `comment-${id}`)} />)}
               <div className="space-y-2">
@@ -410,7 +412,7 @@ function TaskEditorSession({
               </TabsContent>
               {editing && <>
                 <TabsContent value="workflow" forceMount className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-6">
-                  <TaskWorkflow columns={columns} onHistory={setWorkflowHistory} taskId={editing.id} workflowId={workflowId} onChange={setWorkflowId} agents={agents} disabled={busy || pendingRun || editing.agentStatus === "Waiting"} />
+                  <TaskWorkflow columns={columns} onHistory={setWorkflowHistory} taskId={editing.id} workflowId={workflowId ?? null} onChange={setWorkflowId} agents={agents} disabled={busy || pendingRun || editing.agentStatus === "Waiting"} />
                   <RunHistory taskId={editing.id} />
                 </TabsContent>
                 <TabsContent value="activity" forceMount className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-6">

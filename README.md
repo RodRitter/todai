@@ -150,3 +150,11 @@ The task summary and **Workflow** tab show the current step and round. Execution
 Reviewer results can include `findingUpdates`: an array of `{ "id": "focus", "body": "Restore keyboard focus", "status": "outstanding", "note": "Reproduced with Escape" }`. New IDs must be unique within the review section. Later reviewers reuse an ID, omit `body`, and supply an explicit `outstanding` or `resolved` disposition with verification notes. Omitted findings remain unchanged; revision-agent claims cannot resolve them. Approval fails while any tracked finding remains outstanding. A changes-requested result using the older string-only format creates a single tracked finding for that attempt. Active older loops receive stable outstanding records from their original changes-requested reports before resuming. Completed historical records retain their original summaries without inferred dispositions.
 
 Each review keeps the attempt and exact artifact revisions it reviewed. Publishing a newer artifact revision does not change this evidence.
+
+### Starter workflows and defaults
+
+New tasks show the workspace default workflow and allow an explicit override. With a default configured, create the task, press **Run**, inspect progress, and respond to feedback or approvals when needed.
+
+Open **Set up workflows** during task creation, or the **Workflow** tab on a saved task. Choose **Single agent**, **Implement and review**, or **Plan–implement–review**, then **Create from template**. Select existing agents for each role and resolve any unmapped status milestones. Save the editable workflow; templates never create agent profiles. The iterative templates include bounded review and revision plus final human approval. The planning template also requires approval of the plan before implementation.
+
+Select **Use selected workflow for new tasks** to set the workspace default, or **Clear workspace default** to remove it. Defaults affect only newly created tasks; existing tasks and execution snapshots retain their selections. Unavailable defaults display setup guidance and never substitute an unrelated workflow.

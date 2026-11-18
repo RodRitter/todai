@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import type { AgentProfile } from "@/domain/column-agent";
 import { reviewPhaseLabels, workflowSteps, type Workflow, type WorkflowExecution } from "@/domain/workflow";
-import { workspaceFetch } from "@/lib/workspace-fetch";
+import { workflowApi, type WorkflowDefault } from "@/lib/workflow-api";
+import { starterWorkflow, workflowTemplates, type WorkflowTemplate } from "@/domain/workflow-templates";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -13,19 +14,6 @@ import { HistoryGroup, HistoryPage } from "./review-history";
 import { WorkflowEditor } from "./workflow-editor";
 import { AgentStatus } from "./agent-status";
 
-async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const response = await workspaceFetch(url, options);
-  const value = await response.json();
-  if (!response.ok) throw new Error(value.error ?? "Could not load workflows.");
-  return value;
-}
-const workflowApi = {
-  list: (signal: AbortSignal) => request<Workflow[]>("/api/workflows", { signal }),
-  history: (taskId: string, signal: AbortSignal) => request<WorkflowExecution[]>(`/api/workflows?${new URLSearchParams({ taskId })}`, { signal }),
-  retry: (taskId: string, executionId: string) => request<unknown>("/api/workflows", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ taskId, executionId }) }),
-  save: (workflow: Workflow) => request<Workflow>("/api/workflows", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(workflow) }),
-};
-
 export function TaskWorkflow({ taskId, workflowId, onChange, agents = [], columns = [], disabled, onHistory, api = workflowApi }: {
   columns?: readonly string[];
   taskId: string;
@@ -33,9 +21,12 @@ export function TaskWorkflow({ taskId, workflowId, onChange, agents = [], column
   onChange: (id: string | null) => void;
   agents?: AgentProfile[];
   disabled: boolean;
-  api?: typeof workflowApi;
+  api?: Omit<typeof workflowApi, "getDefault" | "setDefault"> & Partial<Pick<typeof workflowApi, "getDefault" | "setDefault">>;
   onHistory?: (history: WorkflowExecution[]) => void;
 }) {
+  const [workspaceDefault, setWorkspaceDefault] = useState<WorkflowDefault>();
+  const [settingDefault, setSettingDefault] = useState(false);
+  const [template, setTemplate] = useState<WorkflowTemplate>("single");
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [history, setHistory] = useState<WorkflowExecution[]>([]);
   const [error, setError] = useState("");
@@ -49,7 +40,8 @@ export function TaskWorkflow({ taskId, workflowId, onChange, agents = [], column
     let timer: ReturnType<typeof setTimeout>;
     async function refresh() {
       try {
-        const [definitions, executions] = await Promise.all([api.list(controller.signal), api.history(taskId, controller.signal)]);
+        const [definitions, executions, defaultValue] = await Promise.all([api.list(controller.signal), taskId ? api.history(taskId, controller.signal) : Promise.resolve([]), api.getDefault?.(controller.signal)]);
+        if (!controller.signal.aborted) setWorkspaceDefault(defaultValue);
         if (!controller.signal.aborted) { setWorkflows(definitions); setHistory(executions); onHistory?.(executions); setLoaded(true); setError(""); }
       } catch (error) {
         if (!controller.signal.aborted) setError(error instanceof Error ? error.message : "Could not load workflows.");
@@ -60,6 +52,14 @@ export function TaskWorkflow({ taskId, workflowId, onChange, agents = [], column
     void refresh();
     return () => { controller.abort(); clearTimeout(timer); };
   }, [taskId, api, attempt, onHistory]);
+
+  async function updateDefault(workflowId: string | null) {
+    if (!api.setDefault) return;
+    setSettingDefault(true);
+    try { setWorkspaceDefault(await api.setDefault(workflowId)); setError(""); }
+    catch (error) { setError(error instanceof Error ? error.message : "Could not update the workspace default."); }
+    finally { setSettingDefault(false); }
+  }
 
   return <section className="space-y-4" aria-label="Task workflow">
     <div className="space-y-2">
@@ -72,6 +72,18 @@ export function TaskWorkflow({ taskId, workflowId, onChange, agents = [], column
       <p className="text-sm text-muted-foreground">{workflowId ? "Save task changes, then Run. Workflow milestones control board status." : "Choose or create a workflow, save the task, then press Run."}</p>
       {!loaded && !error && <p role="status" className="text-sm text-muted-foreground">Loading workflows…</p>}
       {error && <p role="alert" className="text-sm text-destructive">{error} <Button type="button" variant="ghost" size="sm" onClick={() => setAttempt((value) => value + 1)}>Retry</Button></p>}
+      {workspaceDefault && <div className="space-y-2">
+        <p className="text-sm text-muted-foreground">Workspace default: {workspaceDefault.available ? workflows.find((item) => item.id === workspaceDefault.workflowId)?.name : workspaceDefault.workflowId ? "Unavailable — repair its agents and milestones or choose another workflow." : "None — choose a workflow below and make it the default for new tasks."}</p>
+        <Button type="button" variant="outline" size="sm" disabled={disabled || settingDefault || !selected || !api.setDefault} onClick={() => selected && void updateDefault(selected.id)}>Use selected workflow for new tasks</Button>
+        {workspaceDefault.workflowId && <Button type="button" variant="ghost" size="sm" disabled={disabled || settingDefault || !api.setDefault} onClick={() => void updateDefault(null)}>Clear workspace default</Button>}
+      </div>}
+      <div className="space-y-2">
+        <Label htmlFor="workflow-template">Starter template</Label>
+        <NativeSelect id="workflow-template" value={template} disabled={disabled} onChange={(event) => setTemplate(event.target.value as WorkflowTemplate)}>
+          {Object.entries(workflowTemplates).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+        </NativeSelect>
+        <Button type="button" variant="outline" size="sm" disabled={disabled || !loaded} onClick={() => setDraft(starterWorkflow(template, crypto.randomUUID(), {}, columns))}>Create from template</Button>
+      </div>
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" variant="outline" disabled={disabled || !loaded} onClick={() => setDraft({ id: crypto.randomUUID(), name: "", steps: [] })}>Create workflow</Button>
         {selected && <Button type="button" size="sm" variant="ghost" disabled={disabled} onClick={() => setDraft({ ...selected })}>Edit workflow</Button>}
@@ -87,7 +99,7 @@ export function TaskWorkflow({ taskId, workflowId, onChange, agents = [], column
       {step.kind === "review" && <p className="mt-2 text-xs text-muted-foreground">Reviewer: {agents.find((agent) => agent.id === step.agentId)?.name ?? "Unavailable"} · Revision agent: {agents.find((agent) => agent.id === step.revisionAgentId)?.name ?? "Unavailable"} · {step.maxRounds} rounds. Changes requested → Revise → Review. Approval exits; limit reached → Human intervention.</p>}
       {index < workflowSteps(selected).length - 1 && <p className="mt-2 text-xs text-muted-foreground">↓ On {step.kind === "checkpoint" || step.kind === "review" ? "approval" : "success"}, continue to step {index + 2}</p>}
     </li>)}</ol>}
-    <div className="space-y-3">
+    {taskId && <div className="space-y-3">
       <h3 className="font-semibold">Workflow executions</h3>
       {loaded && !history.length && <p className="text-sm text-muted-foreground">No workflow executions yet.</p>}
       {<HistoryPage label="executions" items={history} render={(execution) => <HistoryGroup key={execution.id} title={<><span className="font-medium">{execution.workflow.name}</span> · <AgentStatus status={execution.status} /> <time className="text-xs text-muted-foreground" dateTime={execution.createdAt}>{new Date(execution.createdAt).toLocaleString()}</time></>}>
@@ -125,6 +137,6 @@ export function TaskWorkflow({ taskId, workflowId, onChange, agents = [], column
           </li>)}</ol>
         </div>
       </HistoryGroup>} />}
-    </div>
+    </div>}
   </section>;
 }
