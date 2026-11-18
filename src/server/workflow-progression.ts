@@ -24,6 +24,8 @@ export type WorkflowProgression =
       commentId: AgentRun["commentId"];
       replyPlan: AgentRun["replyPlan"];
       createdAt: string;
+      workflowExecutionId?: string | null;
+      stepInstructions?: string | null;
     }
   | { action: "advance"; column: string; autoRun: boolean };
 
@@ -31,13 +33,14 @@ export type WorkflowProgression =
 export function workflowProgression(context: ProgressionContext): WorkflowProgression {
   const { task, run } = context;
   if (context.event === "feedback-answered") {
-    return { action: "queue", column: task.status, profile: run.profile, kind: run.kind, commentId: run.commentId, replyPlan: run.replyPlan, createdAt: run.createdAt };
+    return { action: "queue", column: task.status, profile: run.profile, kind: run.kind, commentId: run.commentId, replyPlan: run.replyPlan, createdAt: run.createdAt, ...(run.workflowExecutionId ? { workflowExecutionId: run.workflowExecutionId, stepInstructions: run.stepInstructions } : {}) };
   }
   const { columns, hasQueuedRun } = context;
   if (run.kind && (run.status === "Complete" || (run.status === "Failed" && run.kind === "reply"))) {
     const [next, ...rest] = context.replyPlan ?? run.replyPlan ?? [];
     if (next) return { action: "queue", column: run.column, profile: next, kind: "reply", commentId: run.commentId, replyPlan: rest, createdAt: run.createdAt };
   }
+  if (task.workflowId || run.workflowExecutionId) return { action: "wait" };
   if (run.status !== "Complete" || run.kind || hasQueuedRun || !task.autoWorkflow || task.status !== run.column)
     return { action: "wait" };
   const index = columns.indexOf(task.status);

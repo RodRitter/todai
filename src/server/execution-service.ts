@@ -1,3 +1,4 @@
+import { agentPrompt } from "./agent-prompt.ts";
 import { openRunArtifacts, type RunArtifactConnection } from "./run-artifacts.ts";
 import { executionWorkspacePath } from "./workspace-settings.ts";
 import { orderedReplies } from "./comment-intent.ts";
@@ -88,7 +89,7 @@ export class ExecutionService {
         if (run.kind !== "intent") artifacts = await openRunArtifacts(this.store, run, controller.signal);
         if (this.store.interruptionRequested(run.id)) controller.abort();
         controller.signal.throwIfAborted();
-        summary = await this.runner({
+        const request: RunRequest = {
           artifacts: artifacts?.connection,
           run,
           task,
@@ -98,7 +99,12 @@ export class ExecutionService {
             this.store.recordRunner(run.id, pid);
             if (this.store.interruptionRequested(run.id)) controller.abort();
           },
-        });
+        };
+        if (run.workflowExecutionId) {
+          run.prompt = agentPrompt(request);
+          this.store.recordPrompt(run.id, run.prompt);
+        }
+        summary = await this.runner(request);
         artifacts?.close();
         if (run.kind === "intent") {
           const order = orderedReplies(summary, run.replyPlan ?? []);

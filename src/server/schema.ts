@@ -128,6 +128,21 @@ export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
     }
     migrateWorkspaceOwnership(db, !fresh || seedWorkspace);
     initializeArtifactSchema(db);
+    db.exec(`CREATE TABLE IF NOT EXISTS workflows (
+      id TEXT PRIMARY KEY, workspaceId TEXT NOT NULL REFERENCES workspaces(id),
+      name TEXT NOT NULL, agentId TEXT NOT NULL, instructions TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS workflow_executions (
+      id TEXT PRIMARY KEY, workspaceId TEXT NOT NULL REFERENCES workspaces(id),
+      taskId TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+      stepId TEXT NOT NULL, workflow TEXT NOT NULL, profile TEXT NOT NULL, createdAt TEXT NOT NULL
+    );`);
+    if (!columns.some((column) => column.name === "workflowId"))
+      db.exec("ALTER TABLE tasks ADD COLUMN workflowId TEXT");
+    for (const field of ["workflowExecutionId", "stepInstructions", "prompt"]) {
+      if (!runColumns.some((column) => column.name === field))
+        db.exec(`ALTER TABLE runs ADD COLUMN ${field} TEXT`);
+    }
     db.exec("COMMIT");
   } catch (error) {
     db.close();

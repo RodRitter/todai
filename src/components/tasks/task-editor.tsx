@@ -6,6 +6,7 @@ import { Bot, CircleDot, CirclePlay, CircleStop, Maximize2, Minimize2, Workflow,
 import { TaskActivity, TaskFeedback, TaskResult } from "./task-comments";
 import { TaskArtifacts } from "@/components/artifacts/artifact-attachments";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TaskWorkflow } from "./task-workflow";
 import { RunHistory } from "./run-history";
 import { AgentStatus } from "./agent-status";
 import { DescriptionField } from "./description-field";
@@ -112,6 +113,7 @@ function TaskEditorSession({
   const [autoWorkflow, setAutoWorkflow] = useState(
     editing?.autoWorkflow ?? false,
   );
+  const [workflowId, setWorkflowId] = useState(editing?.workflowId ?? null);
   const [autoRun, setAutoRun] = useState(editing?.autoRun ?? false);
   const [title, setTitle] = useState(editing?.title ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
@@ -124,6 +126,7 @@ function TaskEditorSession({
       title.trim() !== editing.title.trim() ||
       description.trim() !== savedDescription.trim() ||
       currentStatus !== editing.status ||
+      workflowId !== (editing.workflowId ?? null) ||
       autoWorkflow !== (editing.autoWorkflow ?? false) ||
       autoRun !== (editing.autoRun ?? false));
 
@@ -176,6 +179,7 @@ function TaskEditorSession({
         description,
         status,
         agentStatus,
+        workflowId,
         autoWorkflow,
         autoRun,
         comments: editing?.comments ?? [],
@@ -211,7 +215,7 @@ function TaskEditorSession({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span>
-                      <Button type="button" size="sm" variant="default" disabled={busy || canSave || editing.agentStatus === "Waiting" || !assignedColumns.includes(editing.status)} onClick={async () => {
+                      <Button type="button" size="sm" variant="default" disabled={busy || canSave || editing.agentStatus === "Waiting" || (!editing.workflowId && !assignedColumns.includes(editing.status))} onClick={async () => {
                         setBusy(true);
                         try {
                           await notifyOperation(onRun, { loading: "Queuing agent…", success: "Agent queued.", error: "Could not start the agent. Reload the task and try again." });
@@ -224,12 +228,12 @@ function TaskEditorSession({
                     </span>
                   </TooltipTrigger>
                   <TooltipContent>
-                    {canSave ? "Save your changes before running the agent." : editing.agentStatus === "Waiting" ? "Answer the pending feedback first." : !assignedColumns.includes(editing.status) ? "Assign an agent to this column first." : editing.agentStatus === "Stopped" ? "Request a new run using saved work and history." : "Run the current column’s agent using the saved task details."}
+                    {canSave ? "Save your changes before running the agent." : editing.agentStatus === "Waiting" ? "Answer the pending feedback first." : !editing.workflowId && !assignedColumns.includes(editing.status) ? "Assign an agent to this column first." : editing.agentStatus === "Stopped" ? "Request a new run using saved work and history." : editing.workflowId ? "Run the selected workflow using saved task details." : "Run the current column’s agent using the saved task details."}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             )}
-            {editing && pendingRun && onStop && (
+            {editing && (pendingRun || (editing.workflowId && editing.agentStatus === "Waiting")) && onStop && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -378,7 +382,7 @@ function TaskEditorSession({
                             name="autoWorkflow"
                             checked={autoWorkflow}
                             onCheckedChange={setAutoWorkflow}
-                            disabled={busy}
+                            disabled={busy || Boolean(workflowId)}
                           />
                         </div>
                       </TooltipTrigger>
@@ -390,7 +394,7 @@ function TaskEditorSession({
                       <TooltipTrigger asChild>
                         <div className="grid min-h-9 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[14rem_minmax(0,1fr)]">
                           <Label htmlFor="task-auto-run" className="text-muted-foreground gap-3 font-normal"><Zap className="size-4 shrink-0" aria-hidden="true" />Auto-run</Label>
-                          <Switch id="task-auto-run" name="autoRun" checked={autoRun} onCheckedChange={setAutoRun} disabled={busy} />
+                          <Switch id="task-auto-run" name="autoRun" checked={autoRun} onCheckedChange={setAutoRun} disabled={busy || Boolean(workflowId)} />
                         </div>
                       </TooltipTrigger>
                       <TooltipContent>
@@ -430,7 +434,7 @@ function TaskEditorSession({
               </TabsContent>
               {editing && <>
                 <TabsContent value="workflow" forceMount className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-6">
-                  <section className="space-y-2"><h3 className="font-semibold">Workflow</h3><p className="text-sm text-muted-foreground">No workflow is configured. Runs currently use the agent assigned to the task’s board column.</p><AgentStatus status={editing.agentStatus} /></section>
+                  <TaskWorkflow taskId={editing.id} workflowId={workflowId} onChange={setWorkflowId} agents={agents} disabled={busy || pendingRun || editing.agentStatus === "Waiting"} />
                   <RunHistory taskId={editing.id} />
                 </TabsContent>
                 <TabsContent value="activity" forceMount className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-6">

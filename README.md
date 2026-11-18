@@ -34,6 +34,10 @@ Open [localhost:3000](http://127.0.0.1:3000).
 
 Add another named workspace in **Settings → Workspace → Add workspace**, then switch using the sidebar selector. Each workspace has its own tasks, agents, columns, assignments, and default executor. Selection lives in the browser URL, so separate tabs can work independently. Switching clears unsaved drafts and leaves queued and active runs in their original directories.
 
+Saved tasks can use a reusable single-step workflow. In the task’s **Workflow** tab, choose **Create workflow**, name it, select an existing agent, and enter step instructions. Save the workflow and task, then press **Run**. Workflows belong to their workspace and run without a column assignment. Edit a selected workflow to change future executions; each execution retains its original workflow and agent configuration.
+
+Expand **Workflow executions** to inspect each attempt’s outcome, result, step instructions, and exact prompt supplied by Todai. Provider instructions and private reasoning are not included. Feedback resumes the same snapshotted step; stopping, failing, or interrupting preserves history. Comment replies remain separate. Workflow-backed tasks bypass column Auto-run and Auto-workflow; tasks without a workflow retain the legacy controls.
+
 Task automation is opt-in. Enable **Auto-run** to start the assigned agent when a task enters a column. Enable **Auto-workflow** to move to the next column after a successful run; the next agent waits for **Run** unless Auto-run is also enabled. Save task edits before pressing Run.
 
 New boards start with **To do**, **In progress**, **In review**, and **Done**. Customize them in **Settings → Board**.
