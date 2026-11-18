@@ -167,3 +167,132 @@ test("replacing board configuration terminates cancelled workflow feedback", () 
     assert.equal(f.store.workflowHistory(task.id).filter((execution) => ["Queued", "Running", "Waiting"].includes(execution.status)).length, 1);
   } finally { f.cleanup(); }
 });
+
+test("ordered steps advance exactly once with snapshotted agents and durable progress", () => {
+  const f = fixture();
+  try {
+    const sequence = { id: "build", name: "Build and review", steps: [
+      { id: "implement", agentId: "builder", instructions: "Implement" },
+      { id: "review", agentId: "builder", instructions: "Review" },
+    ] };
+    f.store.saveWorkflow(sequence); f.store.save(task); f.store.runTask(task.id);
+    f.store.saveAgent({ ...agent, model: "changed" });
+    const first = f.store.claimRun()!;
+    assert.equal(first.stepInstructions, "Implement");
+    f.store.finishRun(first.id, "Complete", "Implemented");
+    f.store.finishRun(first.id, "Complete", "Duplicate");
+    const reopened = new TaskStore(f.path);
+    try {
+      const progress = reopened.workflowHistory(task.id)[0];
+      assert.equal(progress.stepId, "review");
+      assert.equal(progress.status, "Queued");
+      assert.deepEqual(progress.steps?.map((step) => step.status), ["Complete", "Queued"]);
+      const second = reopened.claimRun()!;
+      assert.equal(second.stepInstructions, "Review");
+      assert.equal(second.profile.model, "test");
+      reopened.finishRun(second.id, "Complete", "Reviewed");
+      assert.equal(reopened.claimRun(), undefined);
+      assert.equal(reopened.workflowHistory(task.id)[0].status, "Complete");
+      assert.equal(reopened.history(task.id).length, 2);
+    } finally { reopened.close(); }
+  } finally { f.cleanup(); }
+});
+
+for (const outcome of ["Failed", "Interrupted", "Stopped"] as const) {
+  test(`explicit retry of a ${outcome} step preserves completion and the execution snapshot`, () => {
+    const f = fixture();
+    try {
+      f.store.saveWorkflow({ id: "build", name: "Sequence", steps: [
+        { id: "one", agentId: "builder", instructions: "First" },
+        { id: "two", agentId: "builder", instructions: "Second" },
+      ] });
+      f.store.save(task); f.store.runTask(task.id);
+      const first = f.store.claimRun()!;
+      f.store.finishRun(first.id, "Complete", "First done");
+      const second = f.store.claimRun()!;
+      if (outcome === "Stopped") f.store.stopExecution(second.id);
+      f.store.finishRun(second.id, outcome, "Work preserved");
+      f.store.finishRun(second.id, "Complete", "Stale success");
+      f.store.resumeExecution();
+      assert.equal(f.store.claimRun(), undefined);
+      f.store.saveWorkflow(workflow);
+      f.store.saveAgent({ ...agent, model: "changed" });
+      f.store.retryWorkflow(task.id, first.workflowExecutionId!);
+      assert.throws(() => f.store.retryWorkflow(task.id, first.workflowExecutionId!), /retried|active/i);
+      const retry = f.store.claimRun()!;
+      assert.equal(retry.stepId, "two");
+      assert.equal(retry.profile.model, "test");
+      assert.equal(retry.stepInstructions, "Second");
+      f.store.finishRun(retry.id, "Complete", "Second done");
+      const history = f.store.workflowHistory(task.id);
+      assert.equal(history.length, 1);
+      assert.deepEqual(history[0].steps?.map((step) => step.status), ["Complete", "Complete"]);
+      assert.equal(history[0].runs.length, 3);
+    } finally { f.cleanup(); }
+  });
+}
+
+test("restart interrupts an abandoned step and explicit recovery never replays completed steps", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { pathToFileURL } = await import("node:url");
+  const { ExecutionService } = await import("./execution-service.ts");
+  const f = fixture();
+  try {
+    f.store.saveWorkflow({ id: "build", name: "Sequence", steps: [
+      { id: "one", agentId: "builder", instructions: "First" },
+      { id: "two", agentId: "builder", instructions: "Second" },
+    ] });
+    f.store.save(task); f.store.runTask(task.id);
+    const first = f.store.claimRun()!;
+    f.store.finishRun(first.id, "Complete", "First done");
+    const child = spawnSync(process.execPath, ["--experimental-strip-types", "--input-type=module", "-e", `
+      import { TaskStore } from ${JSON.stringify(pathToFileURL(join(process.cwd(), "src/server/task-store.ts")).href)};
+      const store = new TaskStore(${JSON.stringify(f.path)});
+      store.claimRun(); store.close();
+    `]);
+    assert.equal(child.status, 0, child.stderr.toString());
+    const reopened = new TaskStore(f.path);
+    try {
+      const executed: string[] = [];
+      const service = new ExecutionService(reopened, async ({ run }) => { executed.push(run.stepId!); return "Recovered"; });
+      await service.drain();
+      const progress = reopened.workflowHistory(task.id)[0];
+      assert.deepEqual(progress.steps?.map((step) => step.status), ["Complete", "Interrupted"]);
+      assert.deepEqual(executed, []);
+      reopened.retryWorkflow(task.id, progress.id);
+      await service.drain();
+      assert.deepEqual(executed, ["two"]);
+      assert.equal(reopened.workflowHistory(task.id)[0].status, "Complete");
+    } finally { reopened.close(); }
+  } finally { f.cleanup(); }
+});
+
+test("feedback and queued cancellation keep the active step and respect queue pause", () => {
+  const f = fixture();
+  try {
+    f.store.saveWorkflow({ id: "build", name: "Sequence", steps: [
+      { id: "one", agentId: "builder", instructions: "First" },
+      { id: "two", agentId: "builder", instructions: "Second" },
+    ] });
+    f.store.save(task); f.store.runTask(task.id);
+    const first = f.store.claimRun()!;
+    f.store.finishRun(first.id, "Waiting", "Proceed?", "Yes");
+    const question = f.store.list()[0].comments!.find((comment) => comment.feedbackStatus === "pending")!;
+    f.store.answerFeedback(task.id, question.id, "Yes");
+    const resumed = f.store.claimRun()!;
+    assert.equal(resumed.stepId, "one");
+    f.store.finishRun(resumed.id, "Complete", "First done");
+    f.store.stopTask(task.id);
+    f.store.pauseExecution();
+    f.store.retryWorkflow(task.id, first.workflowExecutionId!);
+    assert.equal(f.store.claimRun(), undefined);
+    f.store.resumeExecution();
+    const second = f.store.claimRun()!;
+    assert.equal(second.stepId, "two");
+    f.store.stopTask(task.id);
+    f.store.finishRun(second.id, "Complete", "Success raced with stop");
+    f.store.resumeExecution();
+    assert.equal(f.store.claimRun(), undefined);
+    assert.equal(f.store.workflowHistory(task.id)[0].status, "Stopped");
+  } finally { f.cleanup(); }
+});

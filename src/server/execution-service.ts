@@ -72,7 +72,9 @@ export class ExecutionService {
       this.store.finishRun(
         run.id,
         "Interrupted",
-        "Agent run interrupted because the app stopped. Workspace changes were preserved. Move the task to an agent column to start a new run.",
+        run.workflowExecutionId
+          ? "Agent run interrupted because the app stopped. Workspace changes were preserved. Retry the current step in the Workflow tab to continue."
+          : "Agent run interrupted because the app stopped. Workspace changes were preserved. Move the task to an agent column to start a new run.",
       );
     }
     while (true) {

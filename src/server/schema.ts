@@ -139,9 +139,13 @@ export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
     );`);
     if (!columns.some((column) => column.name === "workflowId"))
       db.exec("ALTER TABLE tasks ADD COLUMN workflowId TEXT");
-    for (const field of ["workflowExecutionId", "stepInstructions", "prompt"]) {
+    for (const field of ["workflowExecutionId", "stepInstructions", "prompt", "stepId"]) {
       if (!runColumns.some((column) => column.name === field))
         db.exec(`ALTER TABLE runs ADD COLUMN ${field} TEXT`);
+    }
+    for (const table of ["workflows", "workflow_executions"]) {
+      const fields = db.prepare(`PRAGMA table_info(${table})`).all();
+      if (!fields.some((field) => field.name === "steps")) db.exec(`ALTER TABLE ${table} ADD COLUMN steps TEXT`);
     }
     db.exec("COMMIT");
   } catch (error) {

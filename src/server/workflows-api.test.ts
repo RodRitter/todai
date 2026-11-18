@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { TaskStore } from "./task-store.ts";
 import { POST as runTask } from "../app/api/tasks/run/route.ts";
-import { GET, PUT } from "../app/api/workflows/route.ts";
+import { GET, PUT, POST as retryWorkflow } from "../app/api/workflows/route.ts";
 
 test("workflow creation, editing and history are validated and workspace scoped over HTTP", async () => {
   const directory = mkdtempSync(join(tmpdir(), "todai-workflow-api-"));
@@ -40,6 +40,30 @@ test("workflow creation, editing and history are validated and workspace scoped 
     assert.equal(execution.status, "Queued");
     assert.equal(GET(request(undefined, other.workspaceId, "?taskId=task")).status, 400);
     assert.equal(GET(new Request("http://localhost/api/workflows")).status, 400);
+
+    const steps = [
+      { id: "one", agentId: "builder", instructions: "Build" },
+      { id: "two", agentId: "builder", instructions: "Review" },
+    ];
+    for (const invalid of [[], [null], [{ ...steps[0], agentId: "missing" }], [steps[0], steps[0]]]) {
+      const response = await PUT(request({ id: "ordered", name: "Ordered", steps: invalid }));
+      assert.equal(response.status, 400);
+      assert.match((await response.json()).error, /step/i);
+    }
+    assert.equal((await PUT(request({ id: "ordered", name: "Ordered", steps }))).status, 200);
+    store.save({ id: "ordered-task", title: "Ordered", description: "", status: "To do", workflowId: "ordered" });
+    store.runTask("ordered-task");
+    const orderedExecution = store.workflowHistory("ordered-task")[0];
+    store.stopTask("ordered-task");
+    const retryRequest = (workspaceId = store.workspaceId) => new Request("http://localhost/api/workflows", {
+      method: "POST", headers: { "X-Todai-Workspace": workspaceId }, body: JSON.stringify({ taskId: "ordered-task", executionId: orderedExecution.id }),
+    });
+    assert.equal((await retryWorkflow(retryRequest(other.workspaceId))).status, 400);
+    assert.equal((await retryWorkflow(retryRequest())).status, 200);
+    assert.equal((await retryWorkflow(retryRequest())).status, 409);
+    assert.equal(store.executionState().paused, true);
+    assert.equal(store.workflowHistory("ordered-task")[0].stepId, "one");
+    store.stopTask("ordered-task");
     store.deleteAgent("builder");
     store.stopTask("task");
     assert.throws(() => store.runTask("task"), /existing agent/);

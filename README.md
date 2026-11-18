@@ -114,3 +114,9 @@ Shared styling conventions and component usage are documented in Storybook under
 ## Contributing
 
 Keep changes focused, add tests for new behavior, and run lint, type checks, and tests before opening a pull request.
+
+### Ordered task workflows
+
+In a task’s **Workflow** tab, create or edit a reusable workflow. Add agent steps, set instructions for each step, and use the up/down controls to order them. Steps connect automatically and execute from top to bottom. Save the workflow and task selection, then **Run** to start a new execution.
+
+Successful steps advance exactly once. The Workflow tab shows persisted step progress, configuration snapshots, supplied prompts, attempts, and results. Failed, interrupted, or stopped executions stay paused. **Retry current step** continues the latest execution using its original configuration and existing workspace files; it preserves completed steps and does not roll back files. **Run** starts a new execution from the beginning. After a server restart, abandoned running steps become interrupted and require explicit retry. Resuming a paused queue alone does not restart stopped tasks; retrying a task does not resume the queue.

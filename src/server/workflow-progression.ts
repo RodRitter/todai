@@ -26,6 +26,7 @@ export type WorkflowProgression =
       createdAt: string;
       workflowExecutionId?: string | null;
       stepInstructions?: string | null;
+      stepId?: string | null;
     }
   | { action: "advance"; column: string; autoRun: boolean };
 
@@ -33,7 +34,7 @@ export type WorkflowProgression =
 export function workflowProgression(context: ProgressionContext): WorkflowProgression {
   const { task, run } = context;
   if (context.event === "feedback-answered") {
-    return { action: "queue", column: task.status, profile: run.profile, kind: run.kind, commentId: run.commentId, replyPlan: run.replyPlan, createdAt: run.createdAt, ...(run.workflowExecutionId ? { workflowExecutionId: run.workflowExecutionId, stepInstructions: run.stepInstructions } : {}) };
+    return { action: "queue", column: task.status, profile: run.profile, kind: run.kind, commentId: run.commentId, replyPlan: run.replyPlan, createdAt: run.createdAt, ...(run.workflowExecutionId ? { workflowExecutionId: run.workflowExecutionId, stepInstructions: run.stepInstructions, stepId: run.stepId } : {}) };
   }
   const { columns, hasQueuedRun } = context;
   if (run.kind && (run.status === "Complete" || (run.status === "Failed" && run.kind === "reply"))) {
