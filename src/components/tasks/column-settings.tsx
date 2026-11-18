@@ -36,7 +36,7 @@ export function ColumnSettings({
         <main className="mx-auto max-w-2xl space-y-8 p-4 md:p-8">
           <TabsList aria-label="Settings sections">
             <TabsTrigger value="general">General</TabsTrigger>
-            {workspaceSettings && <TabsTrigger value="workspaces">Workspaces</TabsTrigger>}
+            {workspaceSettings && <TabsTrigger value="workspaces">Workspace</TabsTrigger>}
             <TabsTrigger value="board">Board</TabsTrigger>
             {executorSettings && <TabsTrigger value="executors">Executors</TabsTrigger>}
           </TabsList>

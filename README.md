@@ -27,12 +27,12 @@ npm run dev
 
 Open [localhost:3000](http://127.0.0.1:3000).
 
-1. In **Settings → Workspaces**, select your workspace directory.
+1. In **Settings → Workspace**, select your workspace directory.
 2. In **Settings → Executors**, check tool status, test connections, and choose a default executor for new agents.
 3. In **Agents**, choose an executor, model, effort, and permissions.
 4. Assign an agent through a column’s settings, then create or move a task into that column. Open the saved task and press **Run** to queue its agent.
 
-Add another named workspace in **Settings → Workspaces → Add workspace**, then switch using the sidebar selector. Each workspace has its own tasks, agents, columns, assignments, and default executor. Selection lives in the browser URL, so separate tabs can work independently. Switching clears unsaved drafts and leaves queued and active runs in their original directories.
+Add another named workspace in **Settings → Workspace → Add workspace**, then switch using the sidebar selector. Each workspace has its own tasks, agents, columns, assignments, and default executor. Selection lives in the browser URL, so separate tabs can work independently. Switching clears unsaved drafts and leaves queued and active runs in their original directories.
 
 Task automation is opt-in. Enable **Auto-run** to start the assigned agent when a task enters a column. Enable **Auto-workflow** to move to the next column after a successful run; the next agent waits for **Run** unless Auto-run is also enabled. Save task edits before pressing Run.
 
@@ -42,7 +42,7 @@ In a task’s Comments section, write a rich text comment and type **@** to sele
 
 The header’s execution indicator shows the active agent, task, and workspace. **Stop current run** terminates the agent and its commands, preserves saved files and history, and pauses the queue across all workspaces. The pause survives app restarts. **Run again** on a stopped task requests a new run using saved work and history; **Resume queue** is a separate action. Other queued requests remain queued, and requests for a stopped task wait until you explicitly run it again.
 
-To change a workspace directory, stop the running agent or use **Pause queue** in the header. Save the directory in **Settings → Workspaces**, then choose **Resume queue**. If queued jobs still reference an old directory, confirm their new destinations; cancelling leaves the queue paused. Explicitly running a stopped task uses the current workspace directory.
+To change a workspace directory, stop the running agent or use **Pause queue** in the header. Save the directory in **Settings → Workspace**, then choose **Resume queue**. If queued jobs still reference an old directory, confirm their new destinations; cancelling leaves the queue paused. Explicitly running a stopped task uses the current workspace directory.
 
 Use **Archive this workspace** in Settings when it has no running or queued jobs. Archived workspaces leave the selector but retain their tasks, history, configuration, and files. Restore them from Settings; when no active workspaces remain, the app offers creation and restoration.
 
