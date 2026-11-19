@@ -11,6 +11,7 @@ import { CreateWorkspace } from "./create-workspace";
 import { ExecutorSettings } from "./executor-settings";
 import { ColumnSettings } from "./column-settings";
 import { AgentLibrary } from "./agent-library";
+import { WorkflowLibrary } from "./workflow-library";
 import { TaskBoard } from "./task-board";
 import type { AgentProfile, ExecutionTool, ExecutorStatus } from "@/domain/column-agent";
 import {
@@ -24,7 +25,7 @@ import {
 export function PersistentWorkspace({
   screen = "board",
 }: {
-  screen?: "board" | "agents" | "settings";
+  screen?: "board" | "agents" | "workflows" | "settings";
 }) {
   const [board, setBoard] = useState<BoardSnapshot | null>(null);
   const [agents, setAgents] = useState<AgentProfile[] | null>(null);
@@ -75,6 +76,7 @@ export function PersistentWorkspace({
       </main>
     );
   const { columns, tasks } = board;
+  if (screen === "workflows") return <WorkflowLibrary agents={agents} columns={columns} />;
   if (screen === "settings")
     return (
       <UrlColumnSettings

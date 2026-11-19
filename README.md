@@ -155,6 +155,8 @@ Each review keeps the attempt and exact artifact revisions it reviewed. Publishi
 
 New tasks show the workspace default workflow and allow an explicit override. With a default configured, create the task, press **Run**, inspect progress, and respond to feedback or approvals when needed.
 
-Open **Set up workflows** during task creation, or the **Workflow** tab on a saved task. Choose **Single agent**, **Implement and review**, or **Plan–implement–review**, then **Create from template**. Select existing agents for each role and resolve any unmapped status milestones. Save the editable workflow; templates never create agent profiles. The iterative templates include bounded review and revision plus final human approval. The planning template also requires approval of the plan before implementation.
+Open **Workflows** in the sidebar to create and edit reusable workflows for the current workspace. Choose **New workflow** to start from scratch, or select **Single agent**, **Implement and review**, or **Plan–implement–review**, then **Create from template**. Select existing agents for each role and resolve any unmapped status milestones. Save the editable workflow; templates never create agent profiles. The iterative templates include bounded review and revision plus final human approval. The planning template also requires approval of the plan before implementation. Workflow setup also remains available during task creation and in a saved task’s **Workflow** tab.
+
+On the Workflows page, choose **Use for new tasks** to set a workspace default, or **Clear workspace default** to remove it.
 
 Select **Use selected workflow for new tasks** to set the workspace default, or **Clear workspace default** to remove it. Defaults affect only newly created tasks; existing tasks and execution snapshots retain their selections. Unavailable defaults display setup guidance and never substitute an unrelated workflow.
