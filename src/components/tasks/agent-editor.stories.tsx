@@ -58,3 +58,15 @@ export const ToolModels: Story = {
     );
   },
 };
+
+export const ApprovalBeforeEdits: Story = {
+  args: { agent: { ...Configured.args!.agent!, requireApprovalBeforeEdits: true } },
+  play: async ({ canvasElement, args }) => {
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    const approval = dialog.getByRole("switch", { name: "Require approval before edits" });
+    await expect(approval).toBeChecked();
+    await userEvent.click(approval);
+    await userEvent.click(dialog.getByRole("button", { name: "Save agent" }));
+    await expect(args.onSave).toHaveBeenCalledWith(expect.objectContaining({ requireApprovalBeforeEdits: false }));
+  },
+};

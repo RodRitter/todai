@@ -16,6 +16,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { notifyOperation } from "@/components/ui/toast";
 import {
@@ -47,6 +48,7 @@ export function AgentEditor({
   const [model, setModel] = useState(agent?.model ?? "");
   const [effort, setEffort] = useState<AgentProfile["effort"]>(agent?.effort ?? "medium");
   const [permissions, setPermissions] = useState<AgentProfile["permissions"]>(agent?.permissions ?? selectedTool.defaultPermissions);
+  const [requireApprovalBeforeEdits, setRequireApprovalBeforeEdits] = useState(agent?.requireApprovalBeforeEdits ?? false);
   const draftId = useRef<string | null>(null);
   const saving = useRef(false);
   const [busy, setBusy] = useState(false);
@@ -59,6 +61,7 @@ export function AgentEditor({
     try {
       draft = parseAgentProfile({
         ...Object.fromEntries(data),
+        requireApprovalBeforeEdits,
         id: agent?.id ?? (draftId.current ??= crypto.randomUUID()),
       });
     } catch (error) {
@@ -217,6 +220,13 @@ export function AgentEditor({
               </NativeSelect>
             </div>
             <p id="agent-permissions-help" className="text-xs text-muted-foreground">{selectedTool.permissionHelp}</p>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Switch id="agent-edit-approval" checked={requireApprovalBeforeEdits} onCheckedChange={setRequireApprovalBeforeEdits} aria-describedby="agent-edit-approval-help" />
+                <Label htmlFor="agent-edit-approval">Require approval before edits</Label>
+              </div>
+              <p id="agent-edit-approval-help" className="text-xs text-muted-foreground">Instruct the agent to propose changes and pause for your approval before editing files. This uses task feedback; filesystem permissions still apply.</p>
+            </div>
             {executorStatuses.filter((status) => status.tool === selectedTool.value && (!status.installed || !status.signedIn)).map((status) => <p key={status.tool} className="text-sm text-muted-foreground">{status.message}</p>)}
             <Link href="/settings?tab=executors" className="text-sm underline">Check executor availability in Settings</Link>
             {error && !error.field && (

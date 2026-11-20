@@ -123,3 +123,35 @@ test("deleting an agent clears assignments while invalid settings leave saved pr
     store.close();
   }
 });
+
+test("edit approval persists and rejects non-boolean configuration", () => {
+  const store = new TaskStore(":memory:");
+  try {
+    const agent = store.saveAgent({ id: "fixer", name: "Fixer", tool: "codex", model: "test", effort: "high", permissions: "workspace-write", instructions: "Fix", requireApprovalBeforeEdits: true });
+    assert.equal(store.listAgents()[0].requireApprovalBeforeEdits, true);
+    assert.throws(() => store.saveAgent({ ...agent, requireApprovalBeforeEdits: "false" }), /approval/);
+    store.saveAgent({ ...agent, requireApprovalBeforeEdits: false });
+    assert.equal(store.listAgents()[0].requireApprovalBeforeEdits, false);
+  } finally { store.close(); }
+});
+
+test("existing Bug fixer profiles migrate once and keep later approval choices", async () => {
+  const { DatabaseSync } = await import("node:sqlite");
+  const directory = mkdtempSync(join(tmpdir(), "todai-approval-migration-"));
+  const path = join(directory, "tasks.sqlite");
+  let store = new TaskStore(path);
+  const legacyApproval = " Mandatory: before any repair or file edit, issue the skill’s structured feedback_request and stop. Proceed only after an explicit affirmative Human answer to that specific repair proposal; automation and column entry are not approval.";
+  const agent = store.saveAgent({ id: "fixer", name: "Bug fixer", tool: "codex", model: "test", effort: "high", permissions: "workspace-write", instructions: "Follow the Fix role." + legacyApproval });
+  store.close();
+  const db = new DatabaseSync(path);
+  db.exec("ALTER TABLE agents DROP COLUMN requireApprovalBeforeEdits");
+  db.close();
+  store = new TaskStore(path);
+  try {
+    assert.deepEqual(store.listAgents(), [{ ...agent, instructions: "Follow the Fix role.", requireApprovalBeforeEdits: true }]);
+    store.saveAgent({ ...store.listAgents()[0], requireApprovalBeforeEdits: false });
+    store.close();
+    store = new TaskStore(path);
+    assert.equal(store.listAgents()[0].requireApprovalBeforeEdits, false);
+  } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
+});

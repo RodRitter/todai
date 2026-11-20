@@ -210,6 +210,7 @@ function CommentInput({ agents, onPost, agentStatus }: { agents: AgentProfile[];
       disabled={busy || pendingRun}
       agents={agents}
       artifacts
+      onArtifactSelect={(artifact) => setAttachments((items) => [...items.filter((item) => item.id !== artifact.id), artifact])}
       actions={
         <PromptSend disabled={busy || pendingRun || !body.trim()} onClick={() => void submit()} aria-label={busy ? "Sending message" : "Send message"}>
           {busy ? <LoaderCircle className="animate-spin motion-reduce:animate-none" /> : <ArrowUp />}

@@ -513,6 +513,15 @@ export class TaskStore {
           Number(task.autoWorkflow ?? previous?.autoWorkflow ?? false),
           Number(task.autoRun ?? previous?.autoRun ?? false),
         );
+      // Description references become task attachments in the same transaction,
+      // including artifacts created while composing a task that has no ID yet.
+      for (const ref of artifactMentions(task.description)) {
+        if (!this.db.prepare("SELECT revisionId FROM artifact_revisions WHERE id = ? AND revisionId = ? AND workspaceId = workspace_id()")
+          .get(ref.artifactId, ref.revisionId)) {
+          throw new Error("Choose a valid artifact revision reference.");
+        }
+        this.db.prepare("INSERT OR IGNORE INTO task_artifacts (taskId, artifactId) VALUES (?, ?)").run(task.id, ref.artifactId);
+      }
       if (previous?.agentStatus !== "Stopped" && (!previous || previous.status !== task.status || movedBoard) && (task.autoRun ?? previous?.autoRun ?? false)) {
         this.queueAgent(task.id, task.status);
       }
@@ -944,9 +953,9 @@ export class TaskStore {
   listAgents(): AgentProfile[] {
     return (
       this.db
-        .prepare("SELECT id, name, tool, model, effort, instructions, permissions FROM agents WHERE agents.workspaceId = workspace_id() ORDER BY rowid")
+        .prepare("SELECT id, name, tool, model, effort, instructions, permissions, requireApprovalBeforeEdits FROM agents WHERE agents.workspaceId = workspace_id() ORDER BY rowid")
         .all() as unknown as AgentProfile[]
-    ).map((agent) => ({ ...agent }));
+    ).map((agent) => ({ ...agent, requireApprovalBeforeEdits: Boolean(agent.requireApprovalBeforeEdits) }));
   }
 
   saveAgent(input: unknown): AgentProfile {
@@ -955,10 +964,10 @@ export class TaskStore {
     this.assertOwnership("agents", agent.id);
     const result = this.db
       .prepare(
-        `INSERT INTO agents (workspaceId, id, name, tool, model, effort, instructions, permissions)
-      VALUES (workspace_id(), ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET
+        `INSERT INTO agents (workspaceId, id, name, tool, model, effort, instructions, permissions, requireApprovalBeforeEdits)
+      VALUES (workspace_id(), ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET
       name=excluded.name, tool=excluded.tool, model=excluded.model, effort=excluded.effort,
-      instructions=excluded.instructions, permissions=excluded.permissions
+      instructions=excluded.instructions, permissions=excluded.permissions, requireApprovalBeforeEdits=excluded.requireApprovalBeforeEdits
       WHERE agents.workspaceId = excluded.workspaceId`,
       )
       .run(
@@ -969,6 +978,7 @@ export class TaskStore {
         agent.effort,
         agent.instructions,
         agent.permissions,
+        agent.requireApprovalBeforeEdits ? 1 : 0,
       );
     if (!result.changes) throw new WorkspaceOwnershipError("This agent belongs to another workspace.");
     return agent;

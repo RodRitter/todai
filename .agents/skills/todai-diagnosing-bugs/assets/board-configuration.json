@@ -27,7 +27,8 @@
       "model": "gpt-6.1-sol",
       "effort": "high",
       "permissions": "workspace-write",
-      "instructions": "Read the local skill at {{SKILL_PATH}} and follow its Fix role. Use prior task comments as evidence and finish with the role\u2019s required handover. Mandatory: before any repair or file edit, issue the skill\u2019s structured feedback_request and stop. Proceed only after an explicit affirmative Human answer to that specific repair proposal; automation and column entry are not approval."
+      "instructions": "Read the local skill at {{SKILL_PATH}} and follow its Fix role. Use prior task comments as evidence and finish with the role\u2019s required handover.",
+      "requireApprovalBeforeEdits": true
     }
   ],
   "columns": [

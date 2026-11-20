@@ -1,5 +1,6 @@
 "use client";
 
+import type { AgentProfile } from "@/domain/column-agent";
 import { useState } from "react";
 import { EditorSurface, editorLabelClassName } from "@/components/ui/editor-surface";
 import { Markdown } from "@/components/ui/markdown";
@@ -9,7 +10,9 @@ export function DescriptionField({
   value,
   disabled,
   onChange,
+  agents = [],
 }: {
+  agents?: AgentProfile[];
   value: string;
   disabled: boolean;
   onChange: (description: string) => void;
@@ -30,6 +33,8 @@ export function DescriptionField({
       />
       {isEditing ? (
           <DescriptionEditor
+            agents={agents}
+            artifacts
             controlsOnFocus
             value={value}
             disabled={disabled}

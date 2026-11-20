@@ -42,10 +42,20 @@ export const EditWithoutDelete: Story = {
 };
 export const OpenCreate: Story = {
   args: { open: true },
+  play: async ({ canvasElement }) => {
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await expect(dialog.queryByRole("tablist")).not.toBeInTheDocument();
+    await expect(dialog.queryByRole("tab", { name: "Import JIRA Ticket" })).not.toBeInTheDocument();
+  },
   parameters: { docs: { disable: true } },
 };
 export const OpenEdit: Story = {
   args: { open: true, task: exampleTasks[2] },
+  play: async ({ canvasElement }) => {
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await expect(dialog.getByRole("tab", { name: "Activity" })).toBeVisible();
+    await expect(dialog.queryByRole("tab", { name: "Import JIRA Ticket" })).not.toBeInTheDocument();
+  },
   parameters: { docs: { disable: true } },
 };
 export const SaveNewTask: Story = {
@@ -416,48 +426,6 @@ export const InlineTitle: Story = {
 };
 
 const importAgent = { id: "reader", name: "Reader", tool: "codex" as const, model: "gpt-6.1-sol", effort: "low" as const, permissions: "read-only" as const, instructions: "" };
-export const ImportJiraTicket: Story = {
-  args: { open: true, agents: [importAgent], importJiraTicket: fn(async () => ({ title: "PROJ-123: Ticket title", description: "Imported acceptance criteria" })) },
-  play: async ({ canvasElement, args }) => {
-    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
-    await userEvent.click(dialog.getByRole("tab", { name: "Import JIRA Ticket" }));
-    await userEvent.type(dialog.getByLabelText("Jira ticket URL"), "https://team.atlassian.net/browse/PROJ-123");
-    await userEvent.click(dialog.getByRole("button", { name: "Import ticket details" }));
-    await waitFor(() => expect(dialog.getByRole("tab", { name: "Detail" })).toHaveAttribute("data-state", "active"));
-    await expect(dialog.getByRole("button", { name: "Edit title" })).toHaveTextContent("PROJ-123");
-    await expect(dialog.getByLabelText("Description")).toHaveTextContent("Imported acceptance criteria");
-    await expect(args.onSave).not.toHaveBeenCalled();
-    await userEvent.click(dialog.getByRole("tab", { name: "Activity" }));
-    await expect(dialog.getByText("Create the task to start its activity and comments.")).toBeVisible();
-    await userEvent.click(dialog.getByRole("button", { name: "Create task" }));
-    await expect(args.onSave).toHaveBeenCalledWith(expect.objectContaining({ title: "PROJ-123: Ticket title", description: "Imported acceptance criteria", autoRun: false, autoWorkflow: false }));
-  },
-};
-export const JiraImportFailure: Story = {
-  args: { open: true, agents: [importAgent], importJiraTicket: fn(async () => { throw new Error("Browser connection unavailable"); }) },
-  play: async ({ canvasElement }) => {
-    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
-    await userEvent.type(dialog.getByLabelText("Title"), "Keep my draft");
-    await userEvent.click(dialog.getByRole("tab", { name: "Import JIRA Ticket" }));
-    await userEvent.type(dialog.getByLabelText("Jira ticket URL"), "https://team.atlassian.net/browse/PROJ-123");
-    await userEvent.click(dialog.getByRole("button", { name: "Import ticket details" }));
-    await expect(await dialog.findByRole("alert")).toHaveTextContent("Browser connection unavailable");
-    await userEvent.click(dialog.getByRole("tab", { name: "Detail" }));
-    await expect(dialog.getByRole("button", { name: "Edit title" })).toHaveTextContent("Keep my draft");
-  },
-};
-export const JiraImportPending: Story = {
-  args: { open: true, agents: [importAgent], importJiraTicket: () => new Promise(() => {}) },
-  play: async ({ canvasElement }) => {
-    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
-    await userEvent.click(dialog.getByRole("tab", { name: "Import JIRA Ticket" }));
-    await userEvent.type(dialog.getByLabelText("Jira ticket URL"), "https://team.atlassian.net/browse/PROJ-123");
-    await userEvent.click(dialog.getByRole("button", { name: "Import ticket details" }));
-    await expect(dialog.getByRole("button", { name: "Importing…" })).toBeDisabled();
-    await expect(dialog.getByRole("button", { name: "Close" })).toBeDisabled();
-  },
-};
-
 export const MoveBetweenBoards: Story = {
   args: { open: true, boardId: "product", task: { ...exampleTasks[0], boardId: "product" }, boards: [
     { id: "product", name: "Product", columns: ["To do", "In progress", "In review", "Done"] },
@@ -471,4 +439,72 @@ export const MoveBetweenBoards: Story = {
     await userEvent.click(dialog.getByRole("button", { name: "Save changes" }));
     await expect(args.onSave).toHaveBeenCalledWith(expect.objectContaining({ boardId: "research", status: "Ideas" }));
   },
+};
+
+const descriptionArtifact = { id: "brief", revisionId: "r1", revisionNumber: 1, title: "Brief", type: "markdown", creator: "You" };
+const newDescriptionArtifact = { ...descriptionArtifact, id: "plan", title: "Plan" };
+const referenceMocks = () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async (input, options) => {
+    const url = String(input);
+    if (url.startsWith("/api/artifacts")) {
+      if (options?.method === "POST") return Response.json(newDescriptionArtifact);
+      return Response.json(url.includes("search=Plan") ? [] : [descriptionArtifact]);
+    }
+    if (url.startsWith("/api/references")) {
+      const skill = url.includes("kind=skill");
+      return Response.json({ references: [{ kind: skill ? "skill" : "file", label: skill ? "$review" : "src/example.ts", path: skill ? "/skills/review" : "/src/example.ts", detail: "Workspace reference" }] });
+    }
+    return original(input, options);
+  };
+  return () => { globalThis.fetch = original; };
+};
+
+export const DescriptionReferences: Story = {
+  args: { open: true, agents: [importAgent] },
+  beforeEach: referenceMocks,
+  play: async ({ canvasElement, args }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    const taskDialog = within(await page.findByRole("dialog"));
+    if (args.task) await userEvent.click(taskDialog.getByRole("button", { name: "Edit description" }));
+    else await userEvent.type(taskDialog.getByLabelText("Title"), "Referenced task");
+    const editor = taskDialog.getByRole("textbox", { name: "Description" });
+    await userEvent.click(editor);
+    await userEvent.keyboard("{End} ");
+    for (const [tag, option, label, href] of [
+      ["@Reader", /@Reader/, "@Reader", "#agent/reader"],
+      ["$review", /\$review/, "$review", "/skills/review"],
+      ["/src", /src\/example.ts/, "src/example.ts", "/src/example.ts"],
+      ["#Brief", /Brief Revision/, "Brief", "#artifact/brief/r1"],
+    ] as const) {
+      await userEvent.keyboard(tag);
+      await taskDialog.findByRole("option", { name: option });
+      await userEvent.keyboard("{Enter}");
+      await expect(taskDialog.getByRole("link", { name: label })).toHaveAttribute("href", href);
+    }
+    await userEvent.keyboard("#Plan");
+    await taskDialog.findByRole("option", { name: "Create artifact “Plan”" });
+    await userEvent.keyboard("{Enter}");
+    const artifactDialog = within(await page.findByRole("dialog", { name: "Create artifact" }));
+    await userEvent.click(artifactDialog.getByRole("button", { name: "Cancel" }));
+    await expect(editor).toHaveTextContent("#Plan");
+    await expect(args.onSave).not.toHaveBeenCalled();
+    await userEvent.click(editor);
+    await userEvent.keyboard("{End}x{Backspace}");
+    await taskDialog.findByRole("option", { name: "Create artifact “Plan”" });
+    await userEvent.keyboard("{Enter}");
+    const reopened = within(await page.findByRole("dialog", { name: "Create artifact" }));
+    await userEvent.click(reopened.getByRole("textbox", { name: "Document content" }));
+    await userEvent.keyboard("Plan details");
+    await userEvent.click(reopened.getByRole("button", { name: "Save and attach" }));
+    await expect(await taskDialog.findByRole("link", { name: "Plan" })).toHaveAttribute("href", "#artifact/plan/r1");
+    await expect(args.onSave).not.toHaveBeenCalled();
+    await userEvent.click(taskDialog.getByRole("button", { name: args.task ? "Save changes" : "Create task" }));
+    await waitFor(() => expect(args.onSave).toHaveBeenCalledWith(expect.objectContaining({ description: expect.stringContaining("#artifact/plan/r1") })));
+  },
+};
+
+export const EditDescriptionReferences: Story = {
+  ...DescriptionReferences,
+  args: { ...DescriptionReferences.args, task: { ...exampleTasks[2], description: "" } },
 };

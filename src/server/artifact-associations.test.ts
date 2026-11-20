@@ -120,3 +120,19 @@ test("agent comments track canonical citations while code examples remain plain 
     assert.deepEqual(f.tasks.list()[0].comments![0].artifacts, [{ artifactId: artifact.id, revisionId: artifact.revisionId }]);
   } finally { f.close(); }
 });
+
+test("new and edited task descriptions attach cited artifacts on save", () => {
+  const f = fixture();
+  try {
+    const first = f.artifacts.create({ title: "Brief", type: "markdown", content: "Brief", creator: "You" });
+    const second = f.artifacts.create({ title: "Plan", type: "markdown", content: "Plan", creator: "You" });
+    const description = `[Brief](#artifact/${first.id}/${first.revisionId}) [@Agent](#agent/agent) [skill](/skills/test) [file](/src/test)`;
+    const task = f.tasks.save({ id: "draft", title: "Draft", description, status: "To do", agentStatus: "Not started" });
+    assert.equal(task.description, description);
+    assert.deepEqual(f.artifacts.forTask(task.id).map((link) => link.artifact.id), [first.id]);
+    f.tasks.save({ ...task, description: `${description} [Plan](#artifact/${second.id}/${second.revisionId})` });
+    assert.deepEqual(f.artifacts.forTask(task.id).map((link) => link.artifact.id).sort(), [first.id, second.id].sort());
+    assert.throws(() => f.tasks.save({ ...task, title: "Invalid", description: "[Missing](#artifact/missing/revision)" }), /revision/);
+    assert.equal(f.tasks.list()[0].title, "Draft");
+  } finally { f.close(); }
+});

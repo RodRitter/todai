@@ -1,5 +1,7 @@
 "use client";
 
+import { ArtifactCreateDialog } from "@/components/artifacts/artifact-create-dialog";
+import { Button } from "@/components/ui/button";
 import { workspaceFetch } from "@/lib/workspace-fetch";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -31,20 +33,24 @@ function referenceMatch(editor: Editor, allowAgents: boolean, allowArtifacts: bo
   return { from: $from.pos - match[2].length - 1, to: $from.pos, kind: match[1] === "#" ? "artifact" : match[1] === "$" ? "skill" : match[1] === "@" ? "agent" : "file", query: match[2] };
 }
 
-export function DescriptionEditor({ value, onChange, disabled = false, autoFocus = false, agents, artifacts = false, label = "Description", id = "task-description", actions, footer, toolbarActions, controlsOnFocus = false, compact = false, variant = "default", onSubmit }: {
+export function DescriptionEditor({ value, onChange, disabled = false, autoFocus = false, agents, artifacts = false, onArtifactSelect, label = "Description", id = "task-description", actions, footer, toolbarActions, controlsOnFocus = false, compact = false, variant = "default", onSubmit }: {
   variant?: "default" | "prompt"; onSubmit?: () => void;
   value: string; onChange: (value: string) => void; disabled?: boolean; autoFocus?: boolean;
-  agents?: AgentProfile[]; artifacts?: boolean; label?: string; id?: string; actions?: ReactNode; footer?: ReactNode; toolbarActions?: ReactNode; controlsOnFocus?: boolean; compact?: boolean;
+  agents?: AgentProfile[]; artifacts?: boolean; onArtifactSelect?: (artifact: Artifact) => void; label?: string; id?: string; actions?: ReactNode; footer?: ReactNode; toolbarActions?: ReactNode; controlsOnFocus?: boolean; compact?: boolean;
 }) {
+  const [creating, setCreating] = useState<Match | null>(null);
   const [match, setMatch] = useState<Match | null>(null);
-  const [response, setResponse] = useState<{ key: string; items: TaskReference[] }>({ key: "", items: [] });
+  const [response, setResponse] = useState<{ key: string; items: TaskReference[]; artifacts?: Artifact[] }>({ key: "", items: [] });
   const matchKey = JSON.stringify(match);
   const agentMode = agents !== undefined && match?.kind === "agent";
   const results: TaskReference[] = agentMode
     ? agents.filter((agent) => agent.name.toLowerCase().includes(match.query.toLowerCase())).map((agent) => ({ kind: "file", label: `@${agent.name}`, path: agentMentionPath(agent.id), detail: agent.instructions }))
     : response.key === matchKey ? response.items : [];
+  const canCreate = match?.kind === "artifact" && response.key === matchKey;
+  const optionCount = results.length + (canCreate ? 1 : 0);
   const [status, setStatus] = useState("Loading references…");
   const [selected, setSelected] = useState(0);
+  const activeIndex = selected < optionCount ? selected : 0;
   const keyboard = useRef<(event: KeyboardEvent) => boolean>(() => false);
   const editor = useEditor({
     extensions: [StarterKit.configure({ link: { openOnClick: false } }), Markdown, TableKit, TaskList, TaskItem.configure({ nested: true }), Image],
@@ -116,7 +122,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
           ? { references: (payload as Artifact[]).map((artifact) => ({ kind: "artifact", label: artifact.title, path: artifactMentionPath({ artifactId: artifact.id, revisionId: artifact.revisionId }), detail: `Revision ${artifact.revisionNumber} · ${artifact.type}` })) }
           : payload;
         if (abort.signal.aborted) return;
-        setResponse({ key: JSON.stringify(match), items: data.references });
+        setResponse({ key: JSON.stringify(match), items: data.references, artifacts: match.kind === "artifact" ? payload : undefined });
         setStatus(data.references.length ? "" : "No matching references.");
       } catch {
         if (!abort.signal.aborted) setStatus("Could not load references. Type again to retry.");
@@ -125,12 +131,19 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
     return () => { clearTimeout(timer); abort.abort(); };
   }, [match, disabled, agentMode]);
 
-  function insert(reference: TaskReference) {
-    if (!editor || !match || disabled) return;
-    editor.chain().focus().insertContentAt({ from: match.from, to: match.to }, [
+  function insert(reference: TaskReference, range = match) {
+    if (!editor || !range || disabled) return;
+    editor.chain().focus().insertContentAt({ from: range.from, to: range.to }, [
       { type: "text", text: reference.label, marks: [{ type: "link", attrs: { href: reference.path } }] },
       { type: "text", text: " " },
     ]).run();
+    setMatch(null);
+    const artifact = response.artifacts?.find((item) => artifactMentionPath({ artifactId: item.id, revisionId: item.revisionId }) === reference.path);
+    if (artifact) onArtifactSelect?.(artifact);
+  }
+  function create() {
+    if (!match || disabled) return;
+    setCreating(match);
     setMatch(null);
   }
   useEffect(() => {
@@ -141,19 +154,24 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
       return false;
     }
     if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setMatch(null); return true; }
-    if (results.length && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+    if (optionCount && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
       event.preventDefault();
-      setSelected((index) => (index + (event.key === "ArrowDown" ? 1 : -1) + results.length) % results.length);
+      setSelected((index) => (index + (event.key === "ArrowDown" ? 1 : -1) + optionCount) % optionCount);
       return true;
     }
-    if (results.length && (event.key === "Enter" || event.key === "Tab")) {
-      event.preventDefault(); insert(results[selected] ?? results[0]); return true;
+    if (optionCount && (event.key === "Enter" || event.key === "Tab")) {
+      event.preventDefault();
+      if (activeIndex === results.length) create();
+      else insert(results[activeIndex]);
+      return true;
     }
+    if (match.kind === "artifact" && event.key === "Enter") { event.preventDefault(); return true; }
     return false;
   };
   });
 
   return (
+    <>
     <EditorSurface
       className="group/editor"
       variant={variant}
@@ -208,15 +226,24 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
             {agentMode && !results.length && <p role="status" className="p-2 text-xs text-muted-foreground">No matching agents.</p>}
             {!agentMode && (response.key !== matchKey || status) && <p role="status" className="p-2 text-xs text-muted-foreground">{response.key !== matchKey && !status.startsWith("Could not") ? "Loading references…" : status}</p>}
             {results.map((reference, index) => (
-              <button key={reference.path} type="button" role="option" aria-selected={index === (selected < results.length ? selected : 0)} className={`block w-full rounded px-2 py-1.5 text-left text-sm ${index === selected ? "bg-accent" : "hover:bg-muted"}`} onMouseDown={(event) => event.preventDefault()} onClick={() => insert(reference)}>
+              <button key={reference.path} type="button" role="option" aria-selected={index === activeIndex} className={`block w-full rounded px-2 py-1.5 text-left text-sm ${index === activeIndex ? "bg-accent" : "hover:bg-muted"}`} onMouseDown={(event) => event.preventDefault()} onClick={() => insert(reference)}>
                 <span className="block font-medium">{reference.label}</span>
                 <span className="block truncate text-xs text-muted-foreground">{reference.detail}</span>
               </button>
             ))}
+            {canCreate && <Button type="button" variant={activeIndex === results.length ? "secondary" : "ghost"} align="start" className="w-full" role="option" aria-selected={activeIndex === results.length} onMouseDown={(event) => event.preventDefault()} onClick={create}>
+              {match.query ? `Create artifact “${match.query}”` : "Create new artifact"}
+            </Button>}
           </div>
         )}
       </div>
       {footer && <div className="space-y-2 [&:not(:empty)]:mt-3">{footer}</div>}
     </EditorSurface>
+    {creating && <ArtifactCreateDialog title={creating.query} onCancel={() => setCreating(null)} onRestoreFocus={() => { editor?.commands.focus(); setMatch(null); }} onSave={(artifact) => {
+      insert({ kind: "artifact", label: artifact.title, path: artifactMentionPath({ artifactId: artifact.id, revisionId: artifact.revisionId }), detail: "" }, creating);
+      onArtifactSelect?.(artifact);
+      setCreating(null);
+    }} />}
+    </>
   );
 }

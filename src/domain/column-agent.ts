@@ -48,6 +48,7 @@ export type AgentProfile = {
   model: string;
   effort: (typeof executionTools)[number]["efforts"][number];
   instructions: string;
+  requireApprovalBeforeEdits?: boolean;
   permissions: (typeof executionTools)[number]["permissions"][number]["value"];
 };
 
@@ -89,6 +90,8 @@ export function parseAgentProfile(input: unknown): AgentProfile {
     throw new AgentValidationError(
       "Enter instructions as text, or leave them empty.",
     );
+  if (agent.requireApprovalBeforeEdits !== undefined && typeof agent.requireApprovalBeforeEdits !== "boolean")
+    throw new AgentValidationError("Choose whether edits require approval.");
   return {
     id: agent.id,
     name: agent.name.trim(),
@@ -96,6 +99,7 @@ export function parseAgentProfile(input: unknown): AgentProfile {
     model: agent.model.trim(),
     effort: agent.effort,
     instructions: agent.instructions,
+    requireApprovalBeforeEdits: agent.requireApprovalBeforeEdits ?? false,
     permissions: agent.permissions,
   };
 }

@@ -130,6 +130,12 @@ export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
     migrateWorkspaceOwnership(db, !fresh || seedWorkspace);
     migrateBoards(db);
     initializeArtifactSchema(db);
+    if (!db.prepare("PRAGMA table_info(agents)").all().some((column) => column.name === "requireApprovalBeforeEdits")) {
+      db.exec("ALTER TABLE agents ADD COLUMN requireApprovalBeforeEdits INTEGER NOT NULL DEFAULT 0");
+      // Move the installed Bug fixer policy into the reusable setting once.
+      const legacyApproval = " Mandatory: before any repair or file edit, issue the skill’s structured feedback_request and stop. Proceed only after an explicit affirmative Human answer to that specific repair proposal; automation and column entry are not approval.";
+      db.prepare("UPDATE agents SET requireApprovalBeforeEdits = 1, instructions = replace(instructions, ?, '') WHERE name = 'Bug fixer'").run(legacyApproval);
+    }
     db.exec("COMMIT");
   } catch (error) {
     db.close();
