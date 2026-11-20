@@ -1,3 +1,4 @@
+import { migrateBoards } from "./board-schema.ts";
 import { initializeArtifactSchema } from "./artifact-schema.ts";
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
@@ -127,6 +128,7 @@ export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
       db.exec("DROP TABLE column_agents");
     }
     migrateWorkspaceOwnership(db, !fresh || seedWorkspace);
+    migrateBoards(db);
     initializeArtifactSchema(db);
     db.exec("COMMIT");
   } catch (error) {

@@ -30,3 +30,15 @@ export const CompactDeletion: Story = {
   },
 };
 export const SavedColumnDeletion: Story = { ...CompactDeletion, args: { compact: false } };
+
+export const DenseRows: Story = {
+  args: {
+    initialColumns: ["Backlog", "In progress", "Ready for review", "Done"],
+    initialTaskCounts: { Backlog: 12, "In progress": 3, "Ready for review": 2 },
+  },
+  decorators: [(Story) => <div className="max-w-2xl"><Story /></div>],
+};
+export const NarrowLongNames: Story = {
+  args: { initialColumns: ["Research and validation before implementation", "Done"] },
+  decorators: [(Story) => <div className="max-w-80"><Story /></div>],
+};

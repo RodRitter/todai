@@ -62,8 +62,9 @@ export class TaskStore {
 
   readonly workspaceId: string;
   readonly databasePath: string;
+  readonly boardId: string;
 
-  constructor(path: string, workspaceId?: string, options: { seedWorkspace?: boolean } = {}) {
+  constructor(path: string, workspaceId?: string, options: { seedWorkspace?: boolean; boardId?: string } = {}) {
     this.databasePath = path;
     mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
@@ -73,8 +74,12 @@ export class TaskStore {
       this.db.close();
       throw new WorkspaceOwnershipError("Choose an existing workspace. Archived workspaces must be restored first.");
     }
+    this.boardId = options.boardId ?? this.workspaceId;
     // The SQL scope belongs to this connection and never follows a selected UI view.
     this.db.function("workspace_id", () => this.workspaceId);
+    this.db.function("board_id", () => this.boardId);
+    try { if (options.boardId) this.requireBoard(options.boardId); }
+    catch (error) { this.db.close(); throw error; }
   }
 
   listWorkspaces(): Workspace[] {
@@ -106,8 +111,9 @@ export class TaskStore {
     const workspace = { id: randomUUID(), name: name.trim(), path: validateWorkspace(path) };
     return this.transaction(() => {
       this.db.prepare("INSERT INTO workspaces (id, name, path) VALUES (?, ?, ?)").run(workspace.id, workspace.name, workspace.path);
+      this.db.prepare("INSERT INTO boards (id, workspaceId, name) VALUES (?, ?, 'Board')").run(workspace.id, workspace.id);
       for (const [position, column] of setup.columns.entries()) {
-        this.db.prepare("INSERT INTO board_columns (id, name, position, workspaceId) VALUES (?, ?, ?, ?)").run(randomUUID(), column, position, workspace.id);
+        this.db.prepare("INSERT INTO board_columns (id, name, position, workspaceId, boardId) VALUES (?, ?, ?, ?, ?)").run(randomUUID(), column, position, workspace.id, workspace.id);
       }
       for (const id of setup.starterAgentIds) {
         const agent = starterAgentProfile(id, randomUUID());
@@ -160,9 +166,51 @@ export class TaskStore {
     });
   }
 
+  private requireBoard(id: string) {
+    if (!this.db.prepare("SELECT id FROM boards WHERE id = ? AND workspaceId = workspace_id()").get(id))
+      throw new ColumnValidationError("Choose an existing board in this workspace.");
+  }
+
+  listBoards(): import("../domain/task.ts").Board[] {
+    return this.db.prepare("SELECT id, name FROM boards WHERE workspaceId = workspace_id() ORDER BY rowid").all()
+      .map((row) => ({ id: row.id as string, name: row.name as string, columns: this.listColumns(row.id as string) }));
+  }
+
+  saveBoard(name: unknown, id?: string) {
+    return this.transaction(() => {
+      this.assertWorkspaceActive();
+      if (typeof name !== "string" || !name.trim() || name.trim().length > 80)
+        throw new ColumnValidationError("Enter a board name between 1 and 80 characters.");
+      if (id) this.requireBoard(id);
+      if (this.listBoards().some((board) => board.id !== id && board.name.toLowerCase() === name.trim().toLowerCase()))
+        throw new ColumnValidationError("A board with that name already exists.");
+      const boardId = id ?? randomUUID();
+      if (id) this.db.prepare("UPDATE boards SET name = ? WHERE id = ?").run(name.trim(), id);
+      else {
+        this.db.prepare("INSERT INTO boards (id, workspaceId, name) VALUES (?, workspace_id(), ?)").run(boardId, name.trim());
+        for (const [position, column] of ["To do", "In progress", "In review", "Done"].entries())
+          this.db.prepare("INSERT INTO board_columns (id, workspaceId, boardId, name, position) VALUES (?, workspace_id(), ?, ?, ?)").run(randomUUID(), boardId, column, position);
+      }
+      return this.listBoards().find((board) => board.id === boardId)!;
+    });
+  }
+
+  deleteBoard(id: string) {
+    return this.transaction(() => {
+      this.assertWorkspaceActive();
+      this.requireBoard(id);
+      if (id === this.workspaceId) throw new ColumnValidationError("Keep the original board as the default board.");
+      if (this.db.prepare("SELECT id FROM tasks WHERE boardId = ? LIMIT 1").get(id))
+        throw new ColumnValidationError("Move all tasks to another board before deleting this board.");
+      this.db.prepare("DELETE FROM column_assignments WHERE boardId = ?").run(id);
+      this.db.prepare("DELETE FROM board_columns WHERE boardId = ?").run(id);
+      this.db.prepare("DELETE FROM boards WHERE id = ?").run(id);
+    });
+  }
+
   boardSnapshot() {
     return this.transaction(() => ({
-      tasks: this.list(),
+      tasks: this.list().filter((task) => task.boardId === this.boardId),
       columns: this.listColumns(),
       assignments: this.listColumnAgents(),
     }));
@@ -170,7 +218,7 @@ export class TaskStore {
 
   exportConfiguration(): Configuration {
     return this.transaction(() => {
-      const columns = this.db.prepare("SELECT id, name FROM board_columns WHERE board_columns.workspaceId = workspace_id() ORDER BY position").all() as { id: string; name: string }[];
+      const columns = this.db.prepare("SELECT id, name FROM board_columns WHERE board_columns.workspaceId = workspace_id() AND board_columns.boardId = board_id() ORDER BY position").all() as { id: string; name: string }[];
       return {
         format: "todai-configuration", version: 1,
         agents: this.listAgents(), columns: columns.map((column) => ({ ...column })),
@@ -191,14 +239,18 @@ export class TaskStore {
     if (!data.agents.length && !data.columns.length)
       throw new ConfigurationValidationError("Select at least one agent or column.");
     return this.transaction(() => {
-      if ((columnMode === "replace" || conflictMode === "overwrite") && data.columns.length && this.db.prepare("SELECT id FROM runs WHERE runs.workspaceId = workspace_id() AND status IN ('Queued', 'Running') LIMIT 1").get())
+      if ((columnMode === "replace" || conflictMode === "overwrite") && data.columns.length && this.db.prepare("SELECT id FROM runs WHERE runs.workspaceId = workspace_id() AND taskId IN (SELECT id FROM tasks WHERE boardId = board_id()) AND status IN ('Queued', 'Running') LIMIT 1").get())
         throw new ConfigurationValidationError("Wait for queued and active runs to finish before replacing or overwriting columns.");
       if (columnMode === "replace" && data.columns.length) {
-        this.db.exec("DELETE FROM column_assignments WHERE workspaceId = workspace_id(); DELETE FROM board_columns WHERE workspaceId = workspace_id();");
+        this.db.exec("DELETE FROM column_assignments WHERE workspaceId = workspace_id() AND boardId = board_id(); DELETE FROM board_columns WHERE workspaceId = workspace_id() AND boardId = board_id();");
       }
       if (conflictMode === "overwrite") {
         for (const agent of data.agents) this.assertOwnership("agents", agent.id);
-        for (const column of data.columns) this.assertOwnership("board_columns", column.id);
+        for (const column of data.columns) {
+          this.assertOwnership("board_columns", column.id);
+          const existing = this.db.prepare("SELECT boardId FROM board_columns WHERE id = ?").get(column.id);
+          if (existing && existing.boardId !== this.boardId) throw new ColumnValidationError("This column belongs to another board. Import a copy instead.");
+        }
       }
       const agentIds = new Map<string, string>();
       for (const agent of data.agents) {
@@ -209,7 +261,7 @@ export class TaskStore {
       const columnNames = new Map<string, string>();
       const existing = this.listColumns();
       for (const column of data.columns) {
-        const previous = conflictMode === "overwrite" ? this.db.prepare("SELECT name FROM board_columns WHERE board_columns.workspaceId = workspace_id() AND id = ?").get(column.id)?.name as string | undefined : undefined;
+        const previous = conflictMode === "overwrite" ? this.db.prepare("SELECT name FROM board_columns WHERE board_columns.workspaceId = workspace_id() AND board_columns.boardId = board_id() AND id = ?").get(column.id)?.name as string | undefined : undefined;
         let name = column.name;
         let suffix = 2;
         while (existing.some((item) => item !== previous && item.toLowerCase() === name.toLowerCase())) {
@@ -217,12 +269,12 @@ export class TaskStore {
           name = column.name.slice(0, 80 - ending.length) + ending;
         }
         if (previous !== undefined) {
-          this.db.prepare("DELETE FROM column_assignments WHERE column_assignments.workspaceId = workspace_id() AND column = ?").run(previous);
-          this.db.prepare("UPDATE board_columns SET name = ? WHERE board_columns.workspaceId = workspace_id() AND id = ?").run(name, column.id);
-          this.db.prepare("UPDATE tasks SET status = ? WHERE tasks.workspaceId = workspace_id() AND status = ?").run(name, previous);
+          this.db.prepare("DELETE FROM column_assignments WHERE column_assignments.workspaceId = workspace_id() AND column_assignments.boardId = board_id() AND column = ?").run(previous);
+          this.db.prepare("UPDATE board_columns SET name = ? WHERE board_columns.workspaceId = workspace_id() AND board_columns.boardId = board_id() AND id = ?").run(name, column.id);
+          this.db.prepare("UPDATE tasks SET status = ? WHERE tasks.workspaceId = workspace_id() AND tasks.boardId = board_id() AND status = ?").run(name, previous);
           existing[existing.indexOf(previous)] = name;
         } else {
-          this.db.prepare("INSERT INTO board_columns (workspaceId, id, name, position) VALUES (workspace_id(), ?, ?, ?)").run(conflictMode === "overwrite" ? column.id : randomUUID(), name, existing.length);
+          this.db.prepare("INSERT INTO board_columns (workspaceId, boardId, id, name, position) VALUES (workspace_id(), board_id(), ?, ?, ?)").run(conflictMode === "overwrite" ? column.id : randomUUID(), name, existing.length);
           existing.push(name);
         }
         columnNames.set(column.id, name);
@@ -231,17 +283,17 @@ export class TaskStore {
         this.assignColumnAgent({ column: columnNames.get(assignment.columnId)!, agentId: agentIds.get(assignment.agentId)! });
       }
       if (columnMode === "replace" && data.columns.length) {
-        this.db.prepare("UPDATE comments SET feedbackStatus = 'cancelled' WHERE comments.workspaceId = workspace_id() AND feedbackStatus = 'pending'").run();
-        this.db.prepare("UPDATE tasks SET status = ?, agentStatus = 'Not started' WHERE tasks.workspaceId = workspace_id()").run(columnNames.get(data.columns[0].id)!);
+        this.db.prepare("UPDATE comments SET feedbackStatus = 'cancelled' WHERE comments.workspaceId = workspace_id() AND taskId IN (SELECT id FROM tasks WHERE boardId = board_id()) AND feedbackStatus = 'pending'").run();
+        this.db.prepare("UPDATE tasks SET status = ?, agentStatus = 'Not started' WHERE tasks.workspaceId = workspace_id() AND tasks.boardId = board_id()").run(columnNames.get(data.columns[0].id)!);
       }
       return { agents: data.agents.length, columns: data.columns.length, assignments: data.assignments.length };
     });
   }
 
-  listColumns(): string[] {
+  listColumns(boardId = this.boardId): string[] {
     return this.db
-      .prepare("SELECT name FROM board_columns WHERE board_columns.workspaceId = workspace_id() ORDER BY position")
-      .all()
+      .prepare("SELECT name FROM board_columns WHERE board_columns.workspaceId = workspace_id() AND board_columns.boardId = ? ORDER BY position")
+      .all(boardId)
       .map((row) => row.name as string);
   }
 
@@ -273,7 +325,7 @@ export class TaskStore {
     return this.transaction(() => {
       const name = this.columnName(input);
       this.db
-        .prepare("INSERT INTO board_columns (workspaceId, id, name, position) VALUES (workspace_id(), ?, ?, ?)")
+        .prepare("INSERT INTO board_columns (workspaceId, boardId, id, name, position) VALUES (workspace_id(), board_id(), ?, ?, ?)")
         .run(randomUUID(), name, this.listColumns().length);
       return this.listColumns();
     });
@@ -288,22 +340,22 @@ export class TaskStore {
       }
       const name = this.columnName(input, column);
       this.db
-        .prepare("UPDATE board_columns SET name = ? WHERE board_columns.workspaceId = workspace_id() AND name = ?")
+        .prepare("UPDATE board_columns SET name = ? WHERE board_columns.workspaceId = workspace_id() AND board_columns.boardId = board_id() AND name = ?")
         .run(name, column);
       this.db
-        .prepare("UPDATE tasks SET status = ? WHERE tasks.workspaceId = workspace_id() AND status = ?")
+        .prepare("UPDATE tasks SET status = ? WHERE tasks.workspaceId = workspace_id() AND tasks.boardId = board_id() AND status = ?")
         .run(name, column);
       this.db
-        .prepare("UPDATE column_assignments SET column = ? WHERE column_assignments.workspaceId = workspace_id() AND column = ?")
+        .prepare("UPDATE column_assignments SET column = ? WHERE column_assignments.workspaceId = workspace_id() AND column_assignments.boardId = board_id() AND column = ?")
         .run(name, column);
       this.db
         .prepare(
-          "UPDATE runs SET column = ? WHERE runs.workspaceId = workspace_id() AND column = ? AND status IN ('Queued', 'Running', 'Waiting')",
+          "UPDATE runs SET column = ? WHERE runs.workspaceId = workspace_id() AND taskId IN (SELECT id FROM tasks WHERE boardId = board_id()) AND column = ? AND status IN ('Queued', 'Running', 'Waiting')",
         )
         .run(name, column);
       this.db
         .prepare(
-          "UPDATE runs SET interruptionColumn = ? WHERE runs.workspaceId = workspace_id() AND interruptionColumn = ? AND status = 'Running'",
+          "UPDATE runs SET interruptionColumn = ? WHERE runs.workspaceId = workspace_id() AND taskId IN (SELECT id FROM tasks WHERE boardId = board_id()) AND interruptionColumn = ? AND status = 'Running'",
         )
         .run(name, column);
       return this.listColumns();
@@ -322,7 +374,7 @@ export class TaskStore {
         throw new ColumnValidationError("Keep at least one board column.");
       if (
         this.db
-          .prepare("SELECT id FROM tasks WHERE tasks.workspaceId = workspace_id() AND status = ? LIMIT 1")
+          .prepare("SELECT id FROM tasks WHERE tasks.workspaceId = workspace_id() AND tasks.boardId = board_id() AND status = ? LIMIT 1")
           .get(column)
       ) {
         throw new ColumnValidationError(
@@ -330,12 +382,12 @@ export class TaskStore {
         );
       }
       this.db
-        .prepare("DELETE FROM column_assignments WHERE column_assignments.workspaceId = workspace_id() AND column = ?")
+        .prepare("DELETE FROM column_assignments WHERE column_assignments.workspaceId = workspace_id() AND column_assignments.boardId = board_id() AND column = ?")
         .run(column);
-      this.db.prepare("DELETE FROM board_columns WHERE board_columns.workspaceId = workspace_id() AND name = ?").run(column);
+      this.db.prepare("DELETE FROM board_columns WHERE board_columns.workspaceId = workspace_id() AND board_columns.boardId = board_id() AND name = ?").run(column);
       for (const [position, name] of this.listColumns().entries()) {
         this.db
-          .prepare("UPDATE board_columns SET position = ? WHERE board_columns.workspaceId = workspace_id() AND name = ?")
+          .prepare("UPDATE board_columns SET position = ? WHERE board_columns.workspaceId = workspace_id() AND board_columns.boardId = board_id() AND name = ?")
           .run(position, name);
       }
       return this.listColumns();
@@ -359,7 +411,7 @@ export class TaskStore {
       }
       for (const [position, name] of input.entries()) {
         this.db
-          .prepare("UPDATE board_columns SET position = ? WHERE board_columns.workspaceId = workspace_id() AND name = ?")
+          .prepare("UPDATE board_columns SET position = ? WHERE board_columns.workspaceId = workspace_id() AND board_columns.boardId = board_id() AND name = ?")
           .run(position, name);
       }
       return this.listColumns();
@@ -396,13 +448,16 @@ export class TaskStore {
     if (!input || typeof input !== "object") throw new Error("Invalid task.");
     this.assertInputOwnership(input);
     const task = input as Task;
+    const existing = this.list().find((item) => item.id === task.id);
+    const boardId = task.boardId ?? existing?.boardId ?? this.boardId;
+    this.requireBoard(boardId);
     if (
       typeof task.id !== "string" ||
       !task.id.trim() ||
       typeof task.title !== "string" ||
       !task.title.trim() ||
       typeof task.description !== "string" ||
-      !this.listColumns().includes(task.status) ||
+      !this.listColumns(boardId).includes(task.status) ||
       (task.autoWorkflow !== undefined &&
         typeof task.autoWorkflow !== "boolean") ||
       (task.autoRun !== undefined && typeof task.autoRun !== "boolean")
@@ -412,7 +467,9 @@ export class TaskStore {
     return this.transaction(() => {
       this.assertOwnership("tasks", task.id);
       const previous = this.list().find((item) => item.id === task.id);
-      if (previous && previous.status !== task.status) {
+      const movedBoard = previous && previous.boardId !== boardId;
+      if (movedBoard) this.assertIdle(task.id, "moving the task to another board");
+      if (previous && (previous.status !== task.status || movedBoard)) {
         this.db.prepare("UPDATE comments SET feedbackStatus = 'cancelled' WHERE comments.workspaceId = workspace_id() AND taskId = ? AND feedbackStatus = 'pending'").run(task.id);
         this.db
           .prepare(
@@ -442,12 +499,13 @@ export class TaskStore {
       }
       this.db
         .prepare(
-          `INSERT INTO tasks (workspaceId, id, title, description, status, autoWorkflow, autoRun) VALUES (workspace_id(), ?, ?, ?, ?, ?, ?)
+          `INSERT INTO tasks (workspaceId, boardId, id, title, description, status, autoWorkflow, autoRun) VALUES (workspace_id(), ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET title=excluded.title, description=excluded.description,
-        status=excluded.status, autoWorkflow=excluded.autoWorkflow, autoRun=excluded.autoRun
+        boardId=excluded.boardId, status=excluded.status, autoWorkflow=excluded.autoWorkflow, autoRun=excluded.autoRun
         WHERE tasks.workspaceId = excluded.workspaceId`,
         )
         .run(
+          boardId,
           task.id,
           task.title.trim(),
           task.description,
@@ -455,7 +513,7 @@ export class TaskStore {
           Number(task.autoWorkflow ?? previous?.autoWorkflow ?? false),
           Number(task.autoRun ?? previous?.autoRun ?? false),
         );
-      if (previous?.agentStatus !== "Stopped" && (!previous || previous.status !== task.status) && (task.autoRun ?? previous?.autoRun ?? false)) {
+      if (previous?.agentStatus !== "Stopped" && (!previous || previous.status !== task.status || movedBoard) && (task.autoRun ?? previous?.autoRun ?? false)) {
         this.queueAgent(task.id, task.status);
       }
       return this.list().find((item) => item.id === task.id)!;
@@ -472,7 +530,7 @@ export class TaskStore {
         throw new RunValidationError("This task already has a queued or running agent.");
       if (task.comments?.some((comment) => comment.feedbackStatus === "pending"))
         throw new RunValidationError("Answer the pending feedback before starting another run.");
-      if (!this.listColumnAgents().some((assignment) => assignment.column === task.status))
+      if (!this.listColumnAgents(task.boardId).some((assignment) => assignment.column === task.status))
         throw new RunValidationError("Assign an agent to this column before running the task.");
       this.queueAgent(task.id, task.status);
       return this.list().find((item) => item.id === taskId)!;
@@ -499,7 +557,7 @@ export class TaskStore {
 
   private queueAgent(taskId: string, column: string) {
     this.assertWorkspaceActive();
-    const assignment = this.listColumnAgents().find(
+    const assignment = this.listColumnAgents(this.db.prepare("SELECT boardId FROM tasks WHERE id = ? AND workspaceId = workspace_id()").get(taskId)?.boardId as string | undefined).find(
       (item) => item.column === column,
     );
     const profile = this.listAgents().find(
@@ -724,7 +782,7 @@ export class TaskStore {
         task?.autoWorkflow &&
         task.status === run.column
       ) {
-        const columns = this.listColumns();
+        const columns = this.listColumns(task.boardId);
         const index = columns.indexOf(task.status);
         const nextColumn = index >= 0 ? columns[index + 1] : undefined;
         if (nextColumn) {
@@ -835,7 +893,7 @@ export class TaskStore {
     });
   }
 
-  private assertIdle(taskId: string) {
+  private assertIdle(taskId: string, action = "deleting the task") {
     if (
       this.db
         .prepare(
@@ -844,7 +902,7 @@ export class TaskStore {
         .get(taskId)
     ) {
       throw new PendingRunError(
-        "Wait for this agent run to finish before deleting the task.",
+        `Wait for this agent run to finish before ${action}.`,
       );
     }
   }
@@ -921,11 +979,15 @@ export class TaskStore {
     this.db.prepare("DELETE FROM agents WHERE agents.workspaceId = workspace_id() AND id = ?").run(id);
   }
 
-  listColumnAgents(): ColumnAssignment[] {
+  listAllColumnAgents() {
+    return this.listBoards().flatMap((board) => this.listColumnAgents(board.id).map((assignment) => ({ ...assignment, boardName: board.name })));
+  }
+
+  listColumnAgents(boardId = this.boardId): ColumnAssignment[] {
     return (
       this.db
-        .prepare("SELECT column, agentId FROM column_assignments WHERE column_assignments.workspaceId = workspace_id() ORDER BY rowid")
-        .all() as unknown as ColumnAssignment[]
+        .prepare("SELECT column, agentId FROM column_assignments WHERE column_assignments.workspaceId = workspace_id() AND column_assignments.boardId = ? ORDER BY rowid")
+        .all(boardId) as unknown as ColumnAssignment[]
     ).map((assignment) => ({ ...assignment }));
   }
 
@@ -941,7 +1003,7 @@ export class TaskStore {
       throw new AgentValidationError("Choose an existing board column.");
     if (agentId === null) {
       this.db
-        .prepare("DELETE FROM column_assignments WHERE column_assignments.workspaceId = workspace_id() AND column = ?")
+        .prepare("DELETE FROM column_assignments WHERE column_assignments.workspaceId = workspace_id() AND column_assignments.boardId = board_id() AND column = ?")
         .run(column);
       return null;
     }
@@ -955,7 +1017,7 @@ export class TaskStore {
     }
     this.db
       .prepare(
-        "INSERT INTO column_assignments (workspaceId, column, agentId) VALUES (workspace_id(), ?, ?) ON CONFLICT(workspaceId, column) DO UPDATE SET agentId=excluded.agentId",
+        "INSERT INTO column_assignments (workspaceId, boardId, column, agentId) VALUES (workspace_id(), board_id(), ?, ?) ON CONFLICT(boardId, column) DO UPDATE SET agentId=excluded.agentId",
       )
       .run(column, agentId);
     return { column, agentId };

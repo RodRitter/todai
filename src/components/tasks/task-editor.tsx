@@ -2,7 +2,7 @@
 
 import type { ArtifactReference } from "@/domain/artifact";
 import { useRef, useState, type FormEvent } from "react";
-import { Bot, CircleDot, CirclePlay, CircleStop, Workflow, Zap } from "lucide-react";
+import { Bot, LayoutGrid, CircleDot, CirclePlay, CircleStop, Workflow, Zap } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { JiraTicketImport } from "./jira-ticket-import";
 import type { jiraImportApi } from "@/lib/workspace-api";
@@ -30,6 +30,8 @@ import type { AgentProfile } from "@/domain/column-agent";
 import { statuses, type Status, type Task } from "@/domain/task";
 
 export type TaskEditorProps = {
+  boards?: import("@/domain/task").Board[];
+  boardId?: string;
   importJiraTicket?: typeof jiraImportApi.import;
   columns?: readonly string[];
   assignedColumns?: readonly string[];
@@ -58,7 +60,9 @@ export function TaskEditor(props: TaskEditorProps) {
 
 function TaskEditorSession({
   importJiraTicket,
-  columns = statuses,
+  boards,
+  boardId,
+  columns: initialColumns = statuses,
   assignedColumns = [],
   onRun,
   onStop,
@@ -73,6 +77,9 @@ function TaskEditorSession({
   onDeleteComment,
   agents,
 }: TaskEditorProps) {
+  const [selectedBoard, setSelectedBoard] = useState(editing?.boardId ?? boardId);
+  const columns = selectedBoard === boardId ? initialColumns : (boards?.find((board) => board.id === selectedBoard)?.columns ?? initialColumns);
+  const movedBoard = selectedBoard !== (editing?.boardId ?? boardId);
   const pendingRun =
     editing?.agentStatus === "Queued" || editing?.agentStatus === "Running";
   const [tab, setTab] = useState("detail");
@@ -84,7 +91,7 @@ function TaskEditorSession({
   const currentStatus =
     selectedStatus !== null && columns.includes(selectedStatus)
       ? selectedStatus
-      : (editing?.status ?? defaultStatus);
+      : (movedBoard ? columns[0] : editing?.status ?? defaultStatus);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -102,6 +109,7 @@ function TaskEditorSession({
     (!editing ||
       title.trim() !== editing.title.trim() ||
       description.trim() !== savedDescription.trim() ||
+      movedBoard ||
       currentStatus !== editing.status ||
       autoWorkflow !== (editing.autoWorkflow ?? false) ||
       autoRun !== (editing.autoRun ?? false));
@@ -150,6 +158,7 @@ function TaskEditorSession({
     const description = String(data.get("description") ?? "").trim();
     void persist(async () => {
       await onSave({
+        boardId: selectedBoard,
         id: editing?.id ?? (draftId.current ??= crypto.randomUUID()),
         title,
         description,
@@ -300,6 +309,15 @@ function TaskEditorSession({
               >
                 <TooltipProvider>
                   <div className="flex flex-col gap-4">
+                    {boards && boards.length > 0 && <div className="grid min-h-9 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[14rem_minmax(0,1fr)]">
+                      <Label htmlFor="task-board-select" variant="metadata"><LayoutGrid className="size-4 shrink-0" aria-hidden="true" />Board</Label>
+                      <NativeSelect id="task-board-select" value={selectedBoard} disabled={busy || pendingRun} title={pendingRun ? "Stop or finish the agent run before moving boards." : undefined} variant="status" className="w-full max-w-48" onChange={(event) => {
+                        setSelectedBoard(event.target.value);
+                        setSelectedStatus(boards.find((board) => board.id === event.target.value)?.columns[0] ?? null);
+                      }}>
+                        {boards.map((board) => <option key={board.id} value={board.id}>{board.name}</option>)}
+                      </NativeSelect>
+                    </div>}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <div className="grid min-h-9 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[14rem_minmax(0,1fr)]">

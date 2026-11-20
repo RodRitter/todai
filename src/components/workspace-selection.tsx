@@ -5,7 +5,7 @@ import { WorkspaceArchive } from "./tasks/workspace-archive";
 import Link from "next/link";
 import { createContext, useContext, useSyncExternalStore, type ComponentProps, type ReactNode } from "react";
 
-import { selectedWorkspaceId } from "@/lib/workspace-fetch";
+import { selectedWorkspaceId, selectedBoardId } from "@/lib/workspace-fetch";
 import type { Workspace } from "@/domain/workspace";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -27,6 +27,8 @@ export function WorkspaceLink({ href, ...props }: Omit<ComponentProps<typeof Lin
   const selection = useContext(Selection);
   const [path, query] = href.split("?");
   const params = new URLSearchParams(query);
+  const boardId = selectedBoardId();
+  if (boardId && !params.has("board")) params.set("board", boardId);
   if (selection) params.set("workspace", selection.workspace.id);
   return <Link {...props} href={`${path}${params.size ? `?${params}` : ""}`} />;
 }
@@ -39,6 +41,7 @@ export function WorkspaceSwitcher() {
     <Select value={selection.workspace.id} onValueChange={(workspaceId) => {
       const url = new URL(window.location.href);
       url.searchParams.set("workspace", workspaceId);
+      url.searchParams.delete("board");
       window.location.assign(url.href);
     }}>
       <SelectTrigger id="workspace-switcher" className="w-full min-w-0" title={selection.workspace.path}>

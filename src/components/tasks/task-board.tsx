@@ -16,6 +16,8 @@ import { type AgentProfile, type ColumnAssignment } from "@/domain/column-agent"
 import { TaskEditor } from "./task-editor";
 
 export function TaskBoard({
+  boards,
+  boardId,
   columns: initialColumns = statuses,
   initialTasks = [],
   initialAgents = [],
@@ -23,6 +25,8 @@ export function TaskBoard({
   assignAgent,
   persistence,
 }: {
+  boards?: import("@/domain/task").Board[];
+  boardId?: string;
   columns?: readonly string[];
   initialTasks?: Task[];
   initialAgents?: AgentProfile[];
@@ -116,6 +120,11 @@ export function TaskBoard({
   function saveTask(task: Task) {
     return mutate(async () => {
       const saved = persistence ? await persistence.save(task) : task;
+      if (boardId && saved.boardId !== boardId) {
+        updateTasks((current) => current.filter((item) => item.id !== saved.id));
+        setOpen(false);
+        return;
+      }
       updateTasks((current) =>
         current.some((item) => item.id === saved.id)
           ? current.map((item) => (item.id === saved.id ? saved : item))
@@ -143,6 +152,7 @@ export function TaskBoard({
 
   return (
     <AppShell
+      boardName={boards?.find((board) => board.id === boardId)?.name}
       headerActions={
         <Button size="sm" disabled={busy} onClick={() => openEditor()}>
           <Plus /> New task
@@ -221,6 +231,8 @@ export function TaskBoard({
           })}
         </div>
         <TaskEditor
+          boards={boards}
+          boardId={boardId}
           key={editing?.id ?? "new"}
           columns={columns}
           defaultStatus={columns[0]}

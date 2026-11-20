@@ -53,6 +53,7 @@ export const taskApi = {
 };
 
 export const agentApi = {
+  assignments: () => request<(ColumnAssignment & { boardName?: string })[]>("/api/column-agents?allBoards=true"),
   list: () => request<AgentProfile[]>("/api/agents"),
   save: (agent: AgentProfile) =>
     request<AgentProfile>("/api/agents", { method: "PUT", body: agent }),
@@ -127,3 +128,22 @@ export const configurationApi = {
 export const jiraImportApi = {
   import: (url: string, agentId: string) => request<import("@/domain/jira-import").JiraTicketDraft>("/api/jira-import", { method: "POST", body: { url, agentId } }),
 };
+
+export const boardApi = {
+  list: () => request<import("@/domain/task").Board[]>("/api/boards"),
+  create: (name: string) => request<import("@/domain/task").Board>("/api/boards", { method: "POST", body: { name } }),
+  rename: (id: string, name: string) => request<import("@/domain/task").Board>("/api/boards", { method: "PATCH", body: { id, name } }),
+  remove: (id: string) => request<void>("/api/boards", { method: "DELETE", body: { id } }),
+};
+
+// Settings navigation is local; each editor keeps its own board scope.
+export function boardSettingsApi(boardId: string) {
+  const headers = { "X-Todai-Board": boardId };
+  return {
+    load: () => request<BoardSnapshot>("/api/tasks?workspace=true", { headers }),
+    create: (name: string) => request<string[]>("/api/columns", { headers, method: "POST", body: name }),
+    rename: (column: string, name: string) => request<string[]>("/api/columns", { headers, method: "PATCH", body: { column, name } }),
+    remove: (column: string) => request<string[]>("/api/columns", { headers, method: "DELETE", body: column }),
+    reorder: (columns: string[]) => request<string[]>("/api/columns", { headers, method: "PUT", body: columns }),
+  };
+}

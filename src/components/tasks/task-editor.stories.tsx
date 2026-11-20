@@ -457,3 +457,18 @@ export const JiraImportPending: Story = {
     await expect(dialog.getByRole("button", { name: "Close" })).toBeDisabled();
   },
 };
+
+export const MoveBetweenBoards: Story = {
+  args: { open: true, boardId: "product", task: { ...exampleTasks[0], boardId: "product" }, boards: [
+    { id: "product", name: "Product", columns: ["To do", "In progress", "In review", "Done"] },
+    { id: "research", name: "Research", columns: ["Ideas", "Investigating"] },
+  ] },
+  play: async ({ canvasElement, args }) => {
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await userEvent.selectOptions(dialog.getByLabelText("Board"), "research");
+    await expect(dialog.getByLabelText("Status")).toHaveValue("Ideas");
+    await expect(dialog.queryByRole("option", { name: "In progress" })).not.toBeInTheDocument();
+    await userEvent.click(dialog.getByRole("button", { name: "Save changes" }));
+    await expect(args.onSave).toHaveBeenCalledWith(expect.objectContaining({ boardId: "research", status: "Ideas" }));
+  },
+};

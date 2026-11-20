@@ -20,7 +20,7 @@ export function AgentLibrary({
   defaultExecutor?: ExecutionTool;
   executorStatuses?: ExecutorStatus[];
   initialAgents?: AgentProfile[];
-  initialAssignments?: ColumnAssignment[];
+  initialAssignments?: (ColumnAssignment & { boardName?: string })[];
   persistence?: {
     save: (agent: AgentProfile) => Promise<AgentProfile>;
     delete: (id: string) => Promise<void>;
@@ -81,7 +81,7 @@ export function AgentLibrary({
               {agents.map((agent) => {
                 const columns = assignments
                   .filter((item) => item.agentId === agent.id)
-                  .map((item) => item.column);
+                  .map((item) => item.boardName ? `${item.boardName} / ${item.column}` : item.column);
                 return (
                   <li key={agent.id}>
                     <section

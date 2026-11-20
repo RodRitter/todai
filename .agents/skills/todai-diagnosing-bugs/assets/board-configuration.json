@@ -1,0 +1,69 @@
+{
+  "format": "todai-configuration",
+  "version": 1,
+  "agents": [
+    {
+      "id": "bug-diagnosis-diagnostician",
+      "name": "Diagnostician",
+      "tool": "codex",
+      "model": "gpt-6.1-sol",
+      "effort": "high",
+      "permissions": "workspace-write",
+      "instructions": "Read the local skill at {{SKILL_PATH}} and follow its Diagnose role. Use prior task comments as evidence and finish with the role\u2019s required handover."
+    },
+    {
+      "id": "bug-diagnosis-reviewer",
+      "name": "Diagnosis reviewer",
+      "tool": "codex",
+      "model": "gpt-6.1-sol",
+      "effort": "high",
+      "permissions": "read-only",
+      "instructions": "Read the local skill at {{SKILL_PATH}} and follow its Review & Report role. Use prior task comments as evidence and finish with the role\u2019s required handover."
+    },
+    {
+      "id": "bug-diagnosis-fixer",
+      "name": "Bug fixer",
+      "tool": "codex",
+      "model": "gpt-6.1-sol",
+      "effort": "high",
+      "permissions": "workspace-write",
+      "instructions": "Read the local skill at {{SKILL_PATH}} and follow its Fix role. Use prior task comments as evidence and finish with the role\u2019s required handover. Mandatory: before any repair or file edit, issue the skill\u2019s structured feedback_request and stop. Proceed only after an explicit affirmative Human answer to that specific repair proposal; automation and column entry are not approval."
+    }
+  ],
+  "columns": [
+    {
+      "id": "bug-diagnosis-0",
+      "name": "Intake"
+    },
+    {
+      "id": "bug-diagnosis-1",
+      "name": "Diagnose"
+    },
+    {
+      "id": "bug-diagnosis-2",
+      "name": "Review & Report"
+    },
+    {
+      "id": "bug-diagnosis-3",
+      "name": "Fix"
+    },
+    {
+      "id": "bug-diagnosis-4",
+      "name": "Done"
+    }
+  ],
+  "assignments": [
+    {
+      "columnId": "bug-diagnosis-1",
+      "agentId": "bug-diagnosis-diagnostician"
+    },
+    {
+      "columnId": "bug-diagnosis-2",
+      "agentId": "bug-diagnosis-reviewer"
+    },
+    {
+      "columnId": "bug-diagnosis-3",
+      "agentId": "bug-diagnosis-fixer"
+    }
+  ]
+}

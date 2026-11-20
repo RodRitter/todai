@@ -141,7 +141,7 @@ export function ColumnEditor({ initialColumns, initialTaskCounts = {}, create, r
                       <li
                         key={column}
                         draggable={!busy && editing === null}
-                        className={`group relative flex items-center gap-3 p-3 transition-colors ${busy || editing !== null ? "" : "cursor-grab active:cursor-grabbing"} ${draggedColumn === column ? "opacity-40" : ""}`}
+                        className={`group relative flex items-center gap-2 p-2 transition-colors ${busy || editing !== null ? "" : "cursor-grab active:cursor-grabbing"} ${draggedColumn === column ? "opacity-40" : ""}`}
                         onDragStart={(event) => {
                           if (
                             saving.current ||

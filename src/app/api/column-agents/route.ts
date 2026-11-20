@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export function GET(request: Request) {
   try {
-    return Response.json(withTaskStore(request, (store) => store.listColumnAgents()));
+    return Response.json(withTaskStore(request, (store) => new URL(request.url).searchParams.get("allBoards") === "true" ? store.listAllColumnAgents() : store.listColumnAgents()));
   } catch {
     return Response.json(
       {

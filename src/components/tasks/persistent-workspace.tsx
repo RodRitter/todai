@@ -11,9 +11,13 @@ import { CreateWorkspace } from "./create-workspace";
 import { ExecutorSettings } from "./executor-settings";
 import { ColumnSettings } from "./column-settings";
 import { AgentLibrary } from "./agent-library";
+import { BoardSettings } from "./board-settings";
+import type { Board } from "@/domain/task";
+import { selectedBoardId } from "@/lib/workspace-fetch";
 import { TaskBoard } from "./task-board";
 import type { AgentProfile, ExecutionTool, ExecutorStatus } from "@/domain/column-agent";
 import {
+  boardApi,
   agentApi,
   executorApi,
   columnApi,
@@ -26,7 +30,9 @@ export function PersistentWorkspace({
 }: {
   screen?: "board" | "agents" | "settings";
 }) {
+  const [boards, setBoards] = useState<Board[]>([]);
   const [board, setBoard] = useState<BoardSnapshot | null>(null);
+  const [allAssignments, setAllAssignments] = useState<(import("@/domain/column-agent").ColumnAssignment & { boardName?: string })[]>([]);
   const [agents, setAgents] = useState<AgentProfile[] | null>(null);
   const [executorStatuses, setExecutorStatuses] = useState<ExecutorStatus[]>([]);
   const [defaultExecutor, setDefaultExecutor] = useState<ExecutionTool>("codex");
@@ -35,9 +41,11 @@ export function PersistentWorkspace({
   useEffect(() => {
     let active = true;
     const id = toast.loading("Loading workspace…");
-    Promise.all([taskApi.list(), agentApi.list(), executorApi.get(screen === "agents")])
-      .then(([board, agents, settings]) => {
+    Promise.all([taskApi.list(), agentApi.list(), executorApi.get(screen === "agents"), boardApi.list(), screen === "agents" ? agentApi.assignments() : Promise.resolve([])])
+      .then(([board, agents, settings, boards, assignments]) => {
         if (active) {
+          setAllAssignments(assignments);
+          setBoards(boards);
           setBoard(board);
           setDefaultExecutor(settings.defaultExecutor);
           setExecutorStatuses(settings.statuses ?? []);
@@ -79,6 +87,7 @@ export function PersistentWorkspace({
     return (
       <UrlColumnSettings
         key={attempt}
+        boardSettings={<BoardSettings boards={boards} />}
         initialColumns={columns}
         initialTaskCounts={Object.fromEntries(
           columns.map((column) => [
@@ -104,12 +113,14 @@ export function PersistentWorkspace({
         defaultExecutor={defaultExecutor}
         executorStatuses={executorStatuses}
         initialAgents={agents}
-        initialAssignments={assignments}
+        initialAssignments={allAssignments}
         persistence={agentApi}
       />
     );
   return (
     <TaskBoard
+      boards={boards}
+      boardId={selectedBoardId()}
       columns={columns}
       initialTasks={tasks}
       initialAgents={agents}

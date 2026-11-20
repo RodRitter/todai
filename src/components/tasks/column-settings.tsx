@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ColumnEditor } from "./column-editor";
 
 export function ColumnSettings({
+  boardSettings,
   initialColumns,
   initialTaskCounts = {},
   create,
@@ -18,6 +19,7 @@ export function ColumnSettings({
   tab,
   onTabChange,
 }: {
+  boardSettings?: ReactNode;
   tab?: "general" | "workspaces" | "board" | "executors";
   executorSettings?: ReactNode;
   onTabChange?: (value: string) => void;
@@ -45,9 +47,9 @@ export function ColumnSettings({
           </TabsContent>
           {workspaceSettings && <TabsContent value="workspaces" forceMount className="space-y-8">{workspaceSettings}</TabsContent>}
           {executorSettings && <TabsContent value="executors" forceMount>{executorSettings}</TabsContent>}
-          <TabsContent value="board" forceMount>
-            <ColumnEditor initialColumns={initialColumns} initialTaskCounts={initialTaskCounts}
-              create={create} reorder={reorder} rename={rename} remove={remove} />
+          <TabsContent value="board" forceMount className="space-y-8">
+            {boardSettings ?? <ColumnEditor initialColumns={initialColumns} initialTaskCounts={initialTaskCounts}
+              create={create} reorder={reorder} rename={rename} remove={remove} />}
           </TabsContent>
         </main>
       </Tabs>

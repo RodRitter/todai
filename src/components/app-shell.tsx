@@ -1,8 +1,9 @@
 "use client";
 
+import { BoardNavigation } from "./tasks/board-navigation";
 import { WorkspaceLink as Link } from "@/components/workspace-selection";
 import { useState, type ReactNode } from "react";
-import { BookOpen, Bot, Files, LayoutGrid, PanelLeft, Settings } from "lucide-react";
+import { BookOpen, Bot, Files, PanelLeft, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { WorkspaceSwitcher } from "@/components/workspace-selection";
 import { ExecutionActivity } from "@/components/execution-activity";
@@ -11,10 +12,12 @@ import { ServerNotifications } from "@/components/server-notifications";
 export function AppShell({
   children,
   headerActions,
+  boardName,
   screen = "board",
 }: {
   children: ReactNode;
   headerActions?: ReactNode;
+  boardName?: string;
   screen?: "board" | "agents" | "skills" | "artifacts" | "settings";
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -39,19 +42,7 @@ export function AppShell({
           </div>
           <WorkspaceSwitcher />
           <nav className="p-3" aria-label="Main navigation">
-            <Button align="navigation"
-              variant={screen === "board" ? "secondary" : "ghost"}
-              asChild
-            >
-              <Link
-                href="/"
-                aria-current={screen === "board" ? "page" : undefined}
-                aria-label="Task board"
-              >
-                <LayoutGrid />
-                <span className="hidden md:inline">Board</span>
-              </Link>
-            </Button>
+            <BoardNavigation active={screen === "board"} />
             <Button align="navigation"
               variant={screen === "agents" ? "secondary" : "ghost"}
               className="mt-1"
@@ -119,7 +110,7 @@ export function AppShell({
                   ? "Skills"
                   : screen === "artifacts"
                     ? "Artifacts"
-                    : "Task board"}
+                    : boardName ?? "Task board"}
           </h1>
           <div className="ml-auto flex items-center gap-2">
             {headerActions}
