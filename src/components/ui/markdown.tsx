@@ -1,3 +1,4 @@
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { parseArtifactMention } from "@/domain/artifact-mentions";
 import { ArtifactMention } from "@/components/artifacts/artifact-mention";
 import ReactMarkdown, { type Components } from "react-markdown";
@@ -55,12 +56,13 @@ function markdownComponents(compact: boolean): Components {
           loading="lazy"
         />
       ),
+    pre: ({ children }) => <ScrollArea orientation="both" className="max-h-96" variant="code"><pre>{children}</pre></ScrollArea>,
     table: ({ children }) => (
-      <div className="my-3 overflow-x-auto rounded-lg border">
+      <ScrollArea orientation="horizontal" className="my-3" variant="table">
         <table>
           {children}
         </table>
-      </div>
+      </ScrollArea>
     ),
     input: ({ checked }) => (
       <span

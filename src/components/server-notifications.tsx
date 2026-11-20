@@ -1,5 +1,6 @@
 "use client";
 
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { workspaceFetch } from "@/lib/workspace-fetch";
 
 import { useEffect, useState } from "react";
@@ -99,7 +100,7 @@ export function ServerNotifications({ load = loadServers }: { load?: () => Promi
           <div className="px-4 pt-4 pb-2">
             <h2 className="text-sm font-semibold">Running servers</h2>
           </div>
-          <div className="max-h-80 overflow-y-auto p-2" aria-live="polite">
+          <ScrollArea className="max-h-80"><div className="p-2" aria-live="polite">
             {stopError && <p role="alert" className="p-2 text-sm text-destructive">{stopError}</p>}
             {error ? <p role="alert" className="p-2 text-sm text-destructive">{error}</p>
               : !snapshot ? <p role="status" className="p-2 text-sm text-muted-foreground">Checking for servers…</p>
@@ -124,7 +125,7 @@ export function ServerNotifications({ load = loadServers }: { load?: () => Promi
                   </div>
                 </li>
               ))}</ul>}
-          </div>
+          </div></ScrollArea>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

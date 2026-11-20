@@ -4,11 +4,12 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import { XIcon } from "lucide-react";
 import { dismissLatestNotification } from "./toast";
 import { cn } from "@/lib/utils";
+import { ScrollArea } from "./scroll-area";
 import { Button } from "./button";
 
 const DialogCloseContext = React.createContext({ show: true, disabled: false });
 
-export const modalContentClassName = "bg-background fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 overflow-y-auto rounded-3xl border p-6 shadow-lg sm:max-w-lg";
+export const modalContentClassName = "bg-background fixed top-1/2 left-1/2 z-50 flex flex-col max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-3xl border shadow-lg sm:max-w-lg";
 
 export const modalTitleClassName = "col-start-2 row-start-1 min-w-0 text-right text-sm leading-snug font-medium text-muted-foreground wrap-anywhere";
 
@@ -88,7 +89,7 @@ function DialogContent({
           size === "wide" && "sm:max-w-2xl",
           size === "large" && "sm:max-w-3xl",
           size === "expanded" && "sm:max-w-[calc(100%-2rem)]",
-          layout === "workspace" && "h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden pb-0",
+          layout === "workspace" && "grid h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)] gap-6 p-6 pb-0",
           className,
         )}
         {...props}
@@ -110,7 +111,7 @@ function DialogContent({
         }}
       >
         <DialogCloseContext.Provider value={{ show: showCloseButton, disabled: closeDisabled }}>
-          {children}
+          {layout === "workspace" ? children : <ScrollArea variant="modal">{children}</ScrollArea>}
         </DialogCloseContext.Provider>
       </DialogPrimitive.Content>
     </DialogPortal>

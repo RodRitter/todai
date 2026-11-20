@@ -1,5 +1,6 @@
 "use client";
 
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { TaskArtifacts } from "@/components/artifacts/artifact-attachments";
 import type { ArtifactReference } from "@/domain/artifact";
 import { useRef, useState, type FormEvent } from "react";
@@ -275,7 +276,7 @@ function TaskEditorSession({
                 <TabsTrigger value="artifacts" disabled={busy} aria-label="Artifacts" aria-description={`${artifactCount} artifacts`}>Artifacts<TabsCount count={artifactCount} /></TabsTrigger>
               </TabsList>
             </div>}
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-1 pb-6">
+            <ScrollArea className="min-h-0 flex-1"><div className="px-6 pt-1 pb-6">
               <TabsContent value="detail" forceMount className="space-y-7">
               <div className="space-y-2">
                 <input type="hidden" name="title" value={title} />
@@ -453,7 +454,7 @@ function TaskEditorSession({
                   }}
                 />
               </TabsContent>}
-            </div>
+            </div></ScrollArea>
             <DialogFooter variant="workspace">
               {editing && onDelete && (
                 <Button

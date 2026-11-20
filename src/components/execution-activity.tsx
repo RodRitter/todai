@@ -1,5 +1,6 @@
 "use client";
 
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useEffect, useRef, useState } from "react";
 import { Circle, LoaderCircle, Pause } from "lucide-react";
 import { Popover } from "radix-ui";
@@ -83,13 +84,13 @@ export function ExecutionActivityView({ state, error = null, busy = false, onAct
             </div> : <p>No agent is running.</p>}
             {!!state.queued?.length && <div className="space-y-2 border-t pt-3">
               <h3 className="text-xs font-semibold text-muted-foreground">Queued · {state.queued.length}</h3>
-              <ul className="max-h-48 space-y-3 overflow-y-auto" aria-label="Queued runs">
+              <ScrollArea className="max-h-48"><ul className="space-y-3 " aria-label="Queued runs">
                 {state.queued.map((run) => <li key={run.runId} className="space-y-0.5 border-l-2 pl-3">
                   <p className="break-words text-sm font-medium">{run.taskTitle}</p>
                   <p className="break-words text-xs text-muted-foreground">{run.agentName} · {run.workspaceName}</p>
                   {run.held && <p className="text-xs text-muted-foreground">On hold · task needs attention</p>}
                 </li>)}
-              </ul>
+              </ul></ScrollArea>
             </div>}
             <p className="text-xs text-muted-foreground">{state.paused
               ? "The queue is paused across all workspaces. Stopped tasks need a new Run request; resuming the queue does not restart them."

@@ -1,5 +1,6 @@
 "use client";
 
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PdfPreview } from "./pdf-preview";
@@ -92,7 +93,8 @@ export function ArtifactViewer({ artifact, onClose }: { artifact: Artifact; onCl
           )}><ReactMarkdown skipHtml remarkPlugins={[remarkGfm]} components={{
             a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>,
             img: ({ alt }) => <span>[Image: {alt || "external image"}]</span>,
-            table: ({ children }) => <div className="my-6 overflow-x-auto"><table>{children}</table></div>,
+            pre: ({ children }) => <ScrollArea orientation="both" className="max-h-96" variant="code"><pre>{children}</pre></ScrollArea>,
+            table: ({ children }) => <ScrollArea orientation="horizontal" className="my-6"><table>{children}</table></ScrollArea>,
           }}>{content.text || "This revision is empty."}</ReactMarkdown></article>}
           {/* Uploaded images use an inert image context, never an embedded document. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}

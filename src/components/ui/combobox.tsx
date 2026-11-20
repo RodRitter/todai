@@ -1,5 +1,6 @@
 "use client";
 
+import { ScrollArea } from "@/components/ui/scroll-area";
 import * as React from "react";
 import { Popover } from "radix-ui";
 import { CheckIcon, ChevronsUpDownIcon, type LucideIcon } from "lucide-react";
@@ -166,11 +167,10 @@ export function Combobox({
               event.preventDefault();
           }}
         >
-          <div
+          <ScrollArea className="max-h-60" viewportProps={{ tabIndex: -1 }}><div
             id={listId}
             role="listbox"
             aria-label={props["aria-label"] ?? "Suggestions"}
-            className="max-h-60 overflow-y-auto overscroll-contain"
           >
             {visible.map((option, index) => (
               <div
@@ -202,7 +202,7 @@ export function Combobox({
                 />
               </div>
             ))}
-          </div>
+          </div></ScrollArea>
           {visible.length === 0 && (
             <p
               role="status"

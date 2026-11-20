@@ -1,5 +1,6 @@
 "use client";
 
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { ReferencePopover } from "./reference-popover";
 import { referenceMatch, type Match } from "./description-references";
 import { ArtifactCreateDialog } from "@/components/artifacts/artifact-create-dialog";
@@ -55,7 +56,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
       attributes: {
         id, role: "textbox", "aria-label": label, "aria-multiline": "true", "aria-disabled": String(disabled),
         "data-placeholder": variant === "prompt" ? "Send a message… Use @ to mention an agent" : "",
-        class: `${variant === "prompt" ? "[&:has(>p:only-child>br:only-child)]:before:content-[attr(data-placeholder)] [&:has(>p:only-child>br:only-child)]:before:text-muted-foreground [&:has(>p:only-child>br:only-child)]:before:pointer-events-none [&:has(>p:only-child>br:only-child)]:before:float-left [&:has(>p:only-child>br:only-child)]:before:h-0" : ""} ${richTextClassName} max-h-96 overflow-auto p-3 outline-none [&_.tableWrapper]:my-3 [&_.tableWrapper]:overflow-x-auto [&_.tableWrapper]:rounded-lg [&_.tableWrapper]:border [&_ul[data-type=taskList]]:list-none [&_li[data-type=taskItem]]:flex [&_li[data-type=taskItem]]:gap-2 [&_li[data-type=taskItem]>label]:mt-1 [&_li[data-type=taskItem]>div]:min-w-0 [&_li[data-type=taskItem]>div]:flex-1 [&_li[data-type=taskItem]>div>p]:my-1`,
+        class: `${variant === "prompt" ? "[&:has(>p:only-child>br:only-child)]:before:content-[attr(data-placeholder)] [&:has(>p:only-child>br:only-child)]:before:text-muted-foreground [&:has(>p:only-child>br:only-child)]:before:pointer-events-none [&:has(>p:only-child>br:only-child)]:before:float-left [&:has(>p:only-child>br:only-child)]:before:h-0" : ""} ${richTextClassName} p-3 outline-none [&_.tableWrapper]:my-3 [&_.tableWrapper]:overflow-x-auto [&_.tableWrapper]:rounded-lg [&_.tableWrapper]:border [&_ul[data-type=taskList]]:list-none [&_li[data-type=taskItem]]:flex [&_li[data-type=taskItem]]:gap-2 [&_li[data-type=taskItem]>label]:mt-1 [&_li[data-type=taskItem]>div]:min-w-0 [&_li[data-type=taskItem]>div]:flex-1 [&_li[data-type=taskItem]>div>p]:my-1`,
       },
       handleKeyDown: (_view, event) => keyboard.current(event),
     },
@@ -212,7 +213,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
           </TooltipProvider>
           {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
         </div>
-        <EditorContent editor={editor} className="min-w-0 max-w-full" />
+        <ScrollArea className="max-h-96" viewportProps={{ tabIndex: -1 }}><EditorContent editor={editor} className="min-w-0 max-w-full" /></ScrollArea>
         {match && !disabled && editor && (
           <ReferencePopover editor={editor} id={`${id}-references`} activeIndex={activeIndex} onDismiss={() => setMatch(null)} label={agentMode ? "Available agents" : match.kind === "artifact" ? "Workspace artifacts" : match.kind === "skill" ? "Available skills" : "Workspace files"}>
             {agentMode && !results.length && <p role="status" className="p-2 text-xs text-muted-foreground">No matching agents.</p>}

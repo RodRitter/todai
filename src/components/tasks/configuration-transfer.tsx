@@ -1,5 +1,6 @@
 "use client";
 
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useRef, useState } from "react";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -75,7 +76,7 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
           {operation === "import" && columnMode !== "replace" && conflictMode !== "overwrite" && <p className="text-sm text-muted-foreground">Import creates new agents and appends columns in file order. Conflicting column names receive an “imported” suffix. Existing agents, columns, tasks, and assignments stay unchanged.</p>}
           {conflicts.length > 0 && <fieldset className="space-y-2 rounded border p-3">
             <legend className="text-sm font-medium">Matching IDs found — overwrite existing entries?</legend>
-            <ul className="max-h-40 overflow-auto text-xs text-muted-foreground">{conflicts.map((conflict) => <li key={conflict}>{conflict}</li>)}</ul>
+            <ScrollArea className="max-h-40"><ul className="text-xs text-muted-foreground">{conflicts.map((conflict) => <li key={conflict}>{conflict}</li>)}</ul></ScrollArea>
             <label className="flex items-center gap-2 text-sm"><input type="radio" name="conflicts" checked={conflictMode === "copy"} onChange={() => setConflictMode("copy")} />Keep existing entries and import new copies</label>
             <label className="flex items-center gap-2 text-sm"><input type="radio" name="conflicts" checked={conflictMode === "overwrite"} onChange={() => setConflictMode("overwrite")} />Overwrite entries with matching IDs</label>
             {conflictMode === "overwrite" && <p className="text-sm text-muted-foreground">Matching agents will receive the imported settings. Matching columns will receive the imported names and selected assignments; omitted assignments will be cleared. Replace all columns still removes every existing column.</p>}
@@ -162,7 +163,7 @@ function Selection({ title, items, selected, onChange }: {
           <Button size="xs" variant="ghost"  aria-label={`Clear ${title.toLowerCase()}`} onClick={() => onChange([])}>Clear</Button>
         </div>
       </div>
-      <div className="max-h-60 divide-y overflow-auto rounded-md border">
+      <ScrollArea className="max-h-60"><div className="divide-y rounded-md border">
         {items.length === 0 && <p className="px-3 py-4 text-sm text-muted-foreground">No {title.toLowerCase()} available.</p>}
         {items.map((item) => (
           <label key={item.id} className="flex cursor-pointer items-center gap-3 px-3 py-3 text-sm transition-colors hover:bg-muted/50 has-[:checked]:bg-muted/30">
@@ -178,7 +179,7 @@ function Selection({ title, items, selected, onChange }: {
             </span>
           </label>
         ))}
-      </div>
+      </div></ScrollArea>
     </fieldset>
   );
 }

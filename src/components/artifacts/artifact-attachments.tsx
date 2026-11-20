@@ -1,5 +1,6 @@
 "use client";
 
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useEffect, useState } from "react";
 import { artifactCategory, type Artifact, type ArtifactReference, type TaskArtifact } from "@/domain/artifact";
 import { workspaceFetch } from "@/lib/workspace-fetch";
@@ -57,10 +58,10 @@ export function ArtifactPicker({ onSelect, disabled, label = "Attach artifact", 
   const panel = (
 <div className={compact ? "col-span-2 space-y-2" : "space-y-2"}>
       <Input aria-label="Search workspace artifacts" placeholder="Search artifacts" value={search} onChange={(event) => setSearch(event.target.value)} disabled={disabled} />
-      {loading ? <p role="status" className="text-sm">Loading artifacts…</p> : error ? <div role="alert"><p>{error}</p><Button type="button" variant="outline" onClick={() => void load()}>Retry</Button></div> : <ul className="max-h-48 space-y-1 overflow-y-auto">
+      {loading ? <p role="status" className="text-sm">Loading artifacts…</p> : error ? <div role="alert"><p>{error}</p><Button type="button" variant="outline" onClick={() => void load()}>Retry</Button></div> : <ScrollArea className="max-h-48"><ul className="space-y-1 ">
         {visible.map((artifact) => <li key={artifact.id}><Button type="button" variant="ghost" size="row" disabled={disabled} onClick={() => { onSelect(artifact); setOpen(false); }}>{artifact.title} · r{artifact.revisionNumber} · {artifact.type}</Button></li>)}
         {!visible.length && <li className="text-sm text-muted-foreground">No matching artifacts.</li>}
-      </ul>}
+      </ul></ScrollArea>}
     </div>
   );
   if (attachmentIcon) return <Popover.Root open={open} onOpenChange={setOpen}>

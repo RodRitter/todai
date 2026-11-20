@@ -22,6 +22,7 @@ For agent comments, feedback, and execution output, follow the [agent output pre
 | Form field | `Input`, `Textarea`, `NativeSelect`, `Select`, `Combobox`, `Label`, `Switch`; preserve labels and error associations |
 | Prominent title, search field, source editor | `Input variant="title"`, `Input variant="search"` (caller supplies icon), `Textarea variant="code"` |
 | Task status selector / column agent selector | `NativeSelect variant="status"` / `SelectTrigger variant="badge" size="sm"` |
+| Scrollable content | `ScrollArea` with `orientation="vertical|horizontal|both"`; use `variant="table|code|modal"` for those surfaces |
 | Content surface | `Card` variants `default`, `compact`, `task`, `flush`; `elevation="flat"` for embedded surfaces; `interactive`, `dragging`, and `attention` own task card state styling |
 | Modal | `DialogContent size="default|wide|large"`; use `layout="workspace"`, `DialogHeader variant="actions"`, and `DialogFooter variant="workspace"` for a full-height editing workspace |
 | Execution state | `AgentStatus` for text with a status icon; `variant="badge"` for a filled badge |
@@ -38,6 +39,8 @@ Page content uses `p-4 md:p-8`. Settings/forms constrain reading width; boards c
 Use the Tailwind spacing scale: small related controls typically use `gap-2`, form sections `space-y-4` or `space-y-6`. Default controls are 36px tall, small controls 32px, dense actions 28px. Reserve compact actions for dense secondary UI and keep icon controls accessible by name.
 
 Body/control text is generally `text-sm`, supporting metadata `text-xs`, section headings `text-lg` with medium or semibold weight. Let primitives own their corner radii: controls are small, cards use `rounded-2xl`, dialogs `rounded-3xl`. Reuse these choices through props instead of locally reshaping a primitive.
+
+Prefer the shared Base UI `ScrollArea` for bounded lists, panels, previews, tables, and code output. Set a height or maximum height on the root. Keep native page scrolling, text fields, Radix Select scrolling, and Tiptap table/code scrolling under their existing owners. These controls manage their own viewport or editable DOM.
 
 ## Interaction and accessibility
 

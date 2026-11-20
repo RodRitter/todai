@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertDialog } from "radix-ui";
+import { ScrollArea } from "./scroll-area";
 import { Button } from "./button";
 import { ModalHeader, ModalCloseButton, modalTitleClassName, modalContentClassName } from "./dialog";
 
@@ -38,6 +39,7 @@ export function DeleteConfirmation({
           onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }}
           aria-busy={busy}
         >
+          <ScrollArea variant="modal">
           <ModalHeader>
             <AlertDialog.Cancel asChild>
               <ModalCloseButton disabled={busy} />
@@ -54,6 +56,7 @@ export function DeleteConfirmation({
               {busy ? busyLabel : confirmLabel}
             </Button>
           </div>
+          </ScrollArea>
         </AlertDialog.Content>
       </AlertDialog.Portal>
     </AlertDialog.Root>

@@ -73,3 +73,13 @@ export const Busy: Story = {
     await expect(dialog).toBeVisible();
   },
 };
+
+export const LongContent: Story = {
+  render: () => <Dialog defaultOpen>
+    <DialogContent>
+      <DialogHeader><DialogTitle>Long content</DialogTitle><DialogDescription>Scroll to review all items.</DialogDescription></DialogHeader>
+      {Array.from({ length: 40 }, (_, index) => <p key={index}>Review item {index + 1}.</p>)}
+      <DialogFooter><DialogClose asChild><Button>Done</Button></DialogClose></DialogFooter>
+    </DialogContent>
+  </Dialog>,
+};

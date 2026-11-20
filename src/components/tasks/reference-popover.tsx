@@ -1,5 +1,6 @@
 "use client";
 
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import type { Editor } from "@tiptap/react";
 import { Popover } from "radix-ui";
@@ -59,14 +60,14 @@ export function ReferencePopover({ editor, id, label, activeIndex, children, onD
           sideOffset={6}
           collisionPadding={12}
           updatePositionStrategy="always"
-          className="z-50 max-h-[min(16rem,var(--radix-popover-content-available-height))] w-80 max-w-[calc(100vw-1.5rem)] overflow-y-auto overscroll-contain rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+          className="z-50 w-80 max-w-[calc(100vw-1.5rem)] rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
           onOpenAutoFocus={(event) => event.preventDefault()}
           onCloseAutoFocus={(event) => event.preventDefault()}
           onInteractOutside={(event) => {
             if (event.target instanceof Node && editor.view.dom.contains(event.target)) event.preventDefault();
           }}
         >
-          {children}
+          <ScrollArea className="max-h-[min(16rem,var(--radix-popover-content-available-height))]" viewportProps={{ tabIndex: -1 }}>{children}</ScrollArea>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
