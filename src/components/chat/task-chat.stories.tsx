@@ -26,6 +26,17 @@ type Story = StoryObj<typeof meta>;
 export const Conversation: Story = { play: async ({ canvasElement }) => {
   const messages = within(canvasElement).getByRole("list", { name: "Chat messages, newest first" });
   await expect(messages.children).toHaveLength(2);
+  await expect(messages.querySelector("time")).toBeNull();
+  await expect(messages.children[1].querySelector('[data-slot="message"]')).toHaveAttribute("data-align", "end");
+  await expect(messages.children[1].querySelector('[data-slot="bubble"]')).toHaveAttribute("data-variant", "muted");
+  await expect(messages.children[0].querySelector('[data-slot="bubble"]')).toBeNull();
+  const personalRow = messages.children[1].querySelector('[data-slot="message-bubble-row"]');
+  await expect(personalRow?.firstElementChild).toHaveAttribute("aria-label", "Delete chat message");
+  await expect(personalRow?.lastElementChild).toHaveAttribute("data-slot", "bubble");
+  await expect(within(messages).queryByText("Human", { exact: true })).not.toBeInTheDocument();
+  await userEvent.hover(within(messages).getByText("Reviewer", { exact: true }));
+  await expect(await within(canvasElement.ownerDocument.body).findByRole("tooltip")).toHaveTextContent(new Date(session.messages[1].createdAt).toLocaleString());
+  await userEvent.unhover(within(messages).getByText("Reviewer", { exact: true }));
   await expect(messages.children[0]).toHaveTextContent("Check that a chat message does not enter the task context.");
 } };
 export const Empty: Story = {
@@ -50,7 +61,7 @@ export const EmptyRunning: Story = {
 };
 export const Running: Story = { args: { session: { ...session, running: true } }, play: async ({ canvasElement }) => {
   const canvas = within(canvasElement);
-  await expect(canvas.getByRole("status")).toHaveTextContent("Processing chat message");
+  await expect(canvas.getByRole("status")).toHaveTextContent("The agent is working");
   await expect(canvas.getByRole("button", { name: "Send chat message" })).toBeDisabled();
   await expect(canvas.getByRole("button", { name: "Clear chat" })).toBeDisabled();
   for (const button of canvas.getAllByRole("button", { name: "Delete chat message" })) await expect(button).toBeDisabled();
@@ -76,12 +87,12 @@ export const DeleteMessage: Story = {
     const body = within(canvasElement.ownerDocument.body);
     const buttons = canvas.getAllByRole("button", { name: "Delete chat message" });
     await userEvent.click(buttons[0]);
-    let confirmation = within(await body.findByRole("alertdialog"));
+    let confirmation = within(await body.findByRole("dialog", { name: /^(Delete|Clear|Archive)/ }));
     await userEvent.click(confirmation.getByRole("button", { name: "Cancel" }));
     await expect(canvas.getAllByRole("button", { name: "Delete chat message" })).toHaveLength(2);
     await expect(buttons[0]).toHaveFocus();
     await userEvent.click(buttons[0]);
-    confirmation = within(await body.findByRole("alertdialog"));
+    confirmation = within(await body.findByRole("dialog", { name: /^(Delete|Clear|Archive)/ }));
     await userEvent.click(confirmation.getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(canvas.getAllByRole("button", { name: "Delete chat message" })).toHaveLength(1));
     await expect(canvas.getByRole("list")).toHaveTextContent("@Reviewer which check do you mean?");
@@ -91,7 +102,7 @@ export const ClearChat: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole("button", { name: "Clear chat" }));
-    const confirmation = within(await within(canvasElement.ownerDocument.body).findByRole("alertdialog"));
+    const confirmation = within(await within(canvasElement.ownerDocument.body).findByRole("dialog", { name: /^(Delete|Clear|Archive)/ }));
     await expect(confirmation.getByText(/Delete all messages/)).toBeVisible();
     await userEvent.click(confirmation.getByRole("button", { name: "Clear chat" }));
     await waitFor(() => expect(canvas.queryByRole("list")).not.toBeInTheDocument());
@@ -103,7 +114,7 @@ export const FailedDelete: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getAllByRole("button", { name: "Delete chat message" })[0]);
-    const confirmation = within(await within(canvasElement.ownerDocument.body).findByRole("alertdialog"));
+    const confirmation = within(await within(canvasElement.ownerDocument.body).findByRole("dialog", { name: /^(Delete|Clear|Archive)/ }));
     await userEvent.click(confirmation.getByRole("button", { name: "Delete" }));
     await expect(await confirmation.findByRole("alert")).toHaveTextContent("Could not delete the message.");
     await expect(canvas.getAllByRole("button", { name: "Delete chat message", hidden: true })).toHaveLength(2);
@@ -145,3 +156,17 @@ export const AllReferences: Story = {
     await expect(args.onSend).toHaveBeenCalledWith(expect.stringContaining("/src/app.ts"));
   },
 };
+
+export const Sending: Story = {
+  args: { session: { ...session, messages: [] }, body: "Show this message immediately", onSend: () => new Promise<void>(() => {}) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "Send chat message" }));
+    await expect(canvas.getByRole("list", { name: "Chat messages, newest first" })).toHaveTextContent("Show this message immediately");
+    await expect(canvas.getByRole("textbox", { name: "Your chat message" })).not.toHaveTextContent("Show this message immediately");
+    await expect(canvas.getByRole("status")).toHaveTextContent("The agent is queued to start.");
+    await expect(canvas.getByRole("button", { name: "Send chat message" })).toBeDisabled();
+  },
+};
+
+export const LongHumanMessage: Story = { args: { session: { ...session, messages: [{ ...session.messages[0], body: "Long message: " + "content".repeat(120) }] } }, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };

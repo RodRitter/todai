@@ -51,8 +51,8 @@ export function ArtifactCreateDialog({ title, onSave, onCancel, onRestoreFocus }
         <DescriptionEditor id="quick-artifact-content" label="Document content" value={content} onChange={setContent} disabled={saving} />
         {error && <p role="alert">{error}</p>}
         <DialogFooter>
-          <Button type="button" variant="ghost" disabled={saving} onClick={onCancel}>Cancel</Button>
-          <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save and attach"}</Button>
+          <Button size="sm" type="button" variant="ghost" disabled={saving} onClick={onCancel}>Cancel</Button>
+          <Button size="sm" type="submit" disabled={saving}>{saving ? "Saving…" : "Save and attach"}</Button>
         </DialogFooter>
       </form>
     </DialogContent>

@@ -69,7 +69,7 @@ export const CreateEditDelete: Story = {
       canvas.getByRole("region", { name: "Updated reviewer" }),
     ).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "Delete agent" }));
-    await userEvent.click(within(await body.findByRole("alertdialog")).getByRole("button", { name: "Delete" }));
+    await userEvent.click(within(await body.findByRole("dialog", { name: /^(Delete|Clear|Archive)/ })).getByRole("button", { name: "Delete" }));
     await waitFor(() =>
       expect(
         canvas.getByText("No agents yet. Create an agent to get started."),
@@ -167,7 +167,7 @@ export const KeyboardRowEditing: Story = {
       );
     }
     await userEvent.click(canvas.getByRole("button", { name: "Delete agent" }));
-    await userEvent.click(within(await body.findByRole("alertdialog")).getByRole("button", { name: "Delete" }));
+    await userEvent.click(within(await body.findByRole("dialog", { name: /^(Delete|Clear|Archive)/ })).getByRole("button", { name: "Delete" }));
     await waitFor(() =>
       expect(
         canvas.queryByRole("button", { name: "Edit Reviewer" }),

@@ -457,7 +457,7 @@ function TaskEditorSession({
               </div>
               </TabsContent>
               {editing && <TabsContent value="activity" forceMount>
-                <TaskComments onChat={(comment) => {
+                <TaskComments active={tab === "activity"} onChat={(comment) => {
                   setChatDraft((draft) => `${draft}${draft.trim() ? "\n\n" : ""}${commentChatDraft(comment, agents ?? [])}`);
                   setChatDraftVersion((version) => version + 1);
                   setTab("chat");

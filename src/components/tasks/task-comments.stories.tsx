@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { expect, fn, spyOn, userEvent, within } from "storybook/test";
 import type { TaskComment } from "@/domain/task";
+import { Button } from "@/components/ui/button";
 import { TaskComments } from "./task-comments";
 
 const request: TaskComment = {
@@ -108,7 +109,7 @@ function DeletionExample() {
   const [comments, setComments] = useState<TaskComment[]>([
     { id: "delete-me", taskId: "task", authorName: "Human", body: "An outdated comment.", createdAt: "2026-11-17T10:00:00Z" },
   ]);
-  return <TaskComments comments={comments} onDeleteComment={async (id) => setComments((current) => current.filter((comment) => comment.id !== id))} />;
+  return <TaskComments agents={commentAgents} comments={comments} onDeleteComment={async (id) => setComments((current) => current.filter((comment) => comment.id !== id))} />;
 }
 
 export const DeleteComment: Story = {
@@ -120,11 +121,11 @@ export const DeleteComment: Story = {
     await userEvent.hover(canvas.getByText("An outdated comment."));
     await userEvent.click(control);
     await userEvent.click(await body.findByRole("menuitem", { name: "Delete message" }));
-    await userEvent.click(within(await body.findByRole("alertdialog")).getByRole("button", { name: "Cancel" }));
+    await userEvent.click(within(await body.findByRole("dialog", { name: /^(Delete|Clear|Archive)/ })).getByRole("button", { name: "Cancel" }));
     await expect(canvas.getByText("An outdated comment.")).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "Message actions" }));
     await userEvent.click(await body.findByRole("menuitem", { name: "Delete message" }));
-    await userEvent.click(within(await body.findByRole("alertdialog")).getByRole("button", { name: /^Delete$/ }));
+    await userEvent.click(within(await body.findByRole("dialog", { name: /^(Delete|Clear|Archive)/ })).getByRole("button", { name: /^Delete$/ }));
     await expect(canvas.getByText("No activity yet. Send a message to get started.")).toBeVisible();
   },
 };
@@ -198,7 +199,7 @@ export const FailedDeletion: Story = {
     const body = within(canvasElement.ownerDocument.body);
     await userEvent.click(canvas.getByRole("button", { name: "Message actions" }));
     await userEvent.click(await body.findByRole("menuitem", { name: "Delete message" }));
-    const modal = within(await body.findByRole("alertdialog"));
+    const modal = within(await body.findByRole("dialog", { name: /^(Delete|Clear|Archive)/ }));
     await userEvent.click(modal.getByRole("button", { name: "Delete" }));
     await expect(await modal.findByRole("alert")).toHaveTextContent("Could not delete message.");
     await expect(modal.getByRole("button", { name: "Delete" })).toBeEnabled();
@@ -242,7 +243,7 @@ export const DeleteFeedbackThread: Story = {
     const buttons = within(thread).getAllByRole("button", { name: "Message actions" });
     await userEvent.click(buttons[0]);
     await userEvent.click(await body.findByRole("menuitem", { name: "Delete message" }));
-    const modal = within(await body.findByRole("alertdialog"));
+    const modal = within(await body.findByRole("dialog", { name: /^(Delete|Clear|Archive)/ }));
     await expect(modal.getByText("Delete this message and its 1 nested reply? This cannot be undone.")).toBeVisible();
     await userEvent.click(modal.getByRole("button", { name: "Cancel" }));
     await expect(canvas.getByText("Use the filter.")).toBeVisible();
@@ -265,11 +266,11 @@ export const DeletePendingFeedback: Story = {
     await expect(control).toBeEnabled();
     await userEvent.click(control);
     await userEvent.click(await body.findByRole("menuitem", { name: "Delete message" }));
-    await userEvent.click(within(await body.findByRole("alertdialog")).getByRole("button", { name: "Cancel" }));
+    await userEvent.click(within(await body.findByRole("dialog", { name: /^(Delete|Clear|Archive)/ })).getByRole("button", { name: "Cancel" }));
     await expect(canvas.getByLabelText("Your feedback")).toBeVisible();
     await userEvent.click(control);
     await userEvent.click(await body.findByRole("menuitem", { name: "Delete message" }));
-    await userEvent.click(within(await body.findByRole("alertdialog")).getByRole("button", { name: "Delete" }));
+    await userEvent.click(within(await body.findByRole("dialog", { name: /^(Delete|Clear|Archive)/ })).getByRole("button", { name: "Delete" }));
     await expect(canvas.getByText("No activity yet. Send a message to get started.")).toBeVisible();
   },
 };
@@ -279,7 +280,7 @@ function ThreadExample({ fail = false }: { fail?: boolean }) {
     { id: "main", taskId: "task", authorName: "Reviewer", body: "The implementation is ready. What do you think?", createdAt: "2026-11-20T10:00:00Z" },
     { id: "nested", taskId: "task", parentCommentId: "main", authorName: "Human", body: "Looks good. Please keep the **keyboard navigation** accessible.", createdAt: "2026-11-20T10:01:00Z" },
   ]);
-  return <TaskComments comments={comments} onDeleteComment={async (id) => setComments((items) => items.filter((item) => item.id !== id && item.parentCommentId !== id))}
+  return <TaskComments agents={commentAgents} comments={comments} onDeleteComment={async (id) => setComments((items) => items.filter((item) => item.id !== id && item.parentCommentId !== id))}
     onPostComment={async (body, artifacts, parentCommentId) => {
       if (fail) throw new Error("Connection lost. Try again.");
       setComments((items) => [...items, { id: crypto.randomUUID(), taskId: "task", body, artifacts, parentCommentId, authorName: "Human", createdAt: new Date().toISOString() }]);
@@ -289,12 +290,30 @@ export const ReplyThread: Story = {
   render: () => <ThreadExample />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole("button", { name: "Reply" }));
     await expect(canvas.getByRole("button", { name: "Send reply" })).toBeDisabled();
     await userEvent.type(canvas.getByLabelText("Your reply"), "Ready to ship.");
     await userEvent.click(canvas.getByRole("button", { name: "Send reply" }));
     await expect(within(canvas.getByLabelText("Reply thread")).getByText("Ready to ship.")).toBeVisible();
-    await expect(canvas.queryByLabelText("Your reply")).not.toBeInTheDocument();
+    await expect(canvas.getByLabelText("Your reply")).toHaveValue("");
+    await userEvent.type(canvas.getByLabelText("Your reply"), "One more reply.{Enter}");
+    await expect(within(canvas.getByLabelText("Reply thread")).getByText("One more reply.")).toBeVisible();
+    await expect(canvas.getByLabelText("Your reply")).toHaveValue("");
+  },
+};
+export const ReplyTagging: Story = {
+  render: () => <ThreadExample />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const editor = await canvas.findByRole("textbox", { name: "Your reply" });
+    await userEvent.type(editor, "@Rev");
+    await expect(await canvas.findByRole("option", { name: /@Reviewer/ })).toBeVisible();
+    await userEvent.keyboard("{Enter}");
+    await expect(editor.querySelector('a[href="#agent/reviewer"]')).toHaveTextContent("@Reviewer");
+    await userEvent.type(editor, "please review this reply.");
+    await userEvent.click(canvas.getByRole("button", { name: "Send reply" }));
+    const thread = within(canvas.getByLabelText("Reply thread"));
+    await expect(await thread.findByText("@Reviewer")).toBeVisible();
+    await expect(canvas.getByRole("textbox", { name: "Your reply" })).toHaveTextContent(/^$/);
   },
 };
 export const ReplyError: Story = {
@@ -346,6 +365,19 @@ export const ConnectedAvatars: Story = {
       { id: "reply-two", taskId: "task", parentCommentId: "parent", authorName: "Accessibility and interaction reviewer", body: "Confirmed. **Keyboard focus** stays visible and replies remain readable on narrow screens.", createdAt: "2026-11-20T10:02:00Z" },
     ],
     onDeleteComment: async () => {},
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const parent = canvas.getByText("The implementation is ready for review.");
+    const older = canvas.getByText("Please preserve keyboard navigation.");
+    const newer = canvas.getByText(/Confirmed\./);
+    await expect(newer.getBoundingClientRect().top).toBeLessThan(older.getBoundingClientRect().top);
+    await expect(older.getBoundingClientRect().top).toBeLessThan(parent.getBoundingClientRect().top);
+    await userEvent.click(canvas.getByRole("button", { name: "Collapse 2 replies" }));
+    await expect(older).not.toBeVisible();
+    await expect(parent).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Expand 2 replies" }));
+    await expect(newer).toBeVisible();
   },
 };
 export const NarrowConnectedAvatars: Story = { ...ConnectedAvatars, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
@@ -422,3 +454,54 @@ export const EmptyCommentsQueued: Story = {
     await expect(canvas.getByText("The agent is queued to start.")).toBeVisible();
   },
 };
+
+
+function ResponseArrivalExample() {
+  const [active, setActive] = useState(true);
+  const [comments, setComments] = useState<TaskComment[]>([
+    { id: "arrival-parent", taskId: "task", authorName: "Reviewer", body: "Review complete.", createdAt: "2026-11-20T10:00:00Z" },
+    { id: "arrival-human", taskId: "task", parentCommentId: "arrival-parent", authorName: "Human", body: "Please explain.", createdAt: "2026-11-20T10:01:00Z" },
+  ]);
+  function add(authorName: string, nested = false) {
+    setComments((items) => [...items, { id: `arrival-${items.length}`, taskId: "task", authorName,
+      parentCommentId: nested ? "arrival-parent" : undefined,
+      body: `${authorName} response ${items.length}`, createdAt: new Date().toISOString() }]);
+  }
+  return <>
+    <div className="flex flex-wrap gap-2">
+      <Button onClick={() => add("Reviewer")}>Finish response</Button>
+      <Button onClick={() => add("Reviewer", true)}>Finish reply</Button>
+      <Button onClick={() => add("Human")}>Add human comment</Button>
+      <Button onClick={() => setActive((value) => !value)}>{active ? "Leave activity" : "Return to activity"}</Button>
+    </div>
+    <div hidden={!active}><TaskComments taskId="task" active={active} comments={comments} /></div>
+  </>;
+}
+
+export const ResponseArrival: Story = {
+  render: () => <ResponseArrivalExample />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const scroll = spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => {});
+    try {
+      await expect(scroll).not.toHaveBeenCalled();
+      await userEvent.click(canvas.getByRole("button", { name: "Collapse 1 reply" }));
+      await userEvent.click(canvas.getByRole("button", { name: "Finish reply" }));
+      await expect(await canvas.findByText("Reviewer response 2")).toBeVisible();
+      await expect(canvasElement.querySelector("#comment-arrival-2")).toHaveAttribute("data-attention", "true");
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      await expect(scroll).toHaveBeenCalledTimes(1);
+      await userEvent.click(canvas.getByRole("button", { name: "Add human comment" }));
+      await expect(scroll).toHaveBeenCalledTimes(1);
+      await userEvent.click(canvas.getByRole("button", { name: "Leave activity" }));
+      await userEvent.click(canvas.getByRole("button", { name: "Finish response" }));
+      await userEvent.click(canvas.getByRole("button", { name: "Return to activity" }));
+      await expect(scroll).toHaveBeenCalledTimes(1);
+      await userEvent.click(canvas.getByRole("button", { name: "Finish response" }));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      await expect(scroll).toHaveBeenCalledTimes(2);
+    } finally { scroll.mockRestore(); }
+  },
+};
+export const NarrowResponseArrival: Story = { ...ResponseArrival, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
+export const DarkResponseArrival: Story = { ...ResponseArrival, globals: { theme: "dark" } };

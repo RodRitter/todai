@@ -11,12 +11,12 @@ const DialogCloseContext = React.createContext({ show: true, disabled: false });
 
 export const modalContentClassName = "bg-background fixed top-1/2 left-1/2 z-50 flex flex-col max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-3xl border shadow-lg sm:max-w-lg";
 
-export const modalTitleClassName = "col-start-2 row-start-1 min-w-0 text-right text-sm leading-snug font-medium text-muted-foreground wrap-anywhere";
+export const modalTitleClassName = "col-start-1 row-start-1 min-w-0 text-left text-sm leading-snug font-medium text-muted-foreground wrap-anywhere";
 
 export function ModalCloseButton(props: React.ComponentProps<typeof Button>) {
   return (
-    <Button type="button" variant="ghost" size="icon" aria-label="Close" {...props}>
-      <XIcon className="size-5" />
+    <Button type="button" variant="ghost" size="icon-sm" aria-label="Close" {...props}>
+      <XIcon />
     </Button>
   );
 }
@@ -24,7 +24,7 @@ export function ModalCloseButton(props: React.ComponentProps<typeof Button>) {
 export function ModalHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      className={cn("sticky -top-6 z-10 -mx-6 -mt-6 grid grid-cols-[2.25rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2 rounded-t-3xl border-b bg-background px-6 py-4 [&>[data-slot=dialog-description]]:col-span-2", className)}
+      className={cn("sticky top-0 z-10 -mx-4 -mt-4 grid grid-cols-[minmax(0,1fr)_2rem] items-center gap-x-3 gap-y-2 bg-background p-4 [&>[data-slot=dialog-description]]:col-span-full [&>[data-slot=dialog-close]]:col-start-2 [&>[data-slot=dialog-close]]:row-start-1", className)}
       {...props}
     />
   );
@@ -76,7 +76,7 @@ function DialogContent({
   showCloseButton?: boolean;
   closeDisabled?: boolean;
   size?: "default" | "wide" | "large" | "expanded";
-  layout?: "default" | "workspace";
+  layout?: "default" | "workspace" | "prompt";
 }) {
   return (
     <DialogPortal>
@@ -89,7 +89,8 @@ function DialogContent({
           size === "wide" && "sm:max-w-2xl",
           size === "large" && "sm:max-w-3xl",
           size === "expanded" && "sm:max-w-[calc(100%-2rem)]",
-          layout === "workspace" && "grid h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)] gap-6 p-6 pb-0",
+          layout === "workspace" && "grid h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 px-4 [&>[data-slot=dialog-header]]:mt-0",
+          layout === "prompt" && "rounded-xl",
           className,
         )}
         {...props}
@@ -120,12 +121,12 @@ function DialogContent({
 function DialogHeader({ children, className, variant = "default", ...props }: React.ComponentProps<"div"> & { variant?: "default" | "actions" }) {
   const { show, disabled } = React.useContext(DialogCloseContext);
   return (
-    <ModalHeader data-slot="dialog-header" className={cn(variant === "actions" && "grid-cols-[minmax(0,1fr)_auto_2.25rem] [&>button]:col-start-3 [&>button]:row-start-1 [&>[data-slot=dialog-title]]:col-start-1 [&>[data-slot=dialog-title]]:text-left", className)} {...props}>
+    <ModalHeader data-slot="dialog-header" className={cn(variant === "actions" && "grid-cols-[minmax(0,1fr)_auto_2rem] [&>[data-slot=dialog-close]]:col-start-3", className)} {...props}>
       {show ? (
-        <DialogPrimitive.Close asChild>
+        <DialogClose asChild>
           <ModalCloseButton disabled={disabled} />
-        </DialogPrimitive.Close>
-      ) : <span aria-hidden="true" className="size-9" />}
+        </DialogClose>
+      ) : <span data-slot="dialog-close" aria-hidden="true" className="size-8" />}
       {children}
     </ModalHeader>
   );
@@ -136,7 +137,7 @@ function DialogFooter({ className, variant = "default", ...props }: React.Compon
       data-slot="dialog-footer"
       className={cn(
         "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
-        variant === "workspace" && "z-10 shrink-0 flex-row flex-wrap items-center justify-end border-t bg-background px-6 py-4",
+        variant === "workspace" && "z-10 shrink-0 flex-row flex-wrap items-center justify-end bg-background px-4 py-2",
         className,
       )}
       {...props}

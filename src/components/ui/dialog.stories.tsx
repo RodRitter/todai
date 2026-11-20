@@ -13,8 +13,8 @@ import {
   DialogClose,
 } from "./dialog";
 import { Button } from "./button";
-import { expect, fn, userEvent, within } from "storybook/test";
-type DialogExampleProps = ComponentProps<typeof Dialog> & Pick<ComponentProps<typeof DialogContent>, "size" | "closeDisabled">;
+import { expect, fn, userEvent, waitFor, within } from "storybook/test";
+type DialogExampleProps = ComponentProps<typeof Dialog> & Pick<ComponentProps<typeof DialogContent>, "size" | "closeDisabled" | "layout">;
 const meta = {
   tags: ["autodocs"],
   parameters: { layout: "centered" },
@@ -32,12 +32,12 @@ const meta = {
     DialogClose,
   },
   args: { onOpenChange: fn() },
-  render: ({ size, closeDisabled, ...args }) => (
+  render: ({ size, closeDisabled, layout, ...args }) => (
     <Dialog {...args}>
       <DialogTrigger asChild>
         <Button variant="outline">Open dialog</Button>
       </DialogTrigger>
-      <DialogContent size={size} closeDisabled={closeDisabled}>
+      <DialogContent size={size} closeDisabled={closeDisabled} layout={layout}>
         <DialogHeader>
           <DialogTitle>Example dialog</DialogTitle>
           <DialogDescription>
@@ -46,7 +46,7 @@ const meta = {
         </DialogHeader>
         <DialogFooter>
           <DialogClose asChild>
-            <Button disabled={closeDisabled}>Done</Button>
+            <Button size="sm" disabled={closeDisabled}>Done</Button>
           </DialogClose>
         </DialogFooter>
       </DialogContent>
@@ -74,12 +74,37 @@ export const Busy: Story = {
   },
 };
 
-export const LongContent: Story = {
-  render: () => <Dialog defaultOpen>
-    <DialogContent>
+function LongContentExample({ narrow = false }: { narrow?: boolean }) {
+  return <Dialog defaultOpen>
+    <DialogContent className={narrow ? "max-w-80 sm:max-w-80" : undefined}>
       <DialogHeader><DialogTitle>Long content</DialogTitle><DialogDescription>Scroll to review all items.</DialogDescription></DialogHeader>
       {Array.from({ length: 40 }, (_, index) => <p key={index}>Review item {index + 1}.</p>)}
-      <DialogFooter><DialogClose asChild><Button>Done</Button></DialogClose></DialogFooter>
+      <DialogFooter><DialogClose asChild><Button size="sm">Done</Button></DialogClose></DialogFooter>
     </DialogContent>
-  </Dialog>,
+  </Dialog>;
+}
+
+export const LongContent: Story = {
+  render: () => <LongContentExample />,
+  play: async ({ canvasElement }) => {
+    const dialog = await within(canvasElement.ownerDocument.body).findByRole("dialog");
+    const header = dialog.querySelector<HTMLElement>('[data-slot="dialog-header"]')!;
+    const viewport = dialog.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')!;
+    const close = within(header).getByRole("button", { name: "Close" });
+    await Promise.all(dialog.getAnimations().map((animation) => animation.finished));
+    const initialTop = header.getBoundingClientRect().top;
+    const initialInset = close.getBoundingClientRect().top - initialTop;
+    await expect(initialInset).toBeGreaterThanOrEqual(16);
+    viewport.scrollTop = 240;
+    await waitFor(() => {
+      expect(viewport.scrollTop).toBeGreaterThan(0);
+      expect(Math.abs(header.getBoundingClientRect().top - initialTop)).toBeLessThanOrEqual(1);
+      expect(close.getBoundingClientRect().top - header.getBoundingClientRect().top).toBeGreaterThanOrEqual(16);
+    });
+  },
 };
+
+export const LongContentDark: Story = { ...LongContent, globals: { theme: "dark" } };
+export const LongContentNarrow: Story = { ...LongContent, render: () => <LongContentExample narrow /> };
+
+export const Prompt: Story = { args: { defaultOpen: true, layout: "prompt" } };

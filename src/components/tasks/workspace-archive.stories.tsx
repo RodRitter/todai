@@ -32,14 +32,14 @@ export const ConfirmArchive: Story = {
     const canvas = within(canvasElement);
     const page = within(canvasElement.ownerDocument.body);
     await userEvent.click(canvas.getByRole("button", { name: "Archive this workspace" }));
-    let dialog = within(await page.findByRole("alertdialog"));
+    let dialog = within(await page.findByRole("dialog", { name: /^(Delete|Clear|Archive)/ }));
     await expect(args.onArchive).not.toHaveBeenCalled();
     await expect(dialog.getByText(/You can restore it from Archived/)).toBeVisible();
     await userEvent.click(dialog.getByRole("button", { name: "Cancel" }));
-    await expect(page.queryByRole("alertdialog")).not.toBeInTheDocument();
+    await expect(page.queryByRole("dialog", { name: /^(Delete|Clear|Archive)/ })).not.toBeInTheDocument();
     await expect(args.onArchive).not.toHaveBeenCalled();
     await userEvent.click(canvas.getByRole("button", { name: "Archive this workspace" }));
-    dialog = within(await page.findByRole("alertdialog"));
+    dialog = within(await page.findByRole("dialog", { name: /^(Delete|Clear|Archive)/ }));
     await userEvent.click(dialog.getByRole("button", { name: "Archive workspace" }));
     await expect(args.onArchive).toHaveBeenCalledTimes(1);
   },

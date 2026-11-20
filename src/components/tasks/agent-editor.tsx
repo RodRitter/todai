@@ -236,11 +236,11 @@ export function AgentEditor({
             )}
             <DialogFooter className="pt-4">
               <DialogClose asChild>
-                <Button type="button" variant="ghost">
+                <Button size="sm" type="button" variant="ghost">
                   Cancel
                 </Button>
               </DialogClose>
-              <Button type="submit">Save agent</Button>
+              <Button size="sm" type="submit">Save agent</Button>
             </DialogFooter>
           </fieldset>
         </form>

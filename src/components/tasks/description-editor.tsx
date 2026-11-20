@@ -27,7 +27,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export function DescriptionEditor({ value, onChange, disabled = false, autoFocus = false, agents, artifacts = false, onArtifactSelect, label = "Description", id = "task-description", actions, footer, toolbarActions, controlsOnFocus = false, compact = false, variant = "default", onSubmit }: {
-  variant?: "default" | "prompt"; onSubmit?: () => void;
+  variant?: "default" | "prompt" | "compact"; onSubmit?: () => void;
   value: string; onChange: (value: string) => void; disabled?: boolean; autoFocus?: boolean;
   agents?: AgentProfile[]; artifacts?: boolean; onArtifactSelect?: (artifact: Artifact) => void; label?: string; id?: string; actions?: ReactNode; footer?: ReactNode; toolbarActions?: ReactNode; controlsOnFocus?: boolean; compact?: boolean;
 }) {
@@ -55,8 +55,8 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
     editorProps: {
       attributes: {
         id, role: "textbox", "aria-label": label, "aria-multiline": "true", "aria-disabled": String(disabled),
-        "data-placeholder": variant === "prompt" ? "Send a message… Use @ to mention an agent" : "",
-        class: `${variant === "prompt" ? "[&:has(>p:only-child>br:only-child)]:before:content-[attr(data-placeholder)] [&:has(>p:only-child>br:only-child)]:before:text-muted-foreground [&:has(>p:only-child>br:only-child)]:before:pointer-events-none [&:has(>p:only-child>br:only-child)]:before:float-left [&:has(>p:only-child>br:only-child)]:before:h-0" : ""} ${richTextClassName} p-3 outline-none [&_.tableWrapper]:my-3 [&_.tableWrapper]:overflow-x-auto [&_.tableWrapper]:rounded-lg [&_.tableWrapper]:border [&_ul[data-type=taskList]]:list-none [&_li[data-type=taskItem]]:flex [&_li[data-type=taskItem]]:gap-2 [&_li[data-type=taskItem]>label]:mt-1 [&_li[data-type=taskItem]>div]:min-w-0 [&_li[data-type=taskItem]>div]:flex-1 [&_li[data-type=taskItem]>div>p]:my-1`,
+        "data-placeholder": variant !== "default" ? "Send a message… Use @ to mention an agent" : "",
+        class: `${variant !== "default" ? "[&:has(>p:only-child>br:only-child)]:before:content-[attr(data-placeholder)] [&:has(>p:only-child>br:only-child)]:before:text-muted-foreground [&:has(>p:only-child>br:only-child)]:before:pointer-events-none [&:has(>p:only-child>br:only-child)]:before:float-left [&:has(>p:only-child>br:only-child)]:before:h-0" : ""} ${richTextClassName} p-3 outline-none [&_.tableWrapper]:my-3 [&_.tableWrapper]:overflow-x-auto [&_.tableWrapper]:rounded-lg [&_.tableWrapper]:border [&_ul[data-type=taskList]]:list-none [&_li[data-type=taskItem]]:flex [&_li[data-type=taskItem]]:gap-2 [&_li[data-type=taskItem]>label]:mt-1 [&_li[data-type=taskItem]>div]:min-w-0 [&_li[data-type=taskItem]>div]:flex-1 [&_li[data-type=taskItem]>div>p]:my-1`,
       },
       handleKeyDown: (_view, event) => keyboard.current(event),
     },
@@ -143,7 +143,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
   keyboard.current = (event) => {
     if (disabled || event.isComposing) return false;
     if (!match) {
-      if (variant === "prompt" && event.key === "Enter" && !event.shiftKey) { event.preventDefault(); onSubmit?.(); return true; }
+      if (variant !== "default" && event.key === "Enter" && !event.shiftKey) { event.preventDefault(); onSubmit?.(); return true; }
       return false;
     }
     if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setMatch(null); return true; }
@@ -177,12 +177,12 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
         ) editor?.chain().focus().run();
       }}
     >
-      <label htmlFor={id} className={variant === "prompt" ? "sr-only" : editorLabelClassName}>{label}</label>
-      <div className={`min-w-0 flex flex-col [&_.tiptap]:px-0 [&_.tiptap]:pt-0 ${compact ? "[&_.tiptap]:min-h-12" : "[&_.tiptap]:min-h-24"}`}>
-        <div className={`order-last mt-2 flex-wrap items-center justify-between gap-3 ${variant === "prompt" ? "" : "border-t pt-3"} ${controlsOnFocus ? "hidden group-focus-within/editor:flex group-has-[[data-state=open]]/editor:flex" : "flex"}`}>
+      <label htmlFor={id} className={variant !== "default" ? "sr-only" : editorLabelClassName}>{label}</label>
+      <div className={`min-w-0 flex flex-col [&_.tiptap]:px-0 [&_.tiptap]:pt-0 ${variant === "compact" ? "[&_.tiptap]:min-h-8" : compact ? "[&_.tiptap]:min-h-12" : "[&_.tiptap]:min-h-24"}`}>
+        <div className={`order-last flex-wrap items-center justify-between ${variant === "compact" ? "mt-1 gap-2" : "mt-2 gap-3"} ${variant !== "default" ? "" : "border-t pt-3"} ${controlsOnFocus ? "hidden group-focus-within/editor:flex group-has-[[data-state=open]]/editor:flex" : "flex"}`}>
           <TooltipProvider>
             <div role="group" aria-label={`${label} formatting`} className="flex flex-wrap items-center gap-1">
-              {variant !== "prompt" && formatGroups.map((group, index) => (
+              {variant === "default" && formatGroups.map((group, index) => (
                 <ToggleGroup
                   key={group.label}
                   type="multiple"

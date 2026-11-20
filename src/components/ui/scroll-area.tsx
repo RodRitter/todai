@@ -26,7 +26,7 @@ function ScrollArea({ className, children, orientation = "vertical", variant = "
       )} {...viewportProps}>
         <ScrollAreaPrimitive.Content className={cn(
           orientation === "vertical" ? "min-w-0!" : "w-max min-w-full!",
-          variant === "modal" && "grid gap-6 p-6",
+          variant === "modal" && "grid gap-4 p-4",
         )}>{children}</ScrollAreaPrimitive.Content>
       </ScrollAreaPrimitive.Viewport>
       {orientation !== "horizontal" && <ScrollBar />}

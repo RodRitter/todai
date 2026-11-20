@@ -1,6 +1,8 @@
 import { useState, type ComponentProps } from "react";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
+import { ArrowUp } from "lucide-react";
+import { PromptSend } from "@/components/ui/prompt-send";
 import { Button } from "@/components/ui/button";
 import { DescriptionEditor } from "./description-editor";
 import { DescriptionField } from "./description-field";
@@ -244,4 +246,23 @@ export const LongDescriptionSuggestions: Story = {
     await expect(page.queryByRole("listbox")).not.toBeInTheDocument();
     await expect(editor).toHaveFocus();
   },
+};
+
+export const CompactPrompt: Story = {
+  args: {
+    variant: "compact", label: "Your reply", agents: [], artifacts: true,
+    actions: <PromptSend size="icon-xs" aria-label="Send reply"><ArrowUp /></PromptSend>,
+  },
+};
+export const NarrowCompactPrompt: Story = {
+  ...CompactPrompt,
+  decorators: [(Story) => <div className="max-w-80"><Story /></div>],
+};
+export const DarkCompactPrompt: Story = {
+  ...CompactPrompt,
+  decorators: [(Story) => <div className="dark bg-background text-foreground p-4"><Story /></div>],
+};
+export const CompactArtifactTagging: Story = {
+  ...QuickArtifact,
+  args: { ...QuickArtifact.args, variant: "compact" },
 };

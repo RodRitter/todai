@@ -4,6 +4,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { workspaceFetch } from "@/lib/workspace-fetch";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { BookOpen, Lock, RefreshCw, Save, Search } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -23,6 +25,8 @@ async function request<T>(scope: SkillScope, options?: RequestInit): Promise<T> 
 }
 
 export function SkillsPage() {
+  const router = useRouter();
+  const [pendingDiscard, setPendingDiscard] = useState<(() => void) | null>(null);
   const [snapshots, setSnapshots] = useState<Record<SkillScope, SkillsSnapshot> | null>(null);
   const [scope, setScope] = useState<SkillScope>("todai");
   const [selected, setSelected] = useState<LocalSkill | null>(null);
@@ -58,7 +62,11 @@ export function SkillsPage() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
 
-  function canDiscard() { return !dirty || window.confirm("Discard unsaved skill changes?"); }
+  function requestDiscard(action: () => void) {
+    if (saving) return;
+    if (dirty) setPendingDiscard(() => action);
+    else action();
+  }
 
   async function save() {
     if (!selected || saving || scope === "root") return;
@@ -75,13 +83,18 @@ export function SkillsPage() {
 
   return (
     <div onClickCapture={(event) => {
-      if ((event.target as HTMLElement).closest('a[href^="/"]') && (saving || !canDiscard())) event.preventDefault();
+      const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[href^="/"]');
+      if (!link || event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target === "_blank") return;
+      if (saving || dirty) {
+        event.preventDefault();
+        const href = link.getAttribute("href")!;
+        requestDiscard(() => router.push(href));
+      }
     }}>
       <AppShell screen="skills" headerActions={
-        <Button size="sm" variant="ghost" disabled={loading || saving} onClick={() => {
-          if (!canDiscard()) return;
+        <Button size="sm" variant="ghost" disabled={loading || saving} onClick={() => requestDiscard(() => {
           setLoading(true); setError(""); setMessage(""); setAttempt((value) => value + 1);
-        }}><RefreshCw /> Refresh</Button>
+        })}><RefreshCw /> Refresh</Button>
       }>
         <main className="space-y-4 p-4 md:p-8" aria-label="Skills">
 
@@ -96,8 +109,10 @@ export function SkillsPage() {
                 <ScrollArea className="max-h-[calc(100svh-13rem)]"><div className="space-y-1 p-2 py-3">
                   {([{ scope: "workspace", label: "Workspace", data: snapshots.workspace }, { scope: "todai", label: "Todai", data: snapshots.todai }, { scope: "root", label: "Root", data: snapshots.root }] as const).map((group) => (
                     <SkillTree key={group.scope} label={group.label} data={group.data} readOnly={group.scope === "root"} search={search} selectedId={scope === group.scope ? selected?.id : undefined} disabled={saving} onSelect={(skill) => {
-                      if ((selected?.id === skill.id && scope === group.scope) || !canDiscard()) return;
-                      setScope(group.scope); setSelected(skill); setDraft(skill.content); setError(""); setMessage("");
+                      if (selected?.id === skill.id && scope === group.scope) return;
+                      requestDiscard(() => {
+                        setScope(group.scope); setSelected(skill); setDraft(skill.content); setError(""); setMessage("");
+                      });
                     }} />
                   ))}
                 </div></ScrollArea>
@@ -107,7 +122,7 @@ export function SkillsPage() {
                   <div className="min-w-0"><h3 className="font-semibold">{selected.id}</h3><p className="mt-1 text-xs text-muted-foreground" title={selected.path}>{scope === "workspace" ? "Workspace" : scope === "todai" ? "Todai" : "Root"} / {selected.id} / SKILL.md</p></div>
                   <div className="flex items-center gap-2">
                     {scope === "root" && <span className="flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground"><Lock className="size-3" />Read-only</span>}
-                    {dirty && <><span className="text-xs text-muted-foreground">Unsaved</span><Button variant="ghost" size="sm" disabled={saving} onClick={() => { if (canDiscard()) { setDraft(selected.content); setError(""); } }}>Discard</Button></>}
+                    {dirty && <><span className="text-xs text-muted-foreground">Unsaved</span><Button variant="ghost" size="sm" disabled={saving} onClick={() => requestDiscard(() => { setDraft(selected.content); setError(""); })}>Discard</Button></>}
                     {scope !== "root" && <Button size="sm" disabled={!dirty || saving} onClick={() => void save()}><Save />{saving ? "Saving…" : "Save"}</Button>}
                   </div>
                 </div>
@@ -121,6 +136,19 @@ export function SkillsPage() {
           )}
         </main>
       </AppShell>
+      <DeleteConfirmation
+        open={pendingDiscard !== null}
+        onOpenChange={(open) => { if (!open) setPendingDiscard(null); }}
+        title="Discard unsaved skill changes?"
+        description="Your unsaved changes will be lost."
+        confirmLabel="Discard"
+        busy={saving}
+        onConfirm={() => {
+          const action = pendingDiscard;
+          setPendingDiscard(null);
+          action?.();
+        }}
+      />
     </div>
   );
 }

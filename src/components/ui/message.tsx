@@ -2,9 +2,25 @@
 
 import * as React from "react"
 import { cn } from "@/lib/utils"
-import { ChevronDown } from "lucide-react"
+import { ChevronDown, LoaderCircle } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+
+function useMessageAttention(attention: boolean) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (!attention) return;
+    const frame = requestAnimationFrame(() => {
+      ref.current?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+        block: "center",
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [attention]);
+  return ref;
+}
 
 function MessageGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
@@ -19,10 +35,14 @@ function MessageGroup({ className, ...props }: React.ComponentProps<"div">) {
 function Message({
   className,
   align = "start",
+  attention = false,
   ...props
-}: React.ComponentProps<"div"> & { align?: "start" | "end" }) {
+}: React.ComponentProps<"div"> & { align?: "start" | "end"; attention?: boolean }) {
+  const attentionRef = useMessageAttention(attention);
   return (
     <div
+      ref={attentionRef}
+      data-attention={attention || undefined}
       data-slot="message"
       data-align={align}
       className={cn(
@@ -60,6 +80,13 @@ function MessageContent({ className, connected = false, ...props }: React.Compon
       {...props}
     />
   )
+}
+
+export function MessageBubbleRow({ className, ...props }: React.ComponentProps<"div">) {
+  return <div data-slot="message-bubble-row" className={cn(
+    "flex w-full min-w-0 items-center justify-end gap-2 pl-10",
+    className,
+  )} {...props} />;
 }
 
 function MessageHeader({ className, ...props }: React.ComponentProps<"div">) {
@@ -105,40 +132,70 @@ export function MessageReplies({ className, variant = "default", ...props }: Rea
   )} {...props} />;
 }
 
-export function MessageReply({ label, avatarName = label, actions, children, className, ...props }: React.ComponentProps<"div"> & { label: string; avatarName?: string; actions?: React.ReactNode }) {
-  return <div data-slot="message-reply" className={cn("group/reply relative flex min-w-0 gap-2 pb-5 last:pb-0 before:absolute before:left-4 before:top-10 before:bottom-1 before:border-l before:border-border last:before:hidden", className)} {...props}>
+export function MessageReply({ attention = false, label, avatarName = label, createdAt, actions, children, className, ...props }: React.ComponentProps<"div"> & { attention?: boolean; label: string; avatarName?: string; createdAt?: string; actions?: React.ReactNode }) {
+  const attentionRef = useMessageAttention(attention);
+  return <div ref={attentionRef} data-attention={attention || undefined} data-slot="message-reply" className={cn("group/reply relative flex min-w-0 gap-2 pb-5 last:pb-0 before:absolute before:left-4 before:top-10 before:bottom-1 before:border-l before:border-border last:before:hidden", className)} {...props}>
     <MessageAvatar name={avatarName} />
     <MessageContent>
-      <MessageHeader><MessageAuthor>{label}</MessageAuthor>{actions}</MessageHeader>
+      <MessageHeader><MessageAuthor createdAt={createdAt}>{label}</MessageAuthor>{actions}</MessageHeader>
       {children}
     </MessageContent>
   </div>;
 }
 
-export function MessageAuthor({ className, ...props }: React.ComponentProps<"span">) {
-  return <span className={cn("min-w-0 text-sm font-semibold text-foreground wrap-anywhere", className)} {...props} />;
+export function MessageReplyComposer({ className, ...props }: React.ComponentProps<"div">) {
+  return <div data-slot="message-reply-composer" className={cn(
+    "relative min-w-0 pb-5 pl-10 last:pb-0 before:absolute before:left-4 before:top-0 before:bottom-1 before:border-l before:border-border last:before:hidden",
+    className,
+  )} {...props} />;
 }
 
-export function MessageThread({ count, open, onOpenChange, children, className, ...props }: React.ComponentProps<"div"> & {
+export function MessageAuthor({ className, createdAt, ...props }: React.ComponentProps<"span"> & { createdAt?: string }) {
+  const author = <span tabIndex={createdAt ? 0 : undefined} className={cn("min-w-0 rounded-sm text-sm font-semibold text-foreground wrap-anywhere focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", className)} {...props} />;
+  if (!createdAt) return author;
+  return <TooltipProvider><Tooltip>
+    <TooltipTrigger asChild>{author}</TooltipTrigger>
+    <TooltipContent><time dateTime={createdAt}>{new Date(createdAt).toLocaleString()}</time></TooltipContent>
+  </Tooltip></TooltipProvider>;
+}
+
+export function MessageThread({ count, open, onOpenChange, children, className, position = "below", ...props }: React.ComponentProps<"div"> & {
+  position?: "above" | "below";
   count: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const label = count ? `${count} ${count === 1 ? "reply" : "replies"}` : "Reply thread";
+  const trigger = <div className={cn(
+    "relative before:absolute before:-left-6 before:border-l before:border-border",
+    position === "above" ? "pt-3 before:top-0 before:-bottom-2" : "pb-3 before:-top-2.5 before:bottom-0",
+  )}>
+    <CollapsibleTrigger asChild>
+      <Button type="button" variant="ghost-muted" size="sm"
+        aria-label={`${open ? "Collapse" : "Expand"} ${label.toLowerCase()}`}>
+        <span>{label}</span>
+        <ChevronDown aria-hidden="true" className={cn("size-4 shrink-0 transition-transform motion-reduce:transition-none", !open ? "-rotate-90" : position === "above" && "rotate-180")} />
+      </Button>
+    </CollapsibleTrigger>
+  </div>;
   return <Collapsible open={open} onOpenChange={onOpenChange} asChild>
-    <div data-slot="message-replies" className={cn("relative min-w-0 self-stretch", className)} {...props}>
-      <div className="relative pb-3 before:absolute before:-left-6 before:-top-2.5 before:bottom-0 before:border-l before:border-border">
-        <CollapsibleTrigger asChild>
-          <Button type="button" variant="ghost-muted" size="sm"
-            aria-label={`${open ? "Collapse" : "Expand"} ${label.toLowerCase()}`}>
-            <span>{label}</span>
-            <ChevronDown aria-hidden="true" className={cn("size-4 shrink-0 transition-transform motion-reduce:transition-none", !open && "-rotate-90")} />
-          </Button>
-        </CollapsibleTrigger>
-      </div>
-      <CollapsibleContent forceMount hidden={!open} className="relative before:pointer-events-none before:absolute before:-left-6 before:top-0 before:h-4 before:w-6 before:rounded-bl-xl before:border-b before:border-l before:border-border">
+    <div data-slot="message-replies" data-position={position} className={cn("relative min-w-0 self-stretch", position === "above" && "ml-10", className)} {...props}>
+      {position === "below" && trigger}
+      <CollapsibleContent forceMount hidden={!open} className={cn(
+        "relative before:pointer-events-none before:absolute before:-left-6 before:w-6 before:border-l before:border-border",
+        position === "above"
+          ? "before:top-4 before:bottom-0 before:rounded-tl-xl before:border-t"
+          : "before:top-0 before:h-4 before:rounded-bl-xl before:border-b",
+      )}>
         {children}
       </CollapsibleContent>
+      {position === "above" && trigger}
     </div>
   </Collapsible>;
+}
+
+export function MessageAgentStatus({ status }: { status: "Running" | "Queued" }) {
+  return <Message role="status"><MessageContent>
+    <MessageHeader><LoaderCircle aria-hidden="true" className="mr-2 size-4 animate-spin motion-reduce:animate-none" />{status === "Queued" ? "The agent is queued to start." : "The agent is working…"}</MessageHeader>
+  </MessageContent></Message>;
 }

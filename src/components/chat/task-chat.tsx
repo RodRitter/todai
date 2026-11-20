@@ -2,14 +2,15 @@
 import { useEffect, useRef, useState } from "react";
 import { ConversationEmptyState } from "@/components/ui/conversation-empty-state";
 import { Button } from "@/components/ui/button";
+import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Markdown } from "@/components/ui/markdown";
-import { Message, MessageAvatar, MessageContent, MessageHeader, MessageAuthor } from "@/components/ui/message";
+import { Message, MessageAvatar, MessageContent, MessageHeader, MessageAuthor, MessageAgentStatus, MessageBubbleRow } from "@/components/ui/message";
 import { DescriptionEditor } from "@/components/tasks/description-editor";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { PromptSend } from "@/components/ui/prompt-send";
 import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { ArrowUp, Trash2 } from "lucide-react";
-import type { ChatSession } from "@/domain/chat";
+import type { ChatMessage, ChatSession } from "@/domain/chat";
 import type { AgentProfile } from "@/domain/column-agent";
 import { CommentReferenceProvider } from "@/components/tasks/comment-reference";
 import { chatRequest } from "./chat-client";
@@ -27,18 +28,29 @@ export function ChatConversation({ session, busy, onSend, onDelete, onClear, age
   const [version, setVersion] = useState(0);
   const [error, setError] = useState("");
   const submitting = useRef(false);
+  const [pending, setPending] = useState<{ message: ChatMessage; previousIds: Set<string> } | null>(null);
   const latestBody = useRef(body);
   useEffect(() => { latestBody.current = body; }, [body]);
-  const locked = busy || session.running || deleting;
+  const accepted = pending && session.messages.some((message) =>
+    !pending.previousIds.has(message.id) && message.authorName === "Human" && message.body === pending.message.body);
+  const messages = pending && !accepted ? [...session.messages, pending.message] : session.messages;
+  const agentStatus = session.running ? "Running" : pending && !accepted ? "Queued" : undefined;
+  const locked = busy || session.running || deleting || pending !== null;
   async function submit() {
     if (locked || submitting.current || !body.trim()) return;
     submitting.current = true;
     setError("");
+    setPending({ message: { id: crypto.randomUUID(), taskId: session.taskId, authorName: "Human", body: body.trim(), createdAt: new Date().toISOString() }, previousIds: new Set(session.messages.map((message) => message.id)) });
+    latestBody.current = "";
+    onBodyChange("");
+    setVersion((value) => value + 1);
     try {
       await onSend(body.trim());
-      if (latestBody.current === body) { onBodyChange(""); setVersion((value) => value + 1); }
-    } catch (error) { setError(error instanceof Error ? error.message : "Could not send the message."); }
-    finally { submitting.current = false; }
+    } catch (error) {
+      if (!latestBody.current) { onBodyChange(body); setVersion((value) => value + 1); }
+      setError(error instanceof Error ? error.message : "Could not send the message.");
+    }
+    finally { submitting.current = false; setPending(null); }
   }
   async function remove() {
     if (!deletion || busy || session.running || removing.current) return;
@@ -62,20 +74,29 @@ export function ChatConversation({ session, busy, onSend, onDelete, onClear, age
         <TooltipContent>Clear chat</TooltipContent>
       </Tooltip> : undefined}
       onSubmit={() => void submit()} actions={<PromptSend disabled={locked || !body.trim()} aria-label="Send chat message" onClick={() => void submit()}><ArrowUp /></PromptSend>} />
-    {locked && <p role="status">Processing chat message…</p>}
+    {agentStatus && <MessageAgentStatus status={agentStatus} />}
     {(error || session.error) && <p role="alert">{error || session.error}</p>}
-    {!session.messages.length && !locked && !error && !session.error && <ConversationEmptyState variant="chat" />}
-    {session.messages.length ? <ol aria-label="Chat messages, newest first" className="space-y-6">
-      {[...session.messages].reverse().map((message) => <li key={message.id}>
-        <Message><MessageAvatar name={message.authorName || "Agent"} /><MessageContent>
-          <MessageHeader><MessageAuthor>{message.authorName || "Agent"}</MessageAuthor>
-            <time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleString()}</time>
-            <Button type="button" variant="ghost-destructive" size="icon-xs" aria-label="Delete chat message" disabled={locked}
-              onClick={(event) => { setDeleteError(""); setDeletion({ messageId: message.id, trigger: event.currentTarget }); }}><Trash2 aria-hidden="true" /></Button>
-          </MessageHeader>
-          <Markdown>{message.body}</Markdown>
-        </MessageContent></Message>
-      </li>)}
+    {!messages.length && !locked && !error && !session.error && <ConversationEmptyState variant="chat" />}
+    {messages.length ? <ol aria-label="Chat messages, newest first" className="space-y-6">
+      {[...messages].reverse().map((message) => {
+        const personal = message.authorName === "Human";
+        const deleteButton = <Button type="button" variant="ghost-destructive" size="icon-xs" reveal="hover" aria-label="Delete chat message" disabled={locked}
+          onClick={(event) => { setDeleteError(""); setDeletion({ messageId: message.id, trigger: event.currentTarget }); }}><Trash2 aria-hidden="true" /></Button>;
+        return <li key={message.id}>
+          <Message className="group" align={personal ? "end" : "start"}>
+            {!personal && <MessageAvatar name={message.authorName || "Agent"} />}
+            <MessageContent>
+              {personal ? <MessageBubbleRow>
+                {deleteButton}
+                <Bubble align="end" variant="muted"><BubbleContent><Markdown>{message.body}</Markdown></BubbleContent></Bubble>
+              </MessageBubbleRow> : <>
+                <MessageHeader><MessageAuthor createdAt={message.createdAt}>{message.authorName || "Agent"}</MessageAuthor>{deleteButton}</MessageHeader>
+                <Markdown>{message.body}</Markdown>
+              </>}
+            </MessageContent>
+          </Message>
+        </li>;
+      })}
     </ol> : null}
     <DeleteConfirmation open={deletion !== null} onOpenChange={(open) => {
       if (!open) { setDeletion(null); setDeleteError(""); deletion?.trigger.focus(); }
@@ -93,6 +114,7 @@ export function TaskChat({ taskId, active, onNavigateComment, ...composer }: {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const sending = useRef(false);
+  const deleting = useRef(false);
   const generation = useRef(0);
   const [retry, setRetry] = useState(0);
   useEffect(() => {
@@ -100,12 +122,12 @@ export function TaskChat({ taskId, active, onNavigateComment, ...composer }: {
     const controller = new AbortController();
     let loading = false;
     async function load() {
-      if (loading || sending.current || document.hidden) return;
+      if (loading || deleting.current || document.hidden) return;
       loading = true;
       const requestGeneration = generation.current;
       try {
         const result = await chatRequest<ChatSession>(`?taskId=${encodeURIComponent(taskId)}`, undefined, controller.signal);
-        if (!controller.signal.aborted && !sending.current && requestGeneration === generation.current) { setSession(result); setError(""); }
+        if (!controller.signal.aborted && !deleting.current && requestGeneration === generation.current) { setSession(result); setError(""); }
       } catch (error) { if (!controller.signal.aborted && requestGeneration === generation.current) setError(error instanceof Error ? error.message : "Could not load chat."); }
       finally { loading = false; }
     }
@@ -115,9 +137,9 @@ export function TaskChat({ taskId, active, onNavigateComment, ...composer }: {
   }, [taskId, active, retry]);
   async function mutate(input: { body: string } | { messageId: string } | { clear: true }, method: "POST" | "DELETE" = "POST") {
     if (sending.current) throw new Error("The chat is already processing a request.");
-    sending.current = true; generation.current++; setBusy(true);
+    sending.current = true; deleting.current = method === "DELETE"; generation.current++; setBusy(true);
     try { setSession(await chatRequest<ChatSession>("", { taskId, ...input }, undefined, method)); setError(""); }
-    finally { sending.current = false; setBusy(false); }
+    finally { generation.current++; sending.current = false; deleting.current = false; setBusy(false); }
   }
   return <CommentReferenceProvider taskId={taskId} onNavigate={onNavigateComment}>
     {error && <div role="alert">{error} <Button type="button" variant="outline" onClick={() => setRetry((value) => value + 1)}>Retry chat</Button></div>}

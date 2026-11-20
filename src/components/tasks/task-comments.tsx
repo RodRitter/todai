@@ -8,11 +8,10 @@ import { useRef, useState } from "react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowUp, Copy, MessageCircle, Link, Ellipsis, LoaderCircle, Reply, Trash2 } from "lucide-react";
 import { Markdown } from "@/components/ui/markdown";
-import { Message, MessageContent, MessageHeader, MessageAvatar, MessageAuthor, MessageThread, MessageReply } from "@/components/ui/message";
+import { MessageGroup, Message, MessageContent, MessageHeader, MessageAvatar, MessageAuthor, MessageThread, MessageReply, MessageReplyComposer, MessageAgentStatus } from "@/components/ui/message";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Confirmation, ConfirmationActions } from "@/components/ui/confirmation";
 import { PromptSend } from "@/components/ui/prompt-send";
@@ -22,8 +21,11 @@ import type { AgentProfile } from "@/domain/column-agent";
 import { groupActivity } from "@/domain/activity";
 import type { AgentStatus, TaskComment } from "@/domain/task";
 
-export function TaskComments({ onChat, embedded = false, comments = [], onAnswerFeedback, onPostComment, onDeleteComment, agents = [], agentStatus }: {
+const emptyComments: TaskComment[] = [];
+
+export function TaskComments({ taskId, active = true, onChat, embedded = false, comments = emptyComments, onAnswerFeedback, onPostComment, onDeleteComment, agents = [], agentStatus }: {
   taskId?: string;
+  active?: boolean;
   onChat?: (comment: TaskComment) => void;
   embedded?: boolean;
   comments?: TaskComment[];
@@ -33,20 +35,29 @@ export function TaskComments({ onChat, embedded = false, comments = [], onAnswer
   onPostComment?: (body: string, artifacts?: ArtifactReference[], parentCommentId?: string) => Promise<void>;
   onAnswerFeedback?: (commentId: string, body: string) => Promise<void>;
 }) {
+  const [observed, setObserved] = useState({ taskId, comments, active });
+  const [attentionId, setAttentionId] = useState<string>();
+  if (observed.comments !== comments || observed.taskId !== taskId || observed.active !== active) {
+    const previousIds = new Set(observed.comments.map((comment) => comment.id));
+    const latest = active && observed.active && observed.taskId === taskId
+      ? comments.filter((comment) => !previousIds.has(comment.id) && comment.authorName !== "Human")
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt)).at(-1)
+      : undefined;
+    setObserved({ taskId, comments, active });
+    if (latest || !active || observed.taskId !== taskId) setAttentionId(latest?.id);
+  }
   return (
     <section aria-label="Task activity" className={embedded ? "space-y-6" : "mt-8 space-y-6"}>
       {onPostComment && <CommentInput agents={agents} onPost={onPostComment} agentStatus={agentStatus} />}
       {!comments.length && agentStatus !== "Running" && agentStatus !== "Queued" && <ConversationEmptyState variant="comments" />}
       {(agentStatus === "Running" || agentStatus === "Queued") && (
-        <Message role="status"><MessageContent>
-          <MessageHeader><LoaderCircle aria-hidden="true" className="mr-2 size-4 animate-spin motion-reduce:animate-none" />{agentStatus === "Queued" ? "The agent is queued to start." : "The agent is working…"}</MessageHeader>
-        </MessageContent></Message>
+        <MessageAgentStatus status={agentStatus} />
       )}
       {comments.length ? (
         <ol aria-label="Activity, newest first" className="space-y-8">
           {groupActivity(comments).map(({ message: comment, replies }) => (
             <li key={comment.id} tabIndex={-1} id={`comment-${comment.id}`} className="group">
-              <ActivityMessage onChat={onChat} comment={comment} replies={replies} agentStatus={agentStatus} onDeleteComment={onDeleteComment} onAnswerFeedback={onAnswerFeedback} onPostComment={onPostComment} />
+              <ActivityMessage agents={agents} attentionId={attentionId} onChat={onChat} comment={comment} replies={replies} agentStatus={agentStatus} onDeleteComment={onDeleteComment} onAnswerFeedback={onAnswerFeedback} onPostComment={onPostComment} />
             </li>
           ))}
         </ol>
@@ -55,8 +66,10 @@ export function TaskComments({ onChat, embedded = false, comments = [], onAnswer
   );
 }
 
-function ActivityMessage({ onChat, comment, replies = [], agentStatus, onDeleteComment, onAnswerFeedback, onPostComment }: {
+function ActivityMessage({ agents, attentionId, onChat, comment, replies = [], agentStatus, onDeleteComment, onAnswerFeedback, onPostComment }: {
+  agents: AgentProfile[];
   onChat?: (comment: TaskComment) => void;
+  attentionId?: string;
   comment: TaskComment;
   replies?: TaskComment[];
   agentStatus?: AgentStatus;
@@ -66,74 +79,56 @@ function ActivityMessage({ onChat, comment, replies = [], agentStatus, onDeleteC
 }) {
   const [replying, setReplying] = useState(false);
   const [threadOpen, setThreadOpen] = useState(true);
-  const replyButton = useRef<HTMLButtonElement>(null);
-  const disabled = agentStatus === "Running" || agentStatus === "Queued";
-  return (
-    <Message>
-      <MessageAvatar name={comment.authorName || "Agent"} />
-      <MessageContent connected={replies.length > 0 || replying}>
-        <MessageHeader><MessageAuthor>{comment.authorName || "Agent"}</MessageAuthor>
-          <time dateTime={comment.createdAt} title={new Date(comment.createdAt).toLocaleString()}>
-            {new Date(comment.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-          </time>
-          {onPostComment && <Button ref={replyButton} type="button" size="xs" variant="ghost-muted" disabled={disabled}
-            aria-expanded={replying} aria-controls={`thread-${comment.id}`} onClick={() => { setThreadOpen(true); setReplying(true); }}><Reply aria-hidden="true" />Reply</Button>}
-          {onChat && <Button type="button" size="xs" variant="ghost-muted" onClick={() => onChat(comment)}><MessageCircle aria-hidden="true" />Chat</Button>}
-          <CommentActions comment={comment} replyCount={replies.length} onDelete={onDeleteComment} disabled={disabled} />
-        </MessageHeader>
-        {comment.feedbackStatus ? (
-          <Confirmation state={comment.feedbackStatus} question={<Markdown>{comment.body}</Markdown>}
-            recommendation={comment.recommendation && <Markdown>{comment.recommendation}</Markdown>}>
-            {comment.feedbackStatus === "pending" && <FeedbackInput commentId={comment.id} onAnswer={onAnswerFeedback} />}
-
-          </Confirmation>
-        ) : (
-          <Bubble variant="ghost">
-            <BubbleContent><Markdown>{comment.body}</Markdown></BubbleContent>
-          </Bubble>
-        )}
-        {(replies.length > 0 || replying) && <MessageThread id={`thread-${comment.id}`} aria-label="Reply thread" count={replies.length} open={threadOpen} onOpenChange={setThreadOpen}>
-          {replies.map((reply) => <MessageReply key={reply.id} id={`comment-${reply.id}`} avatarName={reply.authorName || "Agent"} label={comment.feedbackStatus && reply.runId === comment.runId && reply.authorName === "Human" ? "Your answer" : reply.authorName || "Agent"}
-            actions={<><time dateTime={reply.createdAt}>{new Date(reply.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time>
-              <CommentActions comment={reply} onDelete={onDeleteComment} disabled={disabled} /></>}>
-            <Markdown>{reply.body}</Markdown>
-          </MessageReply>)}
-          {replying && onPostComment && <ReplyInput commentId={comment.id} disabled={disabled}
-            onPost={(body) => onPostComment(body, [], comment.id)}
-            onClose={() => { setReplying(false); replyButton.current?.focus(); }} />}
-        </MessageThread>}
-      </MessageContent>
-    </Message>
-  );
-}
-
-function ReplyInput({ commentId, disabled, onPost, onClose }: {
-  commentId: string; disabled: boolean; onPost: (body: string) => Promise<void>; onClose: () => void;
-}) {
-  const [body, setBody] = useState("");
-  const [busy, setBusy] = useState(false);
-  const submitting = useRef(false);
-  const [error, setError] = useState("");
-  async function submit() {
-    if (!body.trim() || disabled || submitting.current) return;
-    submitting.current = true;
-    setBusy(true);
-    setError("");
-    try { await onPost(body.trim()); onClose(); }
-    catch (error) { setError(error instanceof Error ? error.message : "Could not send reply."); }
-    finally { submitting.current = false; setBusy(false); }
+  const [observedAttention, setObservedAttention] = useState(attentionId);
+  if (observedAttention !== attentionId) {
+    setObservedAttention(attentionId);
+    if (replies.some((reply) => reply.id === attentionId)) setThreadOpen(true);
   }
-  return <div className="space-y-2">
-    <Label htmlFor={`reply-${commentId}`} variant="metadata">Your reply</Label>
-    <Textarea id={`reply-${commentId}`} autoFocus placeholder="Write a reply…" value={body}
-      disabled={busy || disabled} onChange={(event) => setBody(event.target.value)}
-      aria-invalid={!!error} aria-describedby={error ? `reply-error-${commentId}` : undefined} />
-    {error && <p id={`reply-error-${commentId}`} role="alert" className="text-sm text-destructive">{error}</p>}
-    <div className="flex flex-wrap items-center gap-2">
-      <Button type="button" size="sm" disabled={busy || disabled || !body.trim()} onClick={() => void submit()}>{busy ? "Sending…" : "Send reply"}</Button>
-      <Button type="button" size="sm" variant="ghost-muted" disabled={busy} onClick={onClose}>Cancel</Button>
-    </div>
-  </div>;
+  const replyButton = useRef<HTMLButtonElement>(null);
+  const replyInput = useRef<HTMLDivElement>(null);
+  const disabled = agentStatus === "Running" || agentStatus === "Queued";
+  const renderReply = (reply: TaskComment) => <MessageReply attention={attentionId === reply.id} key={reply.id} id={`comment-${reply.id}`} avatarName={reply.authorName || "Agent"} label={comment.feedbackStatus && reply.runId === comment.runId && reply.authorName === "Human" ? "Your answer" : reply.authorName || "Agent"}
+          createdAt={reply.createdAt}
+          actions={<CommentActions comment={reply} onDelete={onDeleteComment} disabled={disabled} />}>
+          <Markdown>{reply.body}</Markdown>
+        </MessageReply>;
+  return (
+    <MessageGroup>
+      {(replies.length > 0 || replying) && <MessageThread position="above" id={`thread-${comment.id}`} aria-label="Reply thread" count={replies.length} open={threadOpen} onOpenChange={setThreadOpen}>
+        {replies.slice(-1).map(renderReply)}
+        {onPostComment && <MessageReplyComposer ref={replyInput}>
+          <CommentInput variant="reply" id={`reply-${comment.id}`} agents={agents} agentStatus={agentStatus} autoFocus={replying}
+            onPost={(body, artifacts) => onPostComment(body, artifacts, comment.id)}
+            onSent={() => setReplying(false)}
+            onCancel={replies.length ? undefined : () => { setReplying(false); replyButton.current?.focus(); }} />
+        </MessageReplyComposer>}
+        {replies.slice(0, -1).toReversed().map(renderReply)}
+      </MessageThread>}
+      <Message attention={attentionId === comment.id}>
+        <MessageAvatar name={comment.authorName || "Agent"} />
+        <MessageContent>
+          <MessageHeader><MessageAuthor createdAt={comment.createdAt}>{comment.authorName || "Agent"}</MessageAuthor>
+            {onPostComment && <Button ref={replyButton} type="button" size="xs" variant="ghost-muted" disabled={disabled}
+              aria-expanded={threadOpen && (replies.length > 0 || replying)} aria-controls={`thread-${comment.id}`} onClick={() => { setThreadOpen(true); setReplying(true); requestAnimationFrame(() => replyInput.current?.querySelector<HTMLElement>('[role="textbox"]')?.focus()); }}><Reply aria-hidden="true" />Reply</Button>}
+            {onChat && <Button type="button" size="xs" variant="ghost-muted" onClick={() => onChat(comment)}><MessageCircle aria-hidden="true" />Chat</Button>}
+            <CommentActions comment={comment} replyCount={replies.length} onDelete={onDeleteComment} disabled={disabled} />
+          </MessageHeader>
+          {comment.feedbackStatus ? (
+            <Confirmation state={comment.feedbackStatus} question={<Markdown>{comment.body}</Markdown>}
+              recommendation={comment.recommendation && <Markdown>{comment.recommendation}</Markdown>}>
+              {comment.feedbackStatus === "pending" && <FeedbackInput commentId={comment.id} onAnswer={onAnswerFeedback} />}
+
+            </Confirmation>
+          ) : (
+            <Bubble variant="ghost">
+              <BubbleContent><Markdown>{comment.body}</Markdown></BubbleContent>
+            </Bubble>
+          )}
+
+        </MessageContent>
+      </Message>
+    </MessageGroup>
+  );
 }
 
 function CommentActions({ comment, replyCount = 0, onDelete, disabled }: {
@@ -206,7 +201,17 @@ function FeedbackInput({ commentId, onAnswer }: {
   );
 }
 
-function CommentInput({ agents, onPost, agentStatus }: { agents: AgentProfile[]; onPost: (body: string, artifacts?: ArtifactReference[], parentCommentId?: string) => Promise<void>; agentStatus?: AgentStatus }) {
+function CommentInput({ agents, onPost, agentStatus, variant = "default", id = "task-comment", autoFocus = false, onSent, onCancel }: {
+  agents: AgentProfile[];
+  onPost: (body: string, artifacts?: ArtifactReference[], parentCommentId?: string) => Promise<void>;
+  agentStatus?: AgentStatus;
+  variant?: "default" | "reply";
+  id?: string;
+  autoFocus?: boolean;
+  onSent?: () => void;
+  onCancel?: () => void;
+}) {
+  const reply = variant === "reply";
   const [attachments, setAttachments] = useState<Artifact[]>([]);
   const pendingRun = agentStatus === "Running" || agentStatus === "Queued";
   const [body, setBody] = useState("");
@@ -224,6 +229,7 @@ function CommentInput({ agents, onPost, agentStatus }: { agents: AgentProfile[];
       setAttachments([]);
       setBody("");
       setVersion((value) => value + 1);
+      onSent?.();
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not send message.");
     } finally { submitting.current = false; setBusy(false); }
@@ -231,9 +237,10 @@ function CommentInput({ agents, onPost, agentStatus }: { agents: AgentProfile[];
   return (
     <DescriptionEditor
       key={version}
-      id="task-comment"
-      label="Your message"
-      variant="prompt"
+      id={id}
+      label={reply ? "Your reply" : "Your message"}
+      variant={reply ? "compact" : "prompt"}
+      autoFocus={autoFocus}
       onSubmit={() => void submit()}
       compact
       value={body}
@@ -243,12 +250,13 @@ function CommentInput({ agents, onPost, agentStatus }: { agents: AgentProfile[];
       artifacts
       onArtifactSelect={(artifact) => setAttachments((items) => [...items.filter((item) => item.id !== artifact.id), artifact])}
       actions={
-        <PromptSend disabled={busy || pendingRun || !body.trim()} onClick={() => void submit()} aria-label={busy ? "Sending message" : "Send message"}>
+        <PromptSend size={reply ? "icon-xs" : "icon-sm"} disabled={busy || pendingRun || !body.trim()} onClick={() => void submit()} aria-label={reply ? busy ? "Sending reply" : "Send reply" : busy ? "Sending message" : "Send message"}>
           {busy ? <LoaderCircle className="animate-spin motion-reduce:animate-none" /> : <ArrowUp />}
         </PromptSend>
       }
-      toolbarActions={<ArtifactPicker attachmentIcon disabled={busy || pendingRun} onSelect={(artifact) => setAttachments((items) => [...items.filter((item) => item.id !== artifact.id), artifact])} />}
+      toolbarActions={<ArtifactPicker compact={reply} attachmentIcon disabled={busy || pendingRun} onSelect={(artifact) => setAttachments((items) => [...items.filter((item) => item.id !== artifact.id), artifact])} />}
       footer={<>
+        {onCancel && <Button type="button" size="sm" variant="ghost-muted" disabled={busy} onClick={onCancel}>Cancel</Button>}
         {attachments.map((artifact) => <div key={artifact.id} className="flex flex-wrap items-center gap-2 text-sm"><span>{artifact.title} · Pinned revision {artifact.revisionNumber}</span><Button type="button" size="sm" variant="ghost-muted" disabled={busy || pendingRun} onClick={() => setAttachments((items) => items.filter((item) => item.id !== artifact.id))}>Remove attachment</Button></div>)}
         {pendingRun && <p role="status" className="text-xs">{agentStatus === "Running" ? "The agent is working." : "The agent is queued to start."} You can send a message when it finishes or asks for feedback.</p>}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}

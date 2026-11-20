@@ -243,3 +243,66 @@ test("tagged agents respond inside the explicit reply thread", async () => {
     assert.equal(f.store.list()[0].comments!.at(-1)!.parentCommentId, parent.id);
   } finally { f.cleanup(); }
 });
+
+test("replies invoke the recorded author without a mention and stay in the thread", async () => {
+  const calls: string[] = [];
+  const f = fixture(async ({ run }) => {
+    calls.push(run.profile.name);
+    return run.kind === "intent" ? '["reviewer"]' : "Author response";
+  });
+  try {
+    f.store.postComment("task", "@Reviewer");
+    await f.service.drain();
+    const parent = f.store.list()[0].comments!.at(-1)!;
+    f.store.saveAgent({ ...profiles[2], name: "Renamed", model: "changed-model" });
+    calls.length = 0;
+    const saved = f.store.postComment("task", "Please explain your conclusion.", [], parent.id);
+    assert.equal(saved.agentStatus, "Queued");
+    const queued = f.store.history().at(-1)!;
+    assert.equal(queued.kind, "reply");
+    assert.equal(queued.profile.model, "test-model");
+    const reopened = new TaskStore(join(f.directory, "tasks.sqlite"));
+    try { await new ExecutionService(reopened, async ({ run }) => { calls.push(run.profile.name); return "Explanation"; }).drain(); }
+    finally { reopened.close(); }
+    assert.deepEqual(calls, ["Reviewer"]);
+    const result = f.store.list()[0];
+    assert.equal(result.status, "To do");
+    assert.equal(result.comments!.at(-1)!.parentCommentId, parent.id);
+    assert.equal(result.comments!.at(-1)!.body, "Explanation");
+    await f.service.drain();
+    assert.equal(calls.length, 1);
+  } finally { f.cleanup(); }
+});
+
+test("replies deduplicate the author mention and still select other tagged agents", async () => {
+  const calls: string[] = [];
+  const f = fixture(async ({ run }) => {
+    calls.push(run.profile.name);
+    if (run.kind === "intent") {
+      assert.deepEqual(run.replyPlan?.map((agent) => agent.id), ["refiner"]);
+      return '["refiner"]';
+    }
+    return "Response";
+  });
+  try {
+    f.store.addComment({ id: "source", taskId: "task", authorName: "Reviewer", body: "Review", createdAt: new Date().toISOString() });
+    f.store.postComment("task", "@Reviewer explain. @Refiner help clarify.", [], "source");
+    await f.service.drain();
+    assert.deepEqual(calls, ["Reviewer", "Intent", "Refiner"]);
+    assert.ok(f.store.list()[0].comments!.slice(1).every((comment) => comment.parentCommentId === "source"));
+  } finally { f.cleanup(); }
+});
+
+test("replies to human comments do not invoke the agent from a feedback run", async () => {
+  const f = fixture(async ({ run }) => run.kind === "intent" ? '["reviewer"]' : "Response");
+  try {
+    f.store.postComment("task", "@Reviewer");
+    await f.service.drain();
+    const run = f.store.history().at(-1)!;
+    f.store.addComment({ id: "human", taskId: "task", runId: run.id, authorName: "Human", body: "Context", createdAt: new Date().toISOString() });
+    const count = f.store.history().length;
+    f.store.postComment("task", "More context", [], "human");
+    await f.service.drain();
+    assert.equal(f.store.history().length, count);
+  } finally { f.cleanup(); }
+});

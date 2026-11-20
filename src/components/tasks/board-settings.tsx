@@ -111,7 +111,7 @@ export function BoardSettings({ boards: initialBoards, persistence = boardApi, c
             <Input id="new-board-name" autoFocus maxLength={80} disabled={busy} value={newName} onChange={(event) => setNewName(event.target.value)} aria-invalid={!!error} aria-describedby={error ? "new-board-error" : undefined} />
           </div>
           {error && <p id="new-board-error" role="alert" className="text-sm text-destructive">{error}</p>}
-          <DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={() => setCreating(false)}>Cancel</Button><Button disabled={busy || !newName.trim()}>{busy ? "Creating…" : "Create board"}</Button></DialogFooter>
+          <DialogFooter><Button size="sm" type="button" variant="outline" disabled={busy} onClick={() => setCreating(false)}>Cancel</Button><Button size="sm" disabled={busy || !newName.trim()}>{busy ? "Creating…" : "Create board"}</Button></DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

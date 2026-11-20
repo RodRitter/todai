@@ -106,7 +106,7 @@ export function ExecutionActivityView({ state, error = null, busy = false, onAct
       </Popover.Portal>
     </Popover.Root>
     <Dialog open={confirmation !== null} onOpenChange={(open) => { if (!open) setConfirmation(null); }}>
-      <DialogContent>
+      <DialogContent layout="prompt">
         <DialogHeader>
           <DialogTitle>Update queued directories?</DialogTitle>
           <DialogDescription>Move {confirmation?.length} queued jobs to the current workspace directories and resume the queue. Stopped tasks stay stopped.</DialogDescription>
@@ -116,8 +116,8 @@ export function ExecutionActivityView({ state, error = null, busy = false, onAct
             <li key={change.runId} className="break-words"><span className="font-medium">{change.workspaceName}</span><p className="break-all text-muted-foreground">{change.path}</p></li>)}
         </ul>
         <DialogFooter>
-          <Button variant="outline" onClick={() => setConfirmation(null)}>Keep paused</Button>
-          <Button onClick={() => { onAction("resume", confirmation!); setConfirmation(null); }}>Update and resume</Button>
+          <Button size="sm" variant="outline" onClick={() => setConfirmation(null)}>Keep paused</Button>
+          <Button size="sm" onClick={() => { onAction("resume", confirmation!); setConfirmation(null); }}>Update and resume</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1,9 +1,9 @@
 "use client";
 
-import { AlertDialog } from "radix-ui";
-import { ScrollArea } from "./scroll-area";
+import { useRef } from "react";
 import { Button } from "./button";
-import { ModalHeader, ModalCloseButton, modalTitleClassName, modalContentClassName } from "./dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "./dialog";
+import { Alert } from "./alert";
 
 export function DeleteConfirmation({
   open,
@@ -28,37 +28,31 @@ export function DeleteConfirmation({
   confirmLabel?: string;
   busyLabel?: string;
 }) {
+  const cancelRef = useRef<HTMLButtonElement>(null);
   return (
-    <AlertDialog.Root open={open} onOpenChange={(value) => {
+    <Dialog open={open} onOpenChange={(value) => {
       if (!busy) onOpenChange(value);
     }}>
-      <AlertDialog.Portal>
-        <AlertDialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
-        <AlertDialog.Content
-          className={modalContentClassName}
-          onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }}
-          aria-busy={busy}
-        >
-          <ScrollArea variant="modal">
-          <ModalHeader>
-            <AlertDialog.Cancel asChild>
-              <ModalCloseButton disabled={busy} />
-            </AlertDialog.Cancel>
-            <AlertDialog.Title className={modalTitleClassName}>{title}</AlertDialog.Title>
-          </ModalHeader>
-          <AlertDialog.Description className="text-muted-foreground text-sm break-words">{description}</AlertDialog.Description>
-          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-          <div className="flex justify-end gap-2">
-            <AlertDialog.Cancel asChild>
-              <Button type="button" variant="outline" disabled={busy}>Cancel</Button>
-            </AlertDialog.Cancel>
-            <Button type="button" variant="destructive" disabled={busy || disabled} onClick={onConfirm}>
-              {busy ? busyLabel : confirmLabel}
-            </Button>
-          </div>
-          </ScrollArea>
-        </AlertDialog.Content>
-      </AlertDialog.Portal>
-    </AlertDialog.Root>
+      <DialogContent
+        layout="prompt"
+        closeDisabled={busy}
+        onOpenAutoFocus={(event) => { event.preventDefault(); cancelRef.current?.focus(); }}
+        aria-busy={busy}
+      >
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        {error && <Alert variant="error" title={error} />}
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button ref={cancelRef} type="button" size="sm" variant="outline" disabled={busy}>Cancel</Button>
+          </DialogClose>
+          <Button type="button" size="sm" variant="ghost-destructive" disabled={busy || disabled} onClick={onConfirm}>
+            {busy ? busyLabel : confirmLabel}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

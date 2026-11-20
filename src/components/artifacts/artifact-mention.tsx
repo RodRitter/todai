@@ -2,6 +2,7 @@
 
 import { useRef, useState, type ReactNode } from "react";
 import { HoverCard } from "radix-ui";
+import { ReferenceChip } from "@/components/ui/reference-chip";
 import { FileText } from "lucide-react";
 import { artifactCategory, type Artifact, type ArtifactReference } from "@/domain/artifact";
 import { workspaceFetch } from "@/lib/workspace-fetch";
@@ -40,10 +41,9 @@ function Citation({ reference, children }: { reference: ArtifactReference; child
   return <>
     <HoverCard.Root openDelay={300} onOpenChange={(open) => { if (open) void load().catch(() => {}); }}>
       <HoverCard.Trigger asChild>
-        <button type="button" disabled={busy} onFocus={() => void load().catch(() => {})}
+        <ReferenceChip icon={<FileText />} type="button" disabled={busy} onFocus={() => void load().catch(() => {})}
           title="Open cited artifact revision"
-          className="inline cursor-pointer rounded-md border border-primary/15 bg-primary/5 px-1.5 py-0.5 text-sm font-medium text-primary outline-none hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-          onClick={() => void open()}><FileText aria-hidden="true" className="mr-1 inline size-3.5 align-text-bottom" />{children}</button>
+          onClick={() => void open()}>{children}</ReferenceChip>
       </HoverCard.Trigger>
       <HoverCard.Portal>
         <HoverCard.Content sideOffset={6} className="z-50 w-72 max-w-[calc(100vw-2rem)] space-y-1 rounded-lg border bg-popover p-3 text-sm text-popover-foreground shadow-md">

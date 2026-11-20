@@ -8,8 +8,8 @@ export function EditorSurface({
   variant = "default",
   className,
   ...props
-}: ComponentProps<"div"> & { disabled?: boolean; variant?: "default" | "prompt" }) {
-  if (variant === "prompt") return <InputGroup data-disabled={disabled} className={cn("min-w-0 max-w-full h-auto flex-col items-stretch p-3 has-[[contenteditable=true]:focus-visible]:border-ring has-[[contenteditable=true]:focus-visible]:ring-3 has-[[contenteditable=true]:focus-visible]:ring-ring/50", className)} {...props} />;
+}: ComponentProps<"div"> & { disabled?: boolean; variant?: "default" | "prompt" | "compact" }) {
+  if (variant !== "default") return <InputGroup data-disabled={disabled} className={cn("min-w-0 max-w-full h-auto flex-col items-stretch has-[[contenteditable=true]:focus-visible]:border-ring has-[[contenteditable=true]:focus-visible]:ring-3 has-[[contenteditable=true]:focus-visible]:ring-ring/50", variant === "compact" ? "p-2" : "p-3", className)} {...props} />;
   return (
     <div
       data-slot="editor-surface"

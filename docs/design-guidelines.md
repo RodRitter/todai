@@ -38,9 +38,13 @@ Page content uses `p-4 md:p-8`. Settings/forms constrain reading width; boards c
 
 Use the Tailwind spacing scale: small related controls typically use `gap-2`, form sections `space-y-4` or `space-y-6`. Default controls are 36px tall, small controls 32px, dense actions 28px. Reserve compact actions for dense secondary UI and keep icon controls accessible by name.
 
-Body/control text is generally `text-sm`, supporting metadata `text-xs`, section headings `text-lg` with medium or semibold weight. Let primitives own their corner radii: controls are small, cards use `rounded-2xl`, dialogs `rounded-3xl`. Reuse these choices through props instead of locally reshaping a primitive.
+Body/control text is generally `text-sm`, supporting metadata `text-xs`, section headings `text-lg` with medium or semibold weight. Let primitives own their corner radii: controls are small, cards use `rounded-2xl`, editing dialogs `rounded-3xl`, confirmation prompts `rounded-xl`. Reuse these choices through props instead of locally reshaping a primitive.
 
 Prefer the shared Base UI `ScrollArea` for bounded lists, panels, previews, tables, and code output. Set a height or maximum height on the root. Keep native page scrolling, text fields, Radix Select scrolling, and Tiptap table/code scrolling under their existing owners. These controls manage their own viewport or editable DOM.
+
+Use the shared shadcn `Dialog` component for all application prompts and confirmations. Follow the [Dialog composition](https://ui.shadcn.com/docs/components/base/dialog). Do not use browser `alert`, `confirm`, or `prompt` calls. Browser-controlled page exit warnings must use `beforeunload`.
+
+Place modal titles on the left and close buttons on the right. Use compact headers and footers without divider lines. Use `DialogContent layout="prompt"` for confirmation prompts. Use `Button size="sm"` for prompt actions and `size="icon-sm"` for close buttons. Use `variant="ghost-destructive"` for delete buttons. Outside clicks close dialogs unless an operation is pending.
 
 ## Interaction and accessibility
 

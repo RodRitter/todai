@@ -22,10 +22,10 @@ export const CompactDeletion: Story = {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
     await userEvent.click(canvas.getByRole("button", { name: "Delete Done" }));
-    await userEvent.click(within(await body.findByRole("alertdialog")).getByRole("button", { name: "Cancel" }));
+    await userEvent.click(within(await body.findByRole("dialog", { name: /^(Delete|Clear|Archive)/ })).getByRole("button", { name: "Cancel" }));
     await expect(canvas.getByRole("button", { name: "Delete Done" })).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "Delete Done" }));
-    await userEvent.click(within(await body.findByRole("alertdialog")).getByRole("button", { name: "Delete" }));
+    await userEvent.click(within(await body.findByRole("dialog", { name: /^(Delete|Clear|Archive)/ })).getByRole("button", { name: "Delete" }));
     await expect(canvas.queryByRole("button", { name: "Delete Done" })).not.toBeInTheDocument();
   },
 };
