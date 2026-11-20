@@ -165,7 +165,7 @@ function CommentActions({ comment, replyCount = 0, onDelete, disabled }: {
       setConfirming(open);
       if (!open) { setError(""); trigger.current?.focus(); }
     }} title="Delete message?"
-      description={replyCount ? `Delete this message and its ${replyCount} nested ${replyCount === 1 ? "reply" : "replies"}? This cannot be undone.` : "Delete this message? This cannot be undone."}
+      description={`${replyCount ? `Delete this message and its ${replyCount} nested ${replyCount === 1 ? "reply" : "replies"}?` : "Delete this message?"} Artifacts linked only to the deleted messages will also be deleted. This cannot be undone.`}
       busy={busy} disabled={disabled} error={error} onConfirm={() => void remove()} />
   </>;
 }

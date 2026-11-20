@@ -846,8 +846,21 @@ export class TaskStore {
       const ids = new Set(deleting.map((item) => item.id));
       if (this.history(taskId).some((run) => run.status === "Waiting" && run.commentId && ids.has(run.commentId) && task.comments?.some((item) => item.runId === run.id && item.feedbackStatus === "pending" && !ids.has(item.id))))
         throw new CommentValidationError("Answer or cancel this feedback request before deleting it.");
+      const artifactIds = new Set(deleting.flatMap((item) => (item.artifacts ?? []).map((ref) => ref.artifactId)));
       const remove = this.db.prepare("DELETE FROM comments WHERE workspaceId = workspace_id() AND taskId = ? AND id = ?");
       for (const id of ids) remove.run(taskId, id);
+      // Only remove artifacts from this thread that have no remaining links, at any revision.
+      const unlinked = this.db.prepare(`SELECT id FROM artifacts
+        WHERE workspaceId = workspace_id() AND id = ?
+        AND NOT EXISTS (SELECT 1 FROM comment_artifacts WHERE artifactId = artifacts.id)
+        AND NOT EXISTS (SELECT 1 FROM task_artifacts WHERE artifactId = artifacts.id)`);
+      const removeRevisions = this.db.prepare("DELETE FROM artifact_revisions WHERE workspaceId = workspace_id() AND id = ?");
+      const removeArtifact = this.db.prepare("DELETE FROM artifacts WHERE workspaceId = workspace_id() AND id = ?");
+      for (const id of artifactIds) {
+        if (!unlinked.get(id)) continue;
+        removeRevisions.run(id);
+        removeArtifact.run(id);
+      }
       const pending = deleting.filter((item) => item.feedbackStatus === "pending");
       for (const request of pending) {
         this.db.prepare("UPDATE runs SET status = 'Stopped' WHERE workspaceId = workspace_id() AND taskId = ? AND id = ? AND status = 'Waiting'")

@@ -8,7 +8,7 @@ import { TaskStore } from "./task-store.ts";
 import { ArtifactStore } from "./artifact-store.ts";
 import { DELETE } from "../app/api/tasks/comments/route.ts";
 
-test("comment deletion validates ownership and removes attachments without deleting artifacts", async () => {
+test("comment deletion validates ownership and deletes artifacts linked only to the deleted comment", async () => {
   const directory = mkdtempSync(join(tmpdir(), "todai-delete-comment-"));
   const previous = process.env.TODAI_DB_PATH;
   process.env.TODAI_DB_PATH = join(directory, "tasks.sqlite");
@@ -32,7 +32,7 @@ test("comment deletion validates ownership and removes attachments without delet
     assert.equal(response.status, 200);
     assert.deepEqual((await response.json()).comments.map((item: { body: string }) => item.body), ["Keep me"]);
     assert.equal(library.forTask("one").length, 0);
-    assert.equal(library.read(artifact.id).id, artifact.id);
+    assert.throws(() => library.read(artifact.id), /Artifact not found/);
     assert.equal((await remove(data)).status, 400);
     store.addComment({ id: "feedback", taskId: "one", body: "Question", createdAt: new Date().toISOString(), feedbackStatus: "pending" });
     assert.ok(!store.deleteComment("one", "feedback").comments!.some((item) => item.id === "feedback"));
@@ -77,6 +77,46 @@ test("deleting a feedback message removes its nested replies only", () => {
     assert.deepEqual(store.list().find((task) => task.id === "two")!.comments!.map((comment) => comment.id), ["other-task"]);
   } finally {
     store.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+
+test("deleting a parent removes reply artifacts but preserves artifacts linked elsewhere", () => {
+  const directory = mkdtempSync(join(tmpdir(), "todai-delete-artifacts-"));
+  const path = join(directory, "tasks.sqlite");
+  const store = new TaskStore(path);
+  const library = new ArtifactStore(path, store.workspaceId);
+  try {
+    for (const id of ["one", "two"]) store.save({ id, title: id, description: "", status: "To do" });
+    const create = (title: string) => library.create({ title, type: "text", creator: "Human", content: title });
+    const parentOnly = create("Parent only");
+    const replyOnly = create("Reply only");
+    const sharedComment = create("Shared comment");
+    const sharedTask = create("Shared task");
+    const unlinked = create("Unlinked library item");
+    const ref = (artifact: typeof parentOnly) => ({ artifactId: artifact.id, revisionId: artifact.revisionId });
+    const parent = store.postComment("one", "Parent", [ref(parentOnly)]).comments![0];
+    store.postComment("one", "Reply", [replyOnly, sharedComment, sharedTask].map(ref), parent.id);
+    const revision = library.revise(sharedComment.id, { title: "New revision", type: "text", creator: "Human", content: "New" });
+    store.postComment("two", "Other comment", [ref(revision)]);
+    library.linkTask("one", sharedTask.id);
+    library.revise(replyOnly.id, { title: "New reply revision", type: "text", creator: "Human", content: "New" });
+
+    assert.equal(store.deleteComment("one", parent.id).comments!.length, 0);
+    for (const artifact of [parentOnly, replyOnly]) assert.throws(() => library.read(artifact.id), /Artifact not found/);
+    for (const artifact of [sharedComment, sharedTask, unlinked]) assert.equal(library.read(artifact.id).id, artifact.id);
+    assert.equal(library.history(sharedComment.id).length, 2);
+    assert.equal(store.list().find((task) => task.id === "two")!.comments!.length, 1);
+    const db = new DatabaseSync(path);
+    try {
+      for (const artifact of [parentOnly, replyOnly]) {
+        assert.equal(db.prepare("SELECT count(*) AS count FROM artifacts WHERE id = ?").get(artifact.id)!.count, 0);
+        assert.equal(db.prepare("SELECT count(*) AS count FROM artifact_revisions WHERE id = ?").get(artifact.id)!.count, 0);
+      }
+    } finally { db.close(); }
+  } finally {
+    library.close(); store.close();
     rmSync(directory, { recursive: true, force: true });
   }
 });

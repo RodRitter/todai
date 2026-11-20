@@ -244,7 +244,7 @@ export const DeleteFeedbackThread: Story = {
     await userEvent.click(buttons[0]);
     await userEvent.click(await body.findByRole("menuitem", { name: "Delete message" }));
     const modal = within(await body.findByRole("dialog", { name: /^(Delete|Clear|Archive)/ }));
-    await expect(modal.getByText("Delete this message and its 1 nested reply? This cannot be undone.")).toBeVisible();
+    await expect(modal.getByText("Delete this message and its 1 nested reply? Artifacts linked only to the deleted messages will also be deleted. This cannot be undone.")).toBeVisible();
     await userEvent.click(modal.getByRole("button", { name: "Cancel" }));
     await expect(canvas.getByText("Use the filter.")).toBeVisible();
   },
