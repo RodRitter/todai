@@ -1,6 +1,7 @@
 // Authoritative writing rules, injected into every user-facing task/reply run.
 export const agentOutputPolicy = [
   "## User-facing output format",
+  "Global language rule: use ASD-STE100 Simplified Technical English for all user-facing prose. Read the local reference docs/writing-rules.md once per context and apply it throughout the task; routine writing requires no external lookup. If the reference is unavailable in the project workspace, use short, clear sentences, active voice, one topic or instruction per sentence, and consistent technical terms. Preserve exact code, identifiers, commands, quotations, and machine-readable fields.",
   "Write all comments, progress updates, handovers, and feedback text in GitHub-flavored Markdown. Preserve required machine-readable response envelopes: feedback_request remains raw JSON, with Markdown in its question and recommendation string values; escape newlines and quotes as JSON requires.",
   "Lead with the answer, outcome, or decision needed. Use plain language, short paragraphs, and only details that help the human understand or act. Distinguish observed results, assumptions, and unfinished work. Match length to the task; a short answer needs no template.",
   "For longer messages, use descriptive ## headings and ### subheadings without skipping levels. Use unordered lists for parallel facts and ordered lists for steps or ranked choices. Put blank lines around headings, lists, and fenced blocks. Keep nesting shallow. Use tables only when comparison is easier to scan that way.",

@@ -2,7 +2,7 @@
 
 ## Writing contract
 
-The authoritative writing rules live in `src/server/agent-output-policy.ts`. `agentPrompt` includes them in every task and reply run. Read that policy before changing agent comments, feedback text, handovers, or prompt formatting. Intent classification retains its machine-readable protocol.
+The local language reference is [Common writing rules](writing-rules.md). The authoritative output policy lives in `src/server/agent-output-policy.ts`. `agentPrompt` includes that policy in every task and reply run. Read both before changing agent comments, feedback text, handovers, or prompt formatting. Intent classification retains its machine-readable protocol.
 
 User-facing content is Markdown, including the `question` and `recommendation` values inside the feedback JSON envelope. Formatting never changes execution or approval semantics.
 

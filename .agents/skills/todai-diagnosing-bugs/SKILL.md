@@ -17,7 +17,9 @@ Read workspace AGENTS.md, CONTEXT.md if present, and relevant ADRs. Redact secre
 4. Record supported, contradicted, and untested predictions. Reproducing a symptom does not itself prove its cause. Reversible diagnostic experiments are permitted; permanent production repairs belong to the fixer.
 5. Remove your temporary instrumentation and experiments without reverting others’ changes. Retain useful reproduction tests or clearly identified diagnostic harnesses and document expected failures and invocation commands.
 
-Handover: exact symptom; reproduction command and result; minimal scenario; ranked hypotheses and experiment outcomes; evidence locations; retained diagnostic files; limitations and next action.
+Handover: begin with **Issue summary**, a paragraph of 2–3 short sentences (60 words maximum) that states your understanding of the issue. Summarize the reported symptom, expected behavior, and relevant trigger or affected scope when known. Identify material uncertainty and distinguish reported behavior from verified observations. Keep causal findings and experiment details in the supporting report.
+
+Then give the reproduction command and result; minimal scenario; ranked hypotheses and experiment outcomes; evidence locations; retained diagnostic files; limitations and next action. Link detailed evidence instead of repeating logs.
 
 ### Unavailable reproduction
 
