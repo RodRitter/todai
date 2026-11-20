@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
-import { CircleCheck, CircleHelp, CircleX } from "lucide-react";
-import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from "./item";
+import { Item, ItemActions, ItemContent } from "./item";
 
 // The shadcn Confirmation composition, with free-text answers for open questions.
 export function Confirmation({ state, question, recommendation, children }: {
@@ -9,11 +8,11 @@ export function Confirmation({ state, question, recommendation, children }: {
   recommendation?: ReactNode;
   children?: ReactNode;
 }) {
-  const Icon = state === "pending" ? CircleHelp : state === "answered" ? CircleCheck : CircleX;
-  return <Item variant={state === "pending" ? "outline" : "default"} size="sm" role="group" aria-label="Feedback request">
-    <ItemMedia variant="icon" className="self-start"><Icon aria-hidden="true" /></ItemMedia>
+  return <Item variant="outline" size="sm" role="group" aria-label="Feedback request">
     <ItemContent>
-      <ItemTitle>{state === "pending" ? "Your feedback is needed" : state === "answered" ? "Feedback received" : "Feedback cancelled"}</ItemTitle>
+      <span className="mb-2 w-fit rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:border-amber-700 dark:bg-amber-900/50 dark:text-amber-200">
+        {state === "pending" ? "Feedback" : state === "answered" ? "Feedback received" : "Feedback cancelled"}
+      </span>
       <div className="space-y-3">
         {question}
         {recommendation && <div className="space-y-1 text-muted-foreground">

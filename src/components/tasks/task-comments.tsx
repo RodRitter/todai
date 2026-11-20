@@ -3,6 +3,7 @@
 import { ArtifactPicker, TaskArtifacts } from "@/components/artifacts/artifact-attachments";
 import type { Artifact, ArtifactReference } from "@/domain/artifact";
 import { useRef, useState } from "react";
+import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -99,14 +100,15 @@ function ActivityMessage({ comment, replies = [], agentStatus, onDeleteComment, 
             try { await navigator.clipboard.writeText(comment.body); toast.success("Message copied."); }
             catch { toast.error("Could not copy message."); }
           }}><Copy aria-hidden="true" /></Button>
-          {onDeleteComment && <DeleteComment commentId={comment.id} onDelete={onDeleteComment} disabled={agentStatus === "Running" || agentStatus === "Queued" || comment.feedbackStatus === "pending"} />}
+          {onDeleteComment && <DeleteComment commentId={comment.id} replyCount={replies.length} onDelete={onDeleteComment} disabled={agentStatus === "Running" || agentStatus === "Queued" || comment.feedbackStatus === "pending"} />}
         </MessageFooter>
       </MessageContent>
     </Message>
   );
 }
 
-function DeleteComment({ commentId, onDelete, disabled }: {
+function DeleteComment({ commentId, replyCount = 0, onDelete, disabled }: {
+  replyCount?: number;
   commentId: string;
   onDelete: (commentId: string) => Promise<void>;
   disabled: boolean;
@@ -118,21 +120,26 @@ function DeleteComment({ commentId, onDelete, disabled }: {
     if (busy || disabled) return;
     setBusy(true);
     setError("");
-    try { await onDelete(commentId); }
+    try { await onDelete(commentId); setConfirming(false); }
     catch (error) { setError(error instanceof Error ? error.message : "Could not delete message."); }
     finally { setBusy(false); }
   }
   return <div>
-    {confirming ? <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs">Delete message?</span>
-      <Button type="button" size="sm" variant="destructive" disabled={busy || disabled} onClick={() => void remove()}>{busy ? "Deleting…" : "Delete"}</Button>
-      <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => { setConfirming(false); setError(""); }}>Cancel</Button>
-    </div> : <Button type="button" size="icon-xs" variant="ghost-destructive" aria-label="Delete message" title={disabled ? "Finish the agent run and resolve pending feedback before deleting." : "Delete message"}
-      disabled={disabled} onClick={() => setConfirming(true)}
+    <Button type="button" size="icon-xs" variant="ghost-destructive" aria-label="Delete message" title={disabled ? "Finish the agent run and resolve pending feedback before deleting." : "Delete message"}
+      disabled={disabled || busy} onClick={() => { setError(""); setConfirming(true); }}
       reveal="hover">
       <Trash2 className="size-3.5" />
-    </Button>}
-    {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+    </Button>
+    <DeleteConfirmation
+      open={confirming}
+      onOpenChange={(open) => { setConfirming(open); if (!open) setError(""); }}
+      title="Delete message?"
+      description={replyCount ? `Delete this message and its ${replyCount} nested ${replyCount === 1 ? "reply" : "replies"}? This cannot be undone.` : "Delete this message? This cannot be undone."}
+      busy={busy}
+      disabled={disabled}
+      error={error}
+      onConfirm={() => void remove()}
+    />
   </div>;
 }
 

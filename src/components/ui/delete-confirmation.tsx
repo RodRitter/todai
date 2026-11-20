@@ -10,6 +10,8 @@ export function DeleteConfirmation({
   title,
   description,
   busy,
+  disabled = false,
+  error,
   onConfirm,
 }: {
   open: boolean;
@@ -17,6 +19,8 @@ export function DeleteConfirmation({
   title: string;
   description: string;
   busy: boolean;
+  disabled?: boolean;
+  error?: string;
   onConfirm: () => void;
 }) {
   return (
@@ -37,11 +41,12 @@ export function DeleteConfirmation({
             <AlertDialog.Title className={modalTitleClassName}>{title}</AlertDialog.Title>
           </ModalHeader>
           <AlertDialog.Description className="text-muted-foreground text-sm break-words">{description}</AlertDialog.Description>
+          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <div className="flex justify-end gap-2">
             <AlertDialog.Cancel asChild>
               <Button type="button" variant="outline" disabled={busy}>Cancel</Button>
             </AlertDialog.Cancel>
-            <Button type="button" variant="destructive" disabled={busy} onClick={onConfirm}>
+            <Button type="button" variant="destructive" disabled={busy || disabled} onClick={onConfirm}>
               {busy ? "Deleting…" : "Delete"}
             </Button>
           </div>

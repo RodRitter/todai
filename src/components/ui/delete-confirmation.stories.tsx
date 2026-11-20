@@ -15,3 +15,6 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
 export const Busy: Story = { args: { busy: true } };
+
+export const Failed: Story = { args: { error: "Could not delete this item. Try again." } };
+export const Unavailable: Story = { args: { disabled: true } };

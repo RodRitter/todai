@@ -115,13 +115,14 @@ export const DeleteComment: Story = {
   render: () => <DeletionExample />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
     const control = canvas.getByRole("button", { name: "Delete message" });
     await userEvent.hover(canvas.getByText("An outdated comment."));
     await userEvent.click(control);
-    await userEvent.click(canvas.getByRole("button", { name: "Cancel" }));
+    await userEvent.click(within(await body.findByRole("alertdialog")).getByRole("button", { name: "Cancel" }));
     await expect(canvas.getByText("An outdated comment.")).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "Delete message" }));
-    await userEvent.click(canvas.getByRole("button", { name: /^Delete$/ }));
+    await userEvent.click(within(await body.findByRole("alertdialog")).getByRole("button", { name: /^Delete$/ }));
     await expect(canvas.getByText("No activity yet. Send a message to get started.")).toBeVisible();
   },
 };
@@ -183,3 +184,63 @@ export const DetailedAnswer: Story = { args: { comments: [
 export const NarrowConfirmation: Story = { ...Waiting, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
 export const DarkConfirmation: Story = { ...Waiting, decorators: [(Story) => <div className="dark bg-background p-4 text-foreground"><Story /></div>] };
 export const ConfirmationWithoutRecommendation: Story = { args: { comments: [{ ...request, recommendation: undefined }], onAnswerFeedback: async () => {} } };
+
+
+export const FailedDeletion: Story = {
+  args: {
+    comments: [{ id: "message", taskId: "task", authorName: "Human", body: "Keep this message.", createdAt: "2026-11-17T10:00:00Z" }],
+    onDeleteComment: async () => { throw new Error("Could not delete message. Try again."); },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole("button", { name: "Delete message" }));
+    const modal = within(await body.findByRole("alertdialog"));
+    await userEvent.click(modal.getByRole("button", { name: "Delete" }));
+    await expect(await modal.findByRole("alert")).toHaveTextContent("Could not delete message.");
+    await expect(modal.getByRole("button", { name: "Delete" })).toBeEnabled();
+    await userEvent.click(modal.getByRole("button", { name: "Cancel" }));
+    await expect(canvas.getByText("Keep this message.")).toBeVisible();
+  },
+};
+
+
+export const SendingFeedback: Story = {
+  args: { comments: [request], onAnswerFeedback: () => new Promise<void>(() => {}) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(canvas.getByLabelText("Your feedback"), "Use the suggested filter.");
+    await userEvent.click(canvas.getByRole("button", { name: "Submit feedback" }));
+    await expect(canvas.getByRole("button", { name: "Submitting…" })).toBeDisabled();
+    await expect(canvas.getByLabelText("Your feedback")).toBeDisabled();
+  },
+};
+export const LongFeedback: Story = {
+  args: {
+    comments: [{ ...request, body: "Should archived tasks remain visible in every board column, or should we show them only when someone enables the archive filter?", recommendation: "Hide archived tasks by default. Keep the archive filter available so people can find completed work without cluttering the board." }],
+    onAnswerFeedback: async () => {},
+  },
+  decorators: [(Story) => <div className="max-w-80"><Story /></div>],
+};
+
+
+export const DeleteFeedbackThread: Story = {
+  args: {
+    comments: [
+      { ...request, feedbackStatus: "answered" },
+      { id: "answer", taskId: "task", runId: "run", authorName: "Human", body: "Use the filter.", createdAt: "2026-11-17T10:01:00Z" },
+    ],
+    onDeleteComment: async () => {},
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    const thread = canvasElement.querySelector("#comment-request") as HTMLElement;
+    const buttons = within(thread).getAllByRole("button", { name: "Delete message" });
+    await userEvent.click(buttons[buttons.length - 1]);
+    const modal = within(await body.findByRole("alertdialog"));
+    await expect(modal.getByText("Delete this message and its 1 nested reply? This cannot be undone.")).toBeVisible();
+    await userEvent.click(modal.getByRole("button", { name: "Cancel" }));
+    await expect(canvas.getByText("Use the filter.")).toBeVisible();
+  },
+};

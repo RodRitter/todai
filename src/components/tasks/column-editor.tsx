@@ -313,8 +313,7 @@ export function ColumnEditor({ initialColumns, initialTaskCounts = {}, create, r
                                     aria-label={`Delete ${column}`}
                                     onClick={() => {
                                       if (deleteReason) return;
-                                      if (compact) void save(() => remove(column), "Column deleted.");
-                                      else setPendingDelete(column);
+                                      setPendingDelete(column);
                                     }}
                                   >
                                     <Trash2 className="size-3.5" />
@@ -361,6 +360,7 @@ export function ColumnEditor({ initialColumns, initialTaskCounts = {}, create, r
         title="Delete column?"
         description={`Delete “${pendingDelete ?? ""}”? Its agent assignment will be removed. This cannot be undone.`}
         busy={busy}
+        error={error}
         onConfirm={() => {
           if (pendingDelete !== null) void save(async () => {
             const next = await remove(pendingDelete);
