@@ -1,5 +1,6 @@
 "use client";
 
+import { useBottomScroll } from "@/components/conversation/use-bottom-scroll";
 import { ConversationComposer } from "@/components/conversation/conversation-composer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ConversationEmptyState } from "@/components/ui/conversation-empty-state";
@@ -37,6 +38,7 @@ export function TaskComments({ taskId, active = true, onChat, embedded = false, 
   onPostComment?: (body: string, artifacts?: ArtifactReference[], parentCommentId?: string) => Promise<void>;
   onAnswerFeedback?: (commentId: string, body: string) => Promise<void>;
 }) {
+  const { viewport, content } = useBottomScroll(active && embedded);
   const [observed, setObserved] = useState({ taskId, comments, active });
   const [attentionId, setAttentionId] = useState<string>();
   if (observed.comments !== comments || observed.taskId !== taskId || observed.active !== active) {
@@ -48,7 +50,7 @@ export function TaskComments({ taskId, active = true, onChat, embedded = false, 
     setObserved({ taskId, comments, active });
     if (latest || !active || observed.taskId !== taskId) setAttentionId(latest?.id);
   }
-  const activity = <div className={embedded ? "space-y-6 pb-4" : "space-y-6"}>
+  const activity = <div ref={content} className={embedded ? "space-y-6 pb-4" : "space-y-6"}>
       {!comments.length && agentStatus !== "Running" && agentStatus !== "Queued" && <ConversationEmptyState variant="comments" />}
       {comments.length ? (
         <ol aria-label="Activity, oldest first" className="space-y-8">
@@ -65,7 +67,7 @@ export function TaskComments({ taskId, active = true, onChat, embedded = false, 
     </div>;
   return (
     <section aria-label="Task activity" className={embedded ? "flex min-h-0 flex-1 flex-col" : "mt-8 space-y-6"}>
-      {embedded ? <ScrollArea className="min-h-0 flex-1">{activity}</ScrollArea> : activity}
+      {embedded ? <ScrollArea fade="bottom" className="min-h-0 flex-1" viewportProps={{ ref: viewport }}>{activity}</ScrollArea> : activity}
       {onPostComment && <ConversationComposer variant={embedded ? "fixed" : "inline"}>
         <CommentInput agents={agents} onPost={onPostComment} agentStatus={agentStatus} />
       </ConversationComposer>}

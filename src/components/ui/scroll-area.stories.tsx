@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
-import { expect, within } from "storybook/test";
+import { expect, waitFor, within } from "storybook/test";
 import { ScrollArea } from "./scroll-area";
 
 const meta = {
@@ -39,3 +39,20 @@ export const FlexHeight: Story = {
   render: () => <div className="flex h-64 w-72 flex-col"><h2>Fixed header</h2><ScrollArea className="flex-1">{Vertical.args?.children}</ScrollArea><p>Fixed footer</p></div>,
   play: Vertical.play,
 };
+
+export const BottomFade: Story = {
+  args: { ...Vertical.args, fade: "bottom" },
+  play: async ({ canvasElement }) => {
+    const viewport = canvasElement.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')!;
+    await expect(viewport).toHaveClass("scroll-fade-b");
+    await expect(getComputedStyle(viewport).maskImage).not.toBe("none");
+    await expect(viewport.scrollHeight).toBeGreaterThan(viewport.clientHeight);
+    viewport.scrollTop = viewport.scrollHeight;
+    await waitFor(() => expect(viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop).toBeLessThan(1));
+    const input = within(canvasElement).getByRole("button", { name: "Item 40" });
+    input.focus();
+    await expect(input).toHaveFocus();
+  },
+};
+export const BottomFadeShortContent: Story = { args: { ...ShortContent.args, fade: "bottom" } };
+export const BottomFadeDark: Story = { ...BottomFade, globals: { theme: "dark" } };

@@ -7,11 +7,12 @@ import { cn } from "@/lib/utils";
 type ScrollAreaProps = Omit<React.ComponentProps<typeof ScrollAreaPrimitive.Root>, "className"> & {
   className?: string;
   orientation?: "vertical" | "horizontal" | "both";
+  fade?: "none" | "bottom";
   variant?: "default" | "table" | "code" | "modal";
   viewportProps?: Omit<React.ComponentProps<typeof ScrollAreaPrimitive.Viewport>, "className" | "children">;
 };
 
-function ScrollArea({ className, children, orientation = "vertical", variant = "default", viewportProps, ...props }: ScrollAreaProps) {
+function ScrollArea({ className, children, orientation = "vertical", fade = "none", variant = "default", viewportProps, ...props }: ScrollAreaProps) {
   return (
     <ScrollAreaPrimitive.Root data-slot="scroll-area" className={cn(
       "relative flex min-h-0 min-w-0 flex-col overflow-hidden",
@@ -21,6 +22,7 @@ function ScrollArea({ className, children, orientation = "vertical", variant = "
     )} {...props}>
       <ScrollAreaPrimitive.Viewport data-slot="scroll-area-viewport" className={cn(
         "min-h-0 w-full flex-1 rounded-[inherit] overscroll-contain outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/50",
+        fade === "bottom" && "scroll-fade-b scroll-fade-12",
         orientation === "vertical" && "overflow-x-hidden!",
         orientation === "horizontal" && "overflow-y-hidden!",
       )} {...viewportProps}>

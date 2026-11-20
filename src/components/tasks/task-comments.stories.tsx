@@ -573,9 +573,18 @@ export const ReplyInputScrollsIntoView: Story = {
     viewport.scrollTop = viewport.scrollHeight;
     const input = canvas.getByRole("textbox", { name: "Your reply" });
     const surface = input.closest('[data-slot="input-group"]')!;
-    await userEvent.click(input);
-    await expect(canvas.getByRole("button", { name: "Send reply" })).toBeVisible();
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    const samples: number[] = [];
+    const resize = new ResizeObserver(() => {
+      samples.push(surface.getBoundingClientRect().bottom - viewport.getBoundingClientRect().bottom);
+    });
+    resize.observe(surface);
+    try {
+      await userEvent.click(input);
+      await expect(canvas.getByRole("button", { name: "Send reply" })).toBeVisible();
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      await expect(samples.length).toBeGreaterThan(0);
+      await expect(Math.max(...samples)).toBeLessThanOrEqual(1);
+    } finally { resize.disconnect(); }
     await waitFor(() => {
       expect(surface.getBoundingClientRect().bottom).toBeLessThanOrEqual(viewport.getBoundingClientRect().bottom + 1);
       expect(surface.getBoundingClientRect().top).toBeGreaterThanOrEqual(viewport.getBoundingClientRect().top - 1);

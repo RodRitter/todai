@@ -196,6 +196,7 @@ export const ScrollOnArrivalAndTab: Story = {
       <button onClick={() => setActive((value) => !value)}>Switch chat tab</button>
       <button onClick={() => setCurrent((value) => ({ ...value, messages: [...value.messages, { ...session.messages[1], id: crypto.randomUUID() }] }))}>Add chat response</button>
       <button onClick={() => setCurrent((value) => ({ ...value, messages: [...value.messages] }))}>Refresh chat</button>
+      <button onClick={() => setCurrent((value) => ({ ...value, messages: value.messages.map((message, index) => index === value.messages.length - 1 ? { ...message, body: message.body + "\n\n" + "Additional response content.\n\n".repeat(20) } : message) }))}>Grow existing response</button>
       <div className={active ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
         <ChatConversation {...args} session={current} active={active} />
       </div>
@@ -210,6 +211,19 @@ export const ScrollOnArrivalAndTab: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "Refresh chat" }));
     await expect(viewport.scrollTop).toBe(0);
     await userEvent.click(canvas.getByRole("button", { name: "Add chat response" }));
+    await waitFor(atBottom);
+    viewport.scrollTop = 0;
+    await userEvent.click(canvas.getByRole("button", { name: "Grow existing response" }));
+    await waitFor(atBottom);
+    // A late-loading element can change height without a message update.
+    const content = viewport.querySelector("ol")!.parentElement!;
+    const lateContent = canvasElement.ownerDocument.createElement("div");
+    lateContent.style.height = "200px";
+    content.append(lateContent);
+    await waitFor(atBottom);
+    lateContent.style.height = "400px";
+    await waitFor(atBottom);
+    lateContent.remove();
     await waitFor(atBottom);
     viewport.scrollTop = 0;
     await userEvent.click(canvas.getByRole("button", { name: "Switch chat tab" }));

@@ -7,7 +7,7 @@ import { ArtifactCreateDialog } from "@/components/artifacts/artifact-create-dia
 import { Button } from "@/components/ui/button";
 import { workspaceFetch } from "@/lib/workspace-fetch";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "@tiptap/markdown";
@@ -35,7 +35,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
   const [expanded, setExpanded] = useState(autoFocus || !!value.trim());
   const collapsed = variant === "reply" && !expanded;
   const compactVariant = variant === "compact" || variant === "reply";
-  function revealReply() {
+  const revealReply = useCallback(() => {
     const node = surface.current;
     if (variant !== "reply" || !node?.contains(node.ownerDocument.activeElement)) return;
     const viewport = node.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
@@ -44,7 +44,15 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
     const visible = viewport.getBoundingClientRect();
     if (bounds.bottom > visible.bottom) viewport.scrollTop += bounds.bottom - visible.bottom;
     else if (bounds.top < visible.top) viewport.scrollTop -= visible.top - bounds.top;
-  }
+  }, [variant]);
+  useEffect(() => {
+    const node = surface.current;
+    if (variant !== "reply" || !node) return;
+    // Resize notifications run during expansion, before the next paint.
+    const resize = new ResizeObserver(revealReply);
+    resize.observe(node);
+    return () => resize.disconnect();
+  }, [variant, revealReply]);
 
   const [creating, setCreating] = useState<Match | null>(null);
   const [match, setMatch] = useState<Match | null>(null);
@@ -189,9 +197,6 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
         if (disabled) return;
         setExpanded(true);
         requestAnimationFrame(revealReply);
-      }}
-      onTransitionEnd={(event) => {
-        if (event.target === event.currentTarget && event.propertyName === "height" && !collapsed) revealReply();
       }}
       onBlurCapture={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget)) setExpanded(false);

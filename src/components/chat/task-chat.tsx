@@ -1,10 +1,11 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { useBottomScroll } from "@/components/conversation/use-bottom-scroll";
 import { ConversationComposer } from "@/components/conversation/conversation-composer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ConversationEmptyState } from "@/components/ui/conversation-empty-state";
 import { Button } from "@/components/ui/button";
-import { isReplyInputActive, MessageAgentStatus } from "@/components/ui/message";
+import { MessageAgentStatus } from "@/components/ui/message";
 import { ConversationMessage } from "@/components/conversation/conversation-message";
 import { useMessageDeletion } from "@/components/conversation/use-message-deletion";
 import { DescriptionEditor } from "@/components/tasks/description-editor";
@@ -22,8 +23,7 @@ export function ChatConversation({ session, busy, onSend, onDelete, onClear, age
   onDelete: (messageId: string) => Promise<void>; onClear: () => Promise<void>;
   body: string; onBodyChange: (body: string) => void; draftVersion?: number; active?: boolean;
 }) {
-  const viewport = useRef<HTMLDivElement>(null);
-  const previousScroll = useRef<{ active: boolean; ids: Set<string> }>({ active: false, ids: new Set() });
+  const { viewport, content } = useBottomScroll(active);
   const region = useRef<HTMLElement>(null);
   const [version, setVersion] = useState(0);
   const [error, setError] = useState("");
@@ -35,21 +35,6 @@ export function ChatConversation({ session, busy, onSend, onDelete, onClear, age
     !pending.previousIds.has(message.id) && message.authorName === "Human" && message.body === pending.message.body);
   const messages = pending && !accepted ? [...session.messages, pending.message] : session.messages;
   const agentStatus = session.running ? "Running" : pending && !accepted ? "Queued" : undefined;
-  useEffect(() => {
-    const ids = new Set(session.messages.map((message) => message.id));
-    if (pending && !accepted) ids.add(pending.message.id);
-    const previous = previousScroll.current;
-    if (!active || (previous.active && ![...ids].some((id) => !previous.ids.has(id)))) {
-      previousScroll.current = { active, ids };
-      return;
-    }
-    const frame = requestAnimationFrame(() => {
-      previousScroll.current = { active, ids };
-      const node = viewport.current;
-      if (node && !isReplyInputActive(node.ownerDocument)) node.scrollTop = node.scrollHeight;
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [session.messages, pending, accepted, active]);
   const deletion = useMessageDeletion<string | null>({
     disabled: busy || session.running || pending !== null,
     onDelete: async (messageId) => {
@@ -76,7 +61,7 @@ export function ChatConversation({ session, busy, onSend, onDelete, onClear, age
     finally { submitting.current = false; setPending(null); }
   }
   return <section ref={region} aria-label="Task chat" className="flex min-h-0 flex-1 flex-col">
-    <ScrollArea className="min-h-0 flex-1" viewportProps={{ ref: viewport }}><div className="space-y-6 pb-4">
+    <ScrollArea fade="bottom" className="min-h-0 flex-1" viewportProps={{ ref: viewport }}><div ref={content} className="space-y-6 pb-4">
     {messages.length ? <ol aria-label="Chat messages, oldest first" className="space-y-6">
       {messages.map((message) => {
         const deleteButton = <Button type="button" variant="ghost-destructive" size="icon-xs" reveal="hover" aria-label="Delete chat message" disabled={locked}
