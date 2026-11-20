@@ -53,6 +53,7 @@ export function TaskBoard({
   const revision = useRef(0);
   const [busy, setBusy] = useState(false);
   const [tasks, setTasks] = useState(initialTasks);
+  const [initialTab, setInitialTab] = useState<"detail" | "activity">("detail");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Task | null>(null);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
@@ -140,7 +141,8 @@ export function TaskBoard({
     });
   }
 
-  function openEditor(task: Task | null = null) {
+  function openEditor(task: Task | null = null, tab: "detail" | "activity" = "detail") {
+    setInitialTab(tab);
     setEditing(task);
     setOpen(true);
   }
@@ -219,8 +221,8 @@ export function TaskBoard({
                     key={task.id}
                     task={task}
                     isDragging={draggedTaskId === task.id}
-                    onEdit={(task) => {
-                      if (!busy) openEditor(task);
+                    onEdit={(task, tab) => {
+                      if (!busy) openEditor(task, tab);
                     }}
                     onDragStart={(dragged) => setDraggedTaskId(dragged.id)}
                     onDragEnd={endDrag}
@@ -237,6 +239,7 @@ export function TaskBoard({
           columns={columns}
           defaultStatus={columns[0]}
           open={open}
+          initialTab={initialTab}
           task={
             editing
               ? (tasks.find((task) => task.id === editing.id) ?? editing)

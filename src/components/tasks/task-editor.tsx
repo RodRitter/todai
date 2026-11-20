@@ -41,6 +41,7 @@ export type TaskEditorProps = {
   onDeleteComment?: (commentId: string) => Promise<void>;
   onPostComment?: (body: string, artifacts?: ArtifactReference[], parentCommentId?: string) => Promise<void>;
   open: boolean;
+  initialTab?: "detail" | "activity";
   task?: Task | null;
   defaultStatus?: Status;
   onOpenChange: (open: boolean) => void;
@@ -66,6 +67,7 @@ function TaskEditorSession({
   onRun,
   onStop,
   open,
+  initialTab = "detail",
   task: editing = null,
   defaultStatus = "To do",
   onOpenChange,
@@ -82,7 +84,7 @@ function TaskEditorSession({
   const pendingRun =
     editing?.agentStatus === "Queued" || editing?.agentStatus === "Running";
   const [expanded, setExpanded] = useState(false);
-  const [tab, setTab] = useState("detail");
+  const [tab, setTab] = useState<string>(initialTab);
   const [artifactCount, setArtifactCount] = useState(0);
   const draftId = useRef<string | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(!editing);

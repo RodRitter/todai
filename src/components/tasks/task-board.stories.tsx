@@ -348,3 +348,24 @@ export const ResponsiveColumns: Story = {
     },
   },
 };
+
+export const OpenComments: Story = {
+  args: {
+    initialTasks: [{
+      ...exampleTasks[0],
+      comments: [{ id: "comment-1", taskId: exampleTasks[0].id, body: "Ready for review.", createdAt: "2026-11-17T08:00:00.000Z" }],
+    }],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole("button", { name: "1 comment" }));
+    let dialog = within(await body.findByRole("dialog"));
+    await expect(dialog.getByRole("tab", { name: /Activity/ })).toHaveAttribute("aria-selected", "true");
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(body.queryByRole("dialog")).not.toBeInTheDocument());
+    await userEvent.click(canvas.getByRole("button", { name: /^Edit / }));
+    dialog = within(await body.findByRole("dialog"));
+    await expect(dialog.getByRole("tab", { name: "Detail" })).toHaveAttribute("aria-selected", "true");
+  },
+};

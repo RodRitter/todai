@@ -8,13 +8,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { AgentStatus } from "./agent-status";
 import type { Task } from "@/domain/task";
 
 export type TaskCardProps = {
   task: Task;
   isDragging?: boolean;
-  onEdit: (task: Task) => void;
+  onEdit: (task: Task, tab?: "detail" | "activity") => void;
   onDragStart?: (task: Task) => void;
   onDragEnd?: () => void;
 };
@@ -49,6 +50,7 @@ export function TaskCard({
         if (!isDragging && !didDrag.current) onEdit(task);
       }}
       onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           onEdit(task);
@@ -71,13 +73,20 @@ export function TaskCard({
           variant="badge"
         />
         {commentCount > 0 && (
-          <span
-            className="inline-flex min-h-8 items-center gap-1.5 rounded-xl bg-muted px-2.5 py-1.5 text-muted-foreground"
+          <Button
+            type="button"
+            variant="comment-badge"
+            size="badge"
+            aria-haspopup="dialog"
+            onClick={(event) => {
+              event.stopPropagation();
+              if (!isDragging && !didDrag.current) onEdit(task, "activity");
+            }}
             aria-label={`${commentCount} ${commentCount === 1 ? "comment" : "comments"}`}
           >
             <MessageCircle className="size-4" aria-hidden="true" />
             {commentCount}
-          </span>
+          </Button>
         )}
       </CardFooter>
     </Card>

@@ -69,6 +69,20 @@ export const WithComments: Story = {
     },
   },
 };
+export const CommentBadgeActivation: Story = {
+  ...WithComments,
+  play: async ({ canvasElement, args }) => {
+    const badge = within(canvasElement).getByRole("button", { name: "1 comment" });
+    await userEvent.click(badge);
+    await expect(args.onEdit).toHaveBeenCalledTimes(1);
+    await expect(args.onEdit).toHaveBeenLastCalledWith(args.task, "activity");
+    badge.focus();
+    await userEvent.keyboard("{Enter}");
+    await userEvent.keyboard(" ");
+    await expect(args.onEdit).toHaveBeenCalledTimes(3);
+    await expect(args.onEdit).toHaveBeenLastCalledWith(args.task, "activity");
+  },
+};
 export const KeyboardActivation: Story = {
   play: async ({ canvasElement, args }) => {
     const card = within(canvasElement).getByRole("button");
