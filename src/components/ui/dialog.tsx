@@ -118,10 +118,10 @@ function DialogContent({
     </DialogPortal>
   );
 }
-function DialogHeader({ children, className, variant = "default", ...props }: React.ComponentProps<"div"> & { variant?: "default" | "actions" }) {
+function DialogHeader({ children, className, variant = "default", ...props }: React.ComponentProps<"div"> & { variant?: "default" | "actions" | "task" }) {
   const { show, disabled } = React.useContext(DialogCloseContext);
   return (
-    <ModalHeader data-slot="dialog-header" className={cn(variant === "actions" && "grid-cols-[minmax(0,1fr)_auto_2rem] [&>[data-slot=dialog-close]]:col-start-3", className)} {...props}>
+    <ModalHeader data-slot="dialog-header" className={cn(variant !== "default" && "grid-cols-[minmax(0,1fr)_auto_2rem] [&>[data-slot=dialog-close]]:col-start-3", variant === "task" && "px-6 pb-6", className)} {...props}>
       {show ? (
         <DialogClose asChild>
           <ModalCloseButton disabled={disabled} />
@@ -131,13 +131,14 @@ function DialogHeader({ children, className, variant = "default", ...props }: Re
     </ModalHeader>
   );
 }
-function DialogFooter({ className, variant = "default", ...props }: React.ComponentProps<"div"> & { variant?: "default" | "workspace" }) {
+function DialogFooter({ className, variant = "default", ...props }: React.ComponentProps<"div"> & { variant?: "default" | "workspace" | "task" }) {
   return (
     <div
       data-slot="dialog-footer"
       className={cn(
         "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
-        variant === "workspace" && "z-10 shrink-0 flex-row flex-wrap items-center justify-end bg-background px-4 py-2",
+        variant !== "default" && "z-10 shrink-0 flex-row flex-wrap items-center justify-end bg-background px-4 py-2",
+        variant === "task" && "px-6 py-4",
         className,
       )}
       {...props}

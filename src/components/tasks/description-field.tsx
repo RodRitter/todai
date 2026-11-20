@@ -10,12 +10,14 @@ export function DescriptionField({
   value,
   disabled,
   onChange,
+  onBlur,
   agents = [],
 }: {
   agents?: AgentProfile[];
   value: string;
   disabled: boolean;
   onChange: (description: string) => void;
+  onBlur?: () => Promise<boolean>;
 }) {
   const [isEditing, setIsEditing] = useState(false);
 
@@ -25,7 +27,11 @@ export function DescriptionField({
   }
 
   return (
-    <>
+    <div onBlur={(event) => {
+      if (!event.currentTarget.contains(event.target as Node) || event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+      // Keep the editor mounted so toolbar and artifact dialogs retain their state.
+      void onBlur?.();
+    }}>
       <input
         type="hidden"
         name="description"
@@ -74,6 +80,6 @@ export function DescriptionField({
           )}
         </EditorSurface>
       )}
-    </>
+    </div>
   );
 }

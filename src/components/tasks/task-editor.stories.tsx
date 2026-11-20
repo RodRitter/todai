@@ -148,55 +148,18 @@ export const PersistedComments: Story = {
   },
 };
 export const FailedSave: Story = {
-  args: {
-    open: true,
-    task: exampleTasks[0],
-    onSave: fn(async () => {
-      throw new Error("Storage unavailable");
-    }),
-  },
-  play: async ({ canvasElement }) => {
-    const dialog = within(
-      await within(canvasElement.ownerDocument.body).findByRole("dialog"),
-    );
+  args: { open: true, task: exampleTasks[0], onSave: fn() },
+  play: async ({ canvasElement, args }) => {
+    args.onSave.mockRejectedValueOnce(new Error("Save failed")).mockResolvedValue(undefined);
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
     await userEvent.click(dialog.getByRole("button", { name: "Edit title" }));
     await userEvent.clear(dialog.getByLabelText("Title"));
-    await userEvent.type(dialog.getByLabelText("Title"), "Unsaved draft");
-    await userEvent.click(dialog.getByRole("button", { name: "Save changes" }));
-    await waitFor(() =>
-      expect(
-        within(canvasElement.ownerDocument.body).getByText(
-          "Could not confirm changes were saved. Try again to save your draft.",
-        ),
-      ).toBeVisible(),
-    );
-    await expect(dialog.getByRole("button", { name: "Edit title" })).toHaveTextContent("Unsaved draft");
-    await userEvent.click(
-      within(canvasElement.ownerDocument.body).getByRole("button", {
-        name: "Dismiss notification",
-      }),
-    );
-    await expect(dialog.getByRole("button", { name: "Edit title" })).toHaveTextContent("Unsaved draft");
-    await waitFor(() =>
-      expect(
-        within(canvasElement.ownerDocument.body).queryByText(
-          "Could not confirm changes were saved. Try again to save your draft.",
-        ),
-      ).not.toBeInTheDocument(),
-    );
-    await userEvent.click(dialog.getByRole("button", { name: "Save changes" }));
-    await within(canvasElement.ownerDocument.body).findByText(
-      "Could not confirm changes were saved. Try again to save your draft.",
-    );
-    await userEvent.keyboard("{Escape}");
-    await waitFor(() =>
-      expect(
-        within(canvasElement.ownerDocument.body).queryByText(
-          "Could not confirm changes were saved. Try again to save your draft.",
-        ),
-      ).not.toBeInTheDocument(),
-    );
-    await expect(dialog.getByRole("button", { name: "Edit title" })).toHaveTextContent("Unsaved draft");
+    await userEvent.type(dialog.getByLabelText("Title"), "Retained title");
+    await userEvent.tab();
+    await expect(await within(canvasElement.ownerDocument.body).findByText("Could not save changes. Your draft is still open.")).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Edit title" })).toHaveTextContent("Retained title");
+    await userEvent.click(within(canvasElement.ownerDocument.body).getByRole("button", { name: "Retry" }));
+    await expect(await within(canvasElement.ownerDocument.body).findByText("Task saved.", { exact: true })).toBeVisible();
   },
 };
 
@@ -309,29 +272,27 @@ export const MarkdownContent: Story = {
     await expect(
       dialog.queryByRole("button", { name: "Save description" }),
     ).not.toBeInTheDocument();
-    await userEvent.click(
-      dialog.getByRole("button", { name: "Save changes" }),
-    );
+    await userEvent.click(dialog.getByRole("tab", { name: "Detail" }));
     await waitFor(() =>
       expect(
         dialog.getByText("Updated requirements"),
       ).toBeVisible(),
     );
     await expect(
-      dialog.queryByRole("textbox", { name: "Description" }),
-    ).not.toBeInTheDocument();
+      dialog.getByRole("textbox", { name: "Description" }),
+    ).toBeVisible();
     await expect(args.onSave).toHaveBeenCalledWith(
       expect.objectContaining({
         description: "Updated requirements",
       }),
     );
     await expect(
-      dialog.getByRole("button", { name: "Save changes" }),
-    ).toBeDisabled();
+      dialog.queryByRole("button", { name: "Save changes" }),
+    ).not.toBeInTheDocument();
   },
 };
 
-export const CancelDescriptionEdit: Story = {
+export const SaveDescriptionOnClose: Story = {
   args: {
     open: true,
     task: { ...exampleTasks[2], description: "**Original description**" },
@@ -346,13 +307,13 @@ export const CancelDescriptionEdit: Story = {
     await userEvent.clear(dialog.getByLabelText("Description"));
     await userEvent.type(
       dialog.getByLabelText("Description"),
-      "Discard this draft",
+      "Save this draft",
     );
     await userEvent.click(
-      dialog.getByRole("button", { name: "Cancel" }),
+      dialog.getByRole("button", { name: "Close" }),
     );
-    await expect(args.onOpenChange).toHaveBeenCalledWith(false);
-    await expect(args.onSave).not.toHaveBeenCalled();
+    await waitFor(() => expect(args.onOpenChange).toHaveBeenCalledWith(false));
+    await waitFor(() => expect(args.onSave).toHaveBeenCalledWith(expect.objectContaining({ description: "Save this draft" })));
   },
 };
 
@@ -373,24 +334,20 @@ export const FailedDescriptionSave: Story = {
       dialog.getByLabelText("Description"),
       "Retained draft",
     );
-    await userEvent.click(
-      dialog.getByRole("button", { name: "Save changes" }),
-    );
+    await userEvent.click(dialog.getByRole("tab", { name: "Detail" }));
     await within(canvasElement.ownerDocument.body).findByText(
-      "Could not confirm changes were saved. Try again to save your draft.",
+      "Could not save changes. Your draft is still open.",
     );
     await expect(dialog.getByLabelText("Description")).toHaveTextContent(
       "Retained draft",
     );
-    await userEvent.click(
-      dialog.getByRole("button", { name: "Save changes" }),
-    );
+    await userEvent.click(within(canvasElement.ownerDocument.body).getByRole("button", { name: "Retry" }));
     await waitFor(() =>
       expect(dialog.getByText("Retained draft")).toBeVisible(),
     );
     await expect(
-      dialog.queryByRole("textbox", { name: "Description" }),
-    ).not.toBeInTheDocument();
+      dialog.getByRole("textbox", { name: "Description" }),
+    ).toBeVisible();
   },
 };
 
@@ -420,7 +377,7 @@ export const InlineTitle: Story = {
     await userEvent.type(dialog.getByLabelText("Title"), "Updated title{Enter}");
     await expect(dialog.queryByRole("textbox", { name: "Title" })).not.toBeInTheDocument();
     await expect(dialog.getByRole("button", { name: "Edit title" })).toHaveTextContent("Updated title");
-    await userEvent.click(dialog.getByRole("button", { name: "Save changes" }));
+    await userEvent.click(dialog.getByRole("tab", { name: "Detail" }));
     await expect(args.onSave).toHaveBeenCalledWith(expect.objectContaining({ title: "Updated title" }));
   },
 };
@@ -436,7 +393,7 @@ export const MoveBetweenBoards: Story = {
     await userEvent.selectOptions(dialog.getByLabelText("Board"), "research");
     await expect(dialog.getByLabelText("Status")).toHaveValue("Ideas");
     await expect(dialog.queryByRole("option", { name: "In progress" })).not.toBeInTheDocument();
-    await userEvent.click(dialog.getByRole("button", { name: "Save changes" }));
+    await userEvent.click(dialog.getByRole("tab", { name: "Detail" }));
     await expect(args.onSave).toHaveBeenCalledWith(expect.objectContaining({ boardId: "research", status: "Ideas" }));
   },
 };
@@ -488,7 +445,7 @@ export const DescriptionReferences: Story = {
     const artifactDialog = within(await page.findByRole("dialog", { name: "Create artifact" }));
     await userEvent.click(artifactDialog.getByRole("button", { name: "Cancel" }));
     await expect(editor).toHaveTextContent("#Plan");
-    await expect(args.onSave).not.toHaveBeenCalled();
+    if (!args.task) await expect(args.onSave).not.toHaveBeenCalled();
     await userEvent.click(editor);
     await userEvent.keyboard("{End}x{Backspace}");
     await taskDialog.findByRole("option", { name: "Create artifact “Plan”" });
@@ -498,8 +455,8 @@ export const DescriptionReferences: Story = {
     await userEvent.keyboard("Plan details");
     await userEvent.click(reopened.getByRole("button", { name: "Save and attach" }));
     await expect(await taskDialog.findByRole("link", { name: "Plan" })).toHaveAttribute("href", "#artifact/plan/r1");
-    await expect(args.onSave).not.toHaveBeenCalled();
-    await userEvent.click(taskDialog.getByRole("button", { name: args.task ? "Save changes" : "Create task" }));
+    if (args.task) await userEvent.click(taskDialog.getByRole("tab", { name: "Detail" }));
+    else await userEvent.click(taskDialog.getByRole("button", { name: "Create task" }));
     await waitFor(() => expect(args.onSave).toHaveBeenCalledWith(expect.objectContaining({ description: expect.stringContaining("#artifact/plan/r1") })));
   },
 };
@@ -601,5 +558,64 @@ export const ChatLoadFailure: Story = {
     await expect(await dialog.findByRole("alert")).toHaveTextContent("Chat is unavailable.");
     await userEvent.click(dialog.getByRole("button", { name: "Retry chat" }));
     await expect(await dialog.findByRole("textbox", { name: "Your chat message" })).toBeVisible();
+  },
+};
+
+export const HeaderWithLongTitle: Story = {
+  args: {
+    open: true,
+    task: { ...exampleTasks[2], title: "Review the task header with a long title that stays on one line and shows an ellipsis on a narrow screen" },
+    assignedColumns: [exampleTasks[2].status],
+    assignments: [{ column: exampleTasks[2].status, agentId: "reviewer" }],
+    agents: [{ id: "reviewer", name: "Reviewer", tool: "codex", model: "gpt-6.1-sol", effort: "medium", instructions: "", permissions: "read-only" }],
+    onRun: fn(),
+  },
+  play: async ({ canvasElement }) => {
+    const panel = await within(canvasElement.ownerDocument.body).findByRole("dialog");
+    const header = within(panel.querySelector('[data-slot="dialog-header"]') as HTMLElement);
+    const title = header.getByRole("button", { name: "Edit title" });
+    const expand = header.getByRole("button", { name: "Expand task panel" });
+    const close = header.getByRole("button", { name: "Close" });
+    const run = within(panel).getByRole("button", { name: "Run" });
+    await expect(expand.getBoundingClientRect().left).toBeGreaterThanOrEqual(title.getBoundingClientRect().right);
+    await expect(close.getBoundingClientRect().left).toBeGreaterThanOrEqual(expand.getBoundingClientRect().right);
+    await expect(run.getBoundingClientRect().top).toBeGreaterThanOrEqual(title.getBoundingClientRect().bottom);
+    const titleStyle = getComputedStyle(title);
+    await expect(titleStyle.whiteSpace).toBe("nowrap");
+    await expect(titleStyle.textOverflow).toBe("ellipsis");
+    await userEvent.click(expand);
+    await waitFor(() => {
+      const headerBounds = panel.querySelector('[data-slot="dialog-header"]')!.getBoundingClientRect();
+      const contentBounds = panel.querySelector("form")!.getBoundingClientRect();
+      expect(headerBounds.width).toBeLessThanOrEqual(1024);
+      expect(Math.abs(headerBounds.left - contentBounds.left)).toBeLessThan(1);
+      expect(Math.abs(headerBounds.width - contentBounds.width)).toBeLessThan(1);
+    });
+    await userEvent.click(within(panel).getByRole("tab", { name: "Activity" }));
+    await expect(title).toBeVisible();
+    await userEvent.click(title);
+    await userEvent.clear(header.getByLabelText("Title"));
+    await userEvent.type(header.getByLabelText("Title"), "Draft title{Enter}");
+    await waitFor(() => expect(run).toBeEnabled());
+  },
+};
+
+export const HeaderWithStop: Story = {
+  args: {
+    open: true,
+    task: { ...exampleTasks[2], agentStatus: "Running" },
+    onStop: fn(),
+  },
+};
+
+export const AutosaveControls: Story = {
+  args: { open: true, task: exampleTasks[2], onSave: fn(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); }) },
+  play: async ({ canvasElement, args }) => {
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await userEvent.selectOptions(dialog.getByLabelText("Status", { exact: true }), "Done");
+    await userEvent.click(dialog.getByRole("switch", { name: "Auto-workflow" }));
+    await userEvent.click(dialog.getByRole("switch", { name: "Auto-run" }));
+    await waitFor(() => expect(args.onSave).toHaveBeenLastCalledWith(expect.objectContaining({ status: "Done", autoWorkflow: !exampleTasks[2].autoWorkflow, autoRun: !exampleTasks[2].autoRun })));
+    await expect(dialog.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
   },
 };

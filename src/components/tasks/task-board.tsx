@@ -259,6 +259,7 @@ export function TaskBoard({
             const saved = await persistence.answerFeedback!(editing!.id, commentId, body);
             updateTasks((current) => current.map((task) => task.id === saved.id ? saved : task));
           }) : undefined}
+          assignments={assignments}
           assignedColumns={assignments.map((assignment) => assignment.column)}
           onRun={persistence?.run ? () => mutate(async () => {
             const saved = await persistence.run!(editing!.id);
