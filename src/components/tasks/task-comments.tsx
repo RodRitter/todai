@@ -1,13 +1,16 @@
 "use client";
 
+import { ConversationEmptyState } from "@/components/ui/conversation-empty-state";
+import { commentReference } from "@/domain/comment-reference";
 import { ArtifactPicker } from "@/components/artifacts/artifact-attachments";
 import type { Artifact, ArtifactReference } from "@/domain/artifact";
 import { useRef, useState } from "react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowUp, Copy, LoaderCircle, Reply, Trash2 } from "lucide-react";
+import { ArrowUp, Copy, MessageCircle, Link, Ellipsis, LoaderCircle, Reply, Trash2 } from "lucide-react";
 import { Markdown } from "@/components/ui/markdown";
 import { Message, MessageContent, MessageHeader, MessageAvatar, MessageAuthor, MessageThread, MessageReply } from "@/components/ui/message";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
@@ -19,7 +22,9 @@ import type { AgentProfile } from "@/domain/column-agent";
 import { groupActivity } from "@/domain/activity";
 import type { AgentStatus, TaskComment } from "@/domain/task";
 
-export function TaskComments({ embedded = false, comments = [], onAnswerFeedback, onPostComment, onDeleteComment, agents = [], agentStatus }: {
+export function TaskComments({ onChat, embedded = false, comments = [], onAnswerFeedback, onPostComment, onDeleteComment, agents = [], agentStatus }: {
+  taskId?: string;
+  onChat?: (comment: TaskComment) => void;
   embedded?: boolean;
   comments?: TaskComment[];
   agentStatus?: AgentStatus;
@@ -31,25 +36,27 @@ export function TaskComments({ embedded = false, comments = [], onAnswerFeedback
   return (
     <section aria-label="Task activity" className={embedded ? "space-y-6" : "mt-8 space-y-6"}>
       {onPostComment && <CommentInput agents={agents} onPost={onPostComment} agentStatus={agentStatus} />}
-      {agentStatus === "Running" && (
+      {!comments.length && agentStatus !== "Running" && agentStatus !== "Queued" && <ConversationEmptyState variant="comments" />}
+      {(agentStatus === "Running" || agentStatus === "Queued") && (
         <Message role="status"><MessageContent>
-          <MessageHeader><LoaderCircle aria-hidden="true" className="mr-2 size-4 animate-spin motion-reduce:animate-none" />The agent is working…</MessageHeader>
+          <MessageHeader><LoaderCircle aria-hidden="true" className="mr-2 size-4 animate-spin motion-reduce:animate-none" />{agentStatus === "Queued" ? "The agent is queued to start." : "The agent is working…"}</MessageHeader>
         </MessageContent></Message>
       )}
       {comments.length ? (
         <ol aria-label="Activity, newest first" className="space-y-8">
           {groupActivity(comments).map(({ message: comment, replies }) => (
-            <li key={comment.id} id={`comment-${comment.id}`} className="group">
-              <ActivityMessage comment={comment} replies={replies} agentStatus={agentStatus} onDeleteComment={onDeleteComment} onAnswerFeedback={onAnswerFeedback} onPostComment={onPostComment} />
+            <li key={comment.id} tabIndex={-1} id={`comment-${comment.id}`} className="group">
+              <ActivityMessage onChat={onChat} comment={comment} replies={replies} agentStatus={agentStatus} onDeleteComment={onDeleteComment} onAnswerFeedback={onAnswerFeedback} onPostComment={onPostComment} />
             </li>
           ))}
         </ol>
-      ) : agentStatus !== "Running" && <Message><MessageContent><MessageHeader>No activity yet. Send a message to get started.</MessageHeader></MessageContent></Message>}
+      ) : null}
     </section>
   );
 }
 
-function ActivityMessage({ comment, replies = [], agentStatus, onDeleteComment, onAnswerFeedback, onPostComment }: {
+function ActivityMessage({ onChat, comment, replies = [], agentStatus, onDeleteComment, onAnswerFeedback, onPostComment }: {
+  onChat?: (comment: TaskComment) => void;
   comment: TaskComment;
   replies?: TaskComment[];
   agentStatus?: AgentStatus;
@@ -69,10 +76,10 @@ function ActivityMessage({ comment, replies = [], agentStatus, onDeleteComment, 
           <time dateTime={comment.createdAt} title={new Date(comment.createdAt).toLocaleString()}>
             {new Date(comment.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
           </time>
-          <CopyComment body={comment.body} />
           {onPostComment && <Button ref={replyButton} type="button" size="xs" variant="ghost-muted" disabled={disabled}
             aria-expanded={replying} aria-controls={`thread-${comment.id}`} onClick={() => { setThreadOpen(true); setReplying(true); }}><Reply aria-hidden="true" />Reply</Button>}
-          {onDeleteComment && <DeleteComment commentId={comment.id} replyCount={replies.length} onDelete={onDeleteComment} disabled={agentStatus === "Running" || agentStatus === "Queued"} />}
+          {onChat && <Button type="button" size="xs" variant="ghost-muted" onClick={() => onChat(comment)}><MessageCircle aria-hidden="true" />Chat</Button>}
+          <CommentActions comment={comment} replyCount={replies.length} onDelete={onDeleteComment} disabled={disabled} />
         </MessageHeader>
         {comment.feedbackStatus ? (
           <Confirmation state={comment.feedbackStatus} question={<Markdown>{comment.body}</Markdown>}
@@ -88,8 +95,7 @@ function ActivityMessage({ comment, replies = [], agentStatus, onDeleteComment, 
         {(replies.length > 0 || replying) && <MessageThread id={`thread-${comment.id}`} aria-label="Reply thread" count={replies.length} open={threadOpen} onOpenChange={setThreadOpen}>
           {replies.map((reply) => <MessageReply key={reply.id} id={`comment-${reply.id}`} avatarName={reply.authorName || "Agent"} label={comment.feedbackStatus && reply.runId === comment.runId && reply.authorName === "Human" ? "Your answer" : reply.authorName || "Agent"}
             actions={<><time dateTime={reply.createdAt}>{new Date(reply.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time>
-              <CopyComment body={reply.body} />
-              {onDeleteComment && <DeleteComment commentId={reply.id} onDelete={onDeleteComment} disabled={disabled} />}</>}>
+              <CommentActions comment={reply} onDelete={onDeleteComment} disabled={disabled} /></>}>
             <Markdown>{reply.body}</Markdown>
           </MessageReply>)}
           {replying && onPostComment && <ReplyInput commentId={comment.id} disabled={disabled}
@@ -99,13 +105,6 @@ function ActivityMessage({ comment, replies = [], agentStatus, onDeleteComment, 
       </MessageContent>
     </Message>
   );
-}
-
-function CopyComment({ body }: { body: string }) {
-  return <Button type="button" size="icon-xs" variant="ghost" aria-label="Copy message" title="Copy message" onClick={async () => {
-    try { await navigator.clipboard.writeText(body); toast.success("Message copied."); }
-    catch { toast.error("Could not copy message."); }
-  }}><Copy aria-hidden="true" /></Button>;
 }
 
 function ReplyInput({ commentId, disabled, onPost, onClose }: {
@@ -137,40 +136,43 @@ function ReplyInput({ commentId, disabled, onPost, onClose }: {
   </div>;
 }
 
-function DeleteComment({ commentId, replyCount = 0, onDelete, disabled }: {
+function CommentActions({ comment, replyCount = 0, onDelete, disabled }: {
+  comment: TaskComment;
   replyCount?: number;
-  commentId: string;
-  onDelete: (commentId: string) => Promise<void>;
+  onDelete?: (commentId: string) => Promise<void>;
   disabled: boolean;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const trigger = useRef<HTMLButtonElement>(null);
   async function remove() {
-    if (busy || disabled) return;
-    setBusy(true);
-    setError("");
-    try { await onDelete(commentId); setConfirming(false); }
+    if (!onDelete || busy || disabled) return;
+    setBusy(true); setError("");
+    try { await onDelete(comment.id); setConfirming(false); }
     catch (error) { setError(error instanceof Error ? error.message : "Could not delete message."); }
     finally { setBusy(false); }
   }
-  return <div>
-    <Button type="button" size="icon-xs" variant="ghost-destructive" aria-label="Delete message" title={disabled ? "Stop the agent or wait for it to finish before deleting." : "Delete message"}
-      disabled={disabled || busy} onClick={() => { setError(""); setConfirming(true); }}
-      reveal="hover">
-      <Trash2 className="size-3.5" />
-    </Button>
-    <DeleteConfirmation
-      open={confirming}
-      onOpenChange={(open) => { setConfirming(open); if (!open) setError(""); }}
-      title="Delete message?"
+  async function copy(reference = false) {
+    try { await navigator.clipboard.writeText(reference ? commentReference(comment) : comment.body); toast.success(reference ? "Comment reference copied." : "Message copied."); }
+    catch { toast.error("Could not copy message."); }
+  }
+  return <>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild><Button ref={trigger} type="button" size="icon-xs" variant="ghost-muted" aria-label="Message actions" title="Message actions"><Ellipsis aria-hidden="true" /></Button></DropdownMenuTrigger>
+      <DropdownMenuContent align="end" onCloseAutoFocus={(event) => { if (confirming) event.preventDefault(); }}>
+        <DropdownMenuItem onSelect={() => void copy()}><Copy aria-hidden="true" />Copy message</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => void copy(true)}><Link aria-hidden="true" />Copy comment reference</DropdownMenuItem>
+        {onDelete && <DropdownMenuItem variant="destructive" disabled={disabled || busy} onSelect={() => { setError(""); setConfirming(true); }}><Trash2 aria-hidden="true" />Delete message</DropdownMenuItem>}
+      </DropdownMenuContent>
+    </DropdownMenu>
+    <DeleteConfirmation open={confirming} onOpenChange={(open) => {
+      setConfirming(open);
+      if (!open) { setError(""); trigger.current?.focus(); }
+    }} title="Delete message?"
       description={replyCount ? `Delete this message and its ${replyCount} nested ${replyCount === 1 ? "reply" : "replies"}? This cannot be undone.` : "Delete this message? This cannot be undone."}
-      busy={busy}
-      disabled={disabled}
-      error={error}
-      onConfirm={() => void remove()}
-    />
-  </div>;
+      busy={busy} disabled={disabled} error={error} onConfirm={() => void remove()} />
+  </>;
 }
 
 function FeedbackInput({ commentId, onAnswer }: {

@@ -539,3 +539,67 @@ export const ExpandTaskPanel: Story = {
     await expect(dialog.getByRole("button", { name: "Edit title" })).toHaveTextContent("Retained expanded draft");
   },
 };
+
+export const TaskChatTab: Story = {
+  args: { task: { ...exampleTasks[2], comments: [{ id: "source", taskId: exampleTasks[2].id, authorName: "Reviewer", body: "Review this change.", createdAt: "2026-11-20T10:00:00Z" }] }, open: true,
+    agents: [{ id: "reviewer", name: "Reviewer", tool: "codex", model: "test", effort: "low", permissions: "read-only", instructions: "Review changes." }] },
+  beforeEach: () => {
+    const original = globalThis.fetch;
+    const session = { id: "task-chat", taskId: exampleTasks[2].id, createdAt: "2026-11-20T10:00:00Z", updatedAt: "2026-11-20T10:00:00Z", messages: [] as { id: string; body: string; authorName: string; createdAt: string }[], running: false, error: null };
+    globalThis.fetch = async (input, options) => {
+      if (String(input).startsWith("/api/chats")) {
+        if (options?.method === "POST") session.messages.push({ id: "sent", body: JSON.parse(String(options.body)).body, authorName: "Human", createdAt: session.createdAt });
+        return Response.json(session);
+      }
+      return String(input).startsWith("/api/artifacts") ? Response.json([]) : original(input, options);
+    };
+    return () => { globalThis.fetch = original; };
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    const dialog = within(await body.findByRole("dialog"));
+    const chat = dialog.getByRole("tab", { name: "Chat" });
+    await userEvent.click(dialog.getByRole("tab", { name: "Activity" }));
+    await userEvent.click(dialog.getByRole("button", { name: "Chat" }));
+    await expect(chat).toHaveAttribute("data-state", "active");
+    const composer = await dialog.findByRole("textbox", { name: "Your chat message" });
+    await expect(composer).toHaveTextContent("@Reviewer");
+    await expect(composer).toHaveTextContent("Comment by Reviewer");
+    const surface = composer.closest('[data-slot="input-group"]')!;
+    const field = surface.getBoundingClientRect();
+    const viewport = surface.closest('[data-slot="scroll-area-viewport"]')!.getBoundingClientRect();
+    await expect(field.left - viewport.left).toBeGreaterThanOrEqual(3);
+    await expect(viewport.right - field.right).toBeGreaterThanOrEqual(3);
+    await waitFor(() => expect(composer).toHaveFocus());
+    await userEvent.type(composer, " Please explain.");
+    await userEvent.click(dialog.getByRole("tab", { name: "Activity" }));
+    await userEvent.click(chat);
+    await expect(composer).toHaveTextContent("Please explain.");
+    await expect(body.getAllByRole("dialog")).toHaveLength(1);
+    await userEvent.click(dialog.getByRole("button", { name: "Send chat message" }));
+    const messages = await dialog.findByRole("list", { name: "Chat messages, newest first" });
+    await expect(messages.children).toHaveLength(1);
+    await userEvent.click(within(messages).getByRole("button", { name: "Comment by Reviewer" }));
+    await expect(dialog.getByRole("tab", { name: "Activity" })).toHaveAttribute("data-state", "active");
+    await waitFor(() => expect(canvasElement.ownerDocument.getElementById("comment-source")).toHaveFocus());
+  },
+};
+
+export const ChatLoadFailure: Story = {
+  ...TaskChatTab,
+  args: { ...TaskChatTab.args, initialTab: "chat" },
+  beforeEach: () => {
+    const original = globalThis.fetch;
+    let reads = 0;
+    globalThis.fetch = async (input, options) => String(input).startsWith("/api/chats")
+      ? (++reads === 1 ? Response.json({ error: "Chat is unavailable." }, { status: 503 }) : Response.json({ id: "chat", taskId: exampleTasks[2].id, messages: [], running: false, error: null }))
+      : String(input).startsWith("/api/artifacts") ? Response.json([]) : original(input, options);
+    return () => { globalThis.fetch = original; };
+  },
+  play: async ({ canvasElement }) => {
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await expect(await dialog.findByRole("alert")).toHaveTextContent("Chat is unavailable.");
+    await userEvent.click(dialog.getByRole("button", { name: "Retry chat" }));
+    await expect(await dialog.findByRole("textbox", { name: "Your chat message" })).toBeVisible();
+  },
+};

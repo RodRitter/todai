@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, fn, spyOn, userEvent, within } from "storybook/test";
 import type { TaskComment } from "@/domain/task";
 import { TaskComments } from "./task-comments";
 
@@ -116,12 +116,14 @@ export const DeleteComment: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
-    const control = canvas.getByRole("button", { name: "Delete message" });
+    const control = canvas.getByRole("button", { name: "Message actions" });
     await userEvent.hover(canvas.getByText("An outdated comment."));
     await userEvent.click(control);
+    await userEvent.click(await body.findByRole("menuitem", { name: "Delete message" }));
     await userEvent.click(within(await body.findByRole("alertdialog")).getByRole("button", { name: "Cancel" }));
     await expect(canvas.getByText("An outdated comment.")).toBeVisible();
-    await userEvent.click(canvas.getByRole("button", { name: "Delete message" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Message actions" }));
+    await userEvent.click(await body.findByRole("menuitem", { name: "Delete message" }));
     await userEvent.click(within(await body.findByRole("alertdialog")).getByRole("button", { name: /^Delete$/ }));
     await expect(canvas.getByText("No activity yet. Send a message to get started.")).toBeVisible();
   },
@@ -171,7 +173,7 @@ export const AnsweredFeedback: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByText("Your answer")).toBeVisible();
     await expect(canvas.getByText("Yes, hide them by default.")).toBeVisible();
-    await expect(canvas.getAllByRole("button", { name: "Copy message" })).toHaveLength(2);
+    await expect(canvas.getAllByRole("button", { name: "Message actions" })).toHaveLength(2);
     await expect(canvas.getByRole("list", { name: "Activity, newest first" }).children).toHaveLength(1);
   },
 };
@@ -194,7 +196,8 @@ export const FailedDeletion: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
-    await userEvent.click(canvas.getByRole("button", { name: "Delete message" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Message actions" }));
+    await userEvent.click(await body.findByRole("menuitem", { name: "Delete message" }));
     const modal = within(await body.findByRole("alertdialog"));
     await userEvent.click(modal.getByRole("button", { name: "Delete" }));
     await expect(await modal.findByRole("alert")).toHaveTextContent("Could not delete message.");
@@ -236,8 +239,9 @@ export const DeleteFeedbackThread: Story = {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
     const thread = canvasElement.querySelector("#comment-request") as HTMLElement;
-    const buttons = within(thread).getAllByRole("button", { name: "Delete message" });
+    const buttons = within(thread).getAllByRole("button", { name: "Message actions" });
     await userEvent.click(buttons[0]);
+    await userEvent.click(await body.findByRole("menuitem", { name: "Delete message" }));
     const modal = within(await body.findByRole("alertdialog"));
     await expect(modal.getByText("Delete this message and its 1 nested reply? This cannot be undone.")).toBeVisible();
     await userEvent.click(modal.getByRole("button", { name: "Cancel" }));
@@ -257,12 +261,14 @@ export const DeletePendingFeedback: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
-    const control = canvas.getByRole("button", { name: "Delete message" });
+    const control = canvas.getByRole("button", { name: "Message actions" });
     await expect(control).toBeEnabled();
     await userEvent.click(control);
+    await userEvent.click(await body.findByRole("menuitem", { name: "Delete message" }));
     await userEvent.click(within(await body.findByRole("alertdialog")).getByRole("button", { name: "Cancel" }));
     await expect(canvas.getByLabelText("Your feedback")).toBeVisible();
     await userEvent.click(control);
+    await userEvent.click(await body.findByRole("menuitem", { name: "Delete message" }));
     await userEvent.click(within(await body.findByRole("alertdialog")).getByRole("button", { name: "Delete" }));
     await expect(canvas.getByText("No activity yet. Send a message to get started.")).toBeVisible();
   },
@@ -344,3 +350,75 @@ export const ConnectedAvatars: Story = {
 };
 export const NarrowConnectedAvatars: Story = { ...ConnectedAvatars, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
 export const DarkConnectedAvatars: Story = { ...ConnectedAvatars, decorators: [(Story) => <div className="dark bg-background text-foreground p-4"><Story /></div>] };
+
+export const PrivateChatActions: Story = {
+  args: {
+    taskId: "task", comments: [{ ...request, feedbackStatus: undefined },
+      { id: "nested-private", taskId: "task", parentCommentId: request.id, authorName: "Human", body: "A reply without a chat action.", createdAt: "2026-11-20T10:01:00Z" }],
+    onPostComment: async () => {}, onDeleteComment: async () => {}, onChat: fn(),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    await expect(canvas.getAllByRole("button", { name: "Chat" })).toHaveLength(1);
+    const reply = canvas.getByRole("button", { name: "Reply" });
+    await expect(reply.nextElementSibling).toBe(canvas.getByRole("button", { name: "Chat" }));
+    await expect(canvas.queryByRole("button", { name: "Copy message" })).not.toBeInTheDocument();
+    await userEvent.click(canvas.getAllByRole("button", { name: "Message actions" })[0]);
+    await expect(await body.findByRole("menuitem", { name: "Copy message" })).toBeVisible();
+    await expect(body.getByRole("menuitem", { name: "Delete message" })).toBeVisible();
+    await expect(body.getByRole("menuitem", { name: "Copy comment reference" })).toBeVisible();
+    await userEvent.keyboard("{Escape}");
+    await expect(canvas.getAllByRole("button", { name: "Message actions" })[0]).toHaveFocus();
+  },
+};
+export const NarrowPrivateChatActions: Story = { ...PrivateChatActions, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
+export const DarkPrivateChatActions: Story = { ...PrivateChatActions, decorators: [(Story) => <div className="dark bg-background p-4 text-foreground"><Story /></div>] };
+export const RunningCommentMenu: Story = {
+  ...PrivateChatActions,
+  args: { ...PrivateChatActions.args, agentStatus: "Running" },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    await expect(canvas.getByRole("button", { name: "Reply" })).toBeDisabled();
+    await expect(canvas.getByRole("button", { name: "Chat" })).toBeEnabled();
+    await userEvent.click(canvas.getAllByRole("button", { name: "Message actions" })[0]);
+    await expect(await body.findByRole("menuitem", { name: "Delete message" })).toHaveAttribute("data-disabled");
+    await expect(body.getByRole("menuitem", { name: "Copy message" })).not.toHaveAttribute("data-disabled");
+    await userEvent.keyboard("{Escape}");
+  },
+};
+
+export const CopyCommentReference: Story = {
+  ...PrivateChatActions,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const clipboard = spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+    try {
+      await userEvent.click(canvas.getAllByRole("button", { name: "Message actions" })[0]);
+      await userEvent.click(await within(canvasElement.ownerDocument.body).findByRole("menuitem", { name: "Copy comment reference" }));
+      await expect(clipboard).toHaveBeenCalledWith("[Comment by Builder](#comment/task/request)");
+    } finally { clipboard.mockRestore(); }
+  },
+};
+
+export const EmptyComments: Story = {
+  args: { comments: [], onPostComment: fn() },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole("heading", { name: "Add the first comment" })).toBeVisible();
+    await expect(canvas.getByText(/to choose an agent/)).toBeVisible();
+    await expect(canvas.getByRole("textbox", { name: "Your message" })).toBeVisible();
+  },
+};
+export const EmptyCommentsNarrow: Story = { ...EmptyComments, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
+export const EmptyCommentsDark: Story = { ...EmptyComments, globals: { theme: "dark" } };
+export const EmptyCommentsQueued: Story = {
+  args: { ...EmptyComments.args, agentStatus: "Queued" },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByRole("heading", { name: "Add the first comment" })).not.toBeInTheDocument();
+    await expect(canvas.getByRole("button", { name: "Send message" })).toBeDisabled();
+    await expect(canvas.getByText("The agent is queued to start.")).toBeVisible();
+  },
+};

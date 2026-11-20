@@ -1,3 +1,4 @@
+import { initializeChatSchema } from "./chat-schema.ts";
 import { migrateBoards } from "./board-schema.ts";
 import { initializeArtifactSchema } from "./artifact-schema.ts";
 import { randomUUID } from "node:crypto";
@@ -7,8 +8,8 @@ import { statuses } from "../domain/task.ts";
 
 // Keep schema creation and legacy migrations together, in their original order.
 export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
-  const fresh = !db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'tasks'").get();
   db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
+  const fresh = !db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'tasks'").get();
   db.exec(`
       CREATE TABLE IF NOT EXISTS execution_control (
         id INTEGER PRIMARY KEY CHECK (id = 1), paused INTEGER NOT NULL DEFAULT 0
@@ -130,6 +131,7 @@ export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
     migrateWorkspaceOwnership(db, !fresh || seedWorkspace);
     migrateBoards(db);
     initializeArtifactSchema(db);
+    initializeChatSchema(db);
     if (!db.prepare("PRAGMA table_info(agents)").all().some((column) => column.name === "requireApprovalBeforeEdits")) {
       db.exec("ALTER TABLE agents ADD COLUMN requireApprovalBeforeEdits INTEGER NOT NULL DEFAULT 0");
       // Move the installed Bug fixer policy into the reusable setting once.

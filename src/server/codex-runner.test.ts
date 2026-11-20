@@ -198,3 +198,30 @@ setInterval(() => {}, 1000);
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("private Codex chat disables external integrations and uses a chat prompt", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "todai-private-codex-"));
+  const executable = join(directory, "fake-codex");
+  writeFileSync(executable, `#!${process.execPath}
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+let prompt = '';
+process.stdin.on('data', chunk => prompt += chunk);
+process.stdin.on('end', () => {
+  fs.writeFileSync('received.json', JSON.stringify({ args, prompt }));
+  fs.writeFileSync(args[args.indexOf('--output-last-message') + 1], 'Private answer');
+});
+`, { mode: 0o755 });
+  try {
+    const input = request(directory);
+    await createCodexRunner(executable)({ ...input, privateChat: { messages: [] } });
+    const { args, prompt } = JSON.parse(readFileSync(join(directory, "received.json"), "utf8"));
+    assert.ok(args.includes("mcp_servers={}"));
+    assert.ok(args.includes("shell_tool"));
+    assert.ok(args.includes("apps"));
+    assert.ok(args.includes("plugins"));
+    assert.ok(args.includes("read-only"));
+    assert.match(prompt, /saved only in this chat/);
+    assert.doesNotMatch(prompt, /automatically posted as a comment/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});

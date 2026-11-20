@@ -26,6 +26,7 @@ export function createClaudeRunner(executable = "claude"): Runner {
           "--mcp-config", JSON.stringify({ mcpServers: { todai_artifacts: { type: "http", url: request.artifacts.url, headers: { Authorization: `Bearer ${request.artifacts.token}` } } } }),
           "--allowedTools", "mcp__todai_artifacts",
         ] : []),
+        ...(request.privateChat ? ["--tools", "", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}'] : []),
         "-p", "--output-format", "json", "--no-session-persistence",
         "--permission-prompts", "none", "--model", run.profile.model,
         "--effort", run.profile.effort, "--permission-mode", run.profile.permissions],

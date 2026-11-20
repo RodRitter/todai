@@ -1,3 +1,5 @@
+import { parseCommentReference } from "@/domain/comment-reference";
+import { CommentReference } from "@/components/tasks/comment-reference";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { parseArtifactMention } from "@/domain/artifact-mentions";
 import { ArtifactMention } from "@/components/artifacts/artifact-mention";
@@ -31,6 +33,8 @@ function markdownComponents(compact: boolean): Components {
     a: ({ href, children }) =>
       compact ? (
         <span>{children}</span>
+      ) : href && parseCommentReference(href) ? (
+        <CommentReference reference={parseCommentReference(href)!}>{children}</CommentReference>
       ) : href && parseArtifactMention(href) ? (
         <ArtifactMention reference={parseArtifactMention(href)!}>{children}</ArtifactMention>
       ) : typeof children === "string" && /^[$@/]/.test(children) && (href?.startsWith("/") || href?.startsWith("#agent/")) ? (

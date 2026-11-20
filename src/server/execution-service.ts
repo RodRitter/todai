@@ -14,6 +14,7 @@ export type RunRequest = {
   signal: AbortSignal;
   onStart: (pid: number) => void;
   artifacts?: RunArtifactConnection;
+  privateChat?: { messages: import("../domain/task.ts").TaskComment[]; candidates?: import("../domain/column-agent.ts").AgentProfile[] };
 };
 export type Runner = (request: RunRequest) => Promise<string>;
 

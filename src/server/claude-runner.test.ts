@@ -196,3 +196,26 @@ setInterval(() => {}, 1000);
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("private Claude chat has no tools or inherited MCP servers", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "todai-private-claude-"));
+  const executable = join(directory, "fake-claude");
+  writeFileSync(executable, `#!${process.execPath}
+const fs = require('node:fs');
+let prompt = '';
+process.stdin.on('data', chunk => prompt += chunk);
+process.stdin.on('end', () => {
+  fs.writeFileSync('received.json', JSON.stringify({ args: process.argv.slice(2), prompt }));
+  process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result: 'Private answer' }));
+});
+`, { mode: 0o755 });
+  try {
+    const input = request(directory);
+    await createClaudeRunner(executable)({ ...input, privateChat: { messages: [] } });
+    const { args, prompt } = JSON.parse(readFileSync(join(directory, "received.json"), "utf8"));
+    assert.equal(args[args.indexOf("--tools") + 1], "");
+    assert.ok(args.includes("--strict-mcp-config"));
+    assert.ok(args.includes('{"mcpServers":{}}'));
+    assert.match(prompt, /saved only in this chat/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});

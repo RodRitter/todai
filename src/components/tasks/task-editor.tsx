@@ -1,6 +1,8 @@
 "use client";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { TaskChat } from "@/components/chat/task-chat";
+import { commentChatDraft } from "@/domain/comment-reference";
 import { TaskArtifacts } from "@/components/artifacts/artifact-attachments";
 import type { ArtifactReference } from "@/domain/artifact";
 import { useRef, useState, type FormEvent } from "react";
@@ -41,7 +43,7 @@ export type TaskEditorProps = {
   onDeleteComment?: (commentId: string) => Promise<void>;
   onPostComment?: (body: string, artifacts?: ArtifactReference[], parentCommentId?: string) => Promise<void>;
   open: boolean;
-  initialTab?: "detail" | "activity";
+  initialTab?: "detail" | "activity" | "chat";
   task?: Task | null;
   defaultStatus?: Status;
   onOpenChange: (open: boolean) => void;
@@ -85,6 +87,8 @@ function TaskEditorSession({
     editing?.agentStatus === "Queued" || editing?.agentStatus === "Running";
   const [expanded, setExpanded] = useState(false);
   const [tab, setTab] = useState<string>(initialTab);
+  const [chatDraft, setChatDraft] = useState("");
+  const [chatDraftVersion, setChatDraftVersion] = useState(0);
   const [artifactCount, setArtifactCount] = useState(0);
   const draftId = useRef<string | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(!editing);
@@ -171,6 +175,15 @@ function TaskEditorSession({
         comments: editing?.comments ?? [],
       });
       setSavedDescription(description);
+    });
+  }
+
+  function navigateComment(commentId: string) {
+    setTab("activity");
+    requestAnimationFrame(() => {
+      const comment = document.getElementById(`comment-${commentId}`);
+      comment?.scrollIntoView({ block: "nearest" });
+      comment?.focus({ preventScroll: true });
     });
   }
 
@@ -276,6 +289,7 @@ function TaskEditorSession({
                 <TabsTrigger value="detail" disabled={busy}>Detail</TabsTrigger>
                 <ActivityTabTrigger value="activity" disabled={busy} agentStatus={editing.agentStatus} comments={editing.comments} />
                 <TabsTrigger value="artifacts" disabled={busy} aria-label="Artifacts" aria-description={`${artifactCount} artifacts`}>Artifacts<TabsCount count={artifactCount} /></TabsTrigger>
+                <TabsTrigger value="chat" disabled={busy}>Chat</TabsTrigger>
               </TabsList>
             </div>}
             <ScrollArea className="min-h-0 flex-1"><div className="px-6 pt-1 pb-6">
@@ -443,17 +457,19 @@ function TaskEditorSession({
               </div>
               </TabsContent>
               {editing && <TabsContent value="activity" forceMount>
-                <TaskComments embedded comments={editing.comments} agentStatus={editing.agentStatus} onAnswerFeedback={onAnswerFeedback} agents={agents} onPostComment={onPostComment} onDeleteComment={onDeleteComment} />
+                <TaskComments onChat={(comment) => {
+                  setChatDraft((draft) => `${draft}${draft.trim() ? "\n\n" : ""}${commentChatDraft(comment, agents ?? [])}`);
+                  setChatDraftVersion((version) => version + 1);
+                  setTab("chat");
+                }} taskId={editing.id} embedded comments={editing.comments} agentStatus={editing.agentStatus} onAnswerFeedback={onAnswerFeedback} agents={agents} onPostComment={onPostComment} onDeleteComment={onDeleteComment} />
               </TabsContent>}
+              {editing && <TabsContent value="chat" forceMount><TaskChat taskId={editing.id} active={tab === "chat"} agents={agents} body={chatDraft} onBodyChange={setChatDraft} draftVersion={chatDraftVersion} onNavigateComment={navigateComment} /></TabsContent>}
               {editing && <TabsContent value="artifacts" forceMount>
                 <TaskArtifacts
                   taskId={editing.id}
                   commentsKey={JSON.stringify((editing.comments ?? []).map((comment) => comment.id))}
                   onCountChange={setArtifactCount}
-                  onNavigateComment={(commentId) => {
-                    setTab("activity");
-                    requestAnimationFrame(() => document.getElementById(`comment-${commentId}`)?.scrollIntoView({ block: "nearest" }));
-                  }}
+                  onNavigateComment={navigateComment}
                 />
               </TabsContent>}
             </div></ScrollArea>
