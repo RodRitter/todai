@@ -101,7 +101,7 @@ function ActivityMessage({ comment, replies = [], agentStatus, onDeleteComment, 
             try { await navigator.clipboard.writeText(comment.body); toast.success("Message copied."); }
             catch { toast.error("Could not copy message."); }
           }}><Copy aria-hidden="true" /></Button>
-          {onDeleteComment && <DeleteComment commentId={comment.id} replyCount={replies.length} onDelete={onDeleteComment} disabled={agentStatus === "Running" || agentStatus === "Queued" || comment.feedbackStatus === "pending"} />}
+          {onDeleteComment && <DeleteComment commentId={comment.id} replyCount={replies.length} onDelete={onDeleteComment} disabled={agentStatus === "Running" || agentStatus === "Queued"} />}
         </MessageFooter>
       </MessageContent>
     </Message>
@@ -126,7 +126,7 @@ function DeleteComment({ commentId, replyCount = 0, onDelete, disabled }: {
     finally { setBusy(false); }
   }
   return <div>
-    <Button type="button" size="icon-xs" variant="ghost-destructive" aria-label="Delete message" title={disabled ? "Finish the agent run and resolve pending feedback before deleting." : "Delete message"}
+    <Button type="button" size="icon-xs" variant="ghost-destructive" aria-label="Delete message" title={disabled ? "Stop the agent or wait for it to finish before deleting." : "Delete message"}
       disabled={disabled || busy} onClick={() => { setError(""); setConfirming(true); }}
       reveal="hover">
       <Trash2 className="size-3.5" />

@@ -35,7 +35,7 @@ test("comment deletion validates ownership and removes attachments without delet
     assert.equal(library.read(artifact.id).id, artifact.id);
     assert.equal((await remove(data)).status, 400);
     store.addComment({ id: "feedback", taskId: "one", body: "Question", createdAt: new Date().toISOString(), feedbackStatus: "pending" });
-    assert.throws(() => store.deleteComment("one", "feedback"), /Answer or cancel/);
+    assert.ok(!store.deleteComment("one", "feedback").comments!.some((item) => item.id === "feedback"));
     store.saveAgent({ id: "agent", name: "Agent", tool: "codex", model: "test", effort: "medium", permissions: "workspace-write", instructions: "" });
     store.assignColumnAgent({ column: "In progress", agentId: "agent" });
     store.save({ id: "two", title: "two", description: "", status: "In progress", autoRun: true });

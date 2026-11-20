@@ -187,3 +187,31 @@ test("legacy intent comments are hidden without hiding unrelated comments from a
     assert.equal(f.store.history()[0].summary, intent.summary);
   } finally { f.cleanup(); }
 });
+
+test("deleting pending feedback stops the agent without moving the task or resuming replies", async () => {
+  const calls: string[] = [];
+  const f = fixture(async ({ run }) => {
+    if (run.kind === "intent") return '["refiner","reviewer"]';
+    calls.push(run.profile.name);
+    return '{"type":"feedback_request","question":"Proceed?","recommendation":"Yes."}';
+  });
+  try {
+    f.store.postComment("task", "@Refiner @Reviewer");
+    await f.service.drain();
+    const waiting = f.store.list()[0];
+    const request = waiting.comments!.find((comment) => comment.feedbackStatus === "pending")!;
+    const unrelated = f.store.postComment("task", "Keep this context").comments!.find((comment) => comment.body === "Keep this context")!;
+    assert.equal(f.store.deleteComment("task", unrelated.id).agentStatus, "Waiting");
+    const saved = f.store.deleteComment("task", request.id);
+    assert.equal(saved.agentStatus, "Stopped");
+    assert.equal(saved.status, waiting.status);
+    assert.ok(!saved.comments!.some((comment) => comment.id === request.id));
+    assert.equal(f.store.history().find((run) => run.id === request.runId)!.status, "Stopped");
+    assert.throws(() => f.store.answerFeedback("task", request.id, "Yes"), /no longer pending/);
+    await f.service.drain();
+    assert.deepEqual(calls, ["Refiner"]);
+    const reopened = new TaskStore(join(f.directory, "tasks.sqlite"));
+    try { assert.equal(reopened.list()[0].agentStatus, "Stopped"); }
+    finally { reopened.close(); }
+  } finally { f.cleanup(); }
+});

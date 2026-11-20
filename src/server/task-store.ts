@@ -841,10 +841,21 @@ export class TaskStore {
       const replies = groupActivity(task.comments ?? []).find(({ message }) => message.id === commentId)?.replies ?? [];
       const deleting = [comment, ...replies];
       const ids = new Set(deleting.map((item) => item.id));
-      if (deleting.some((item) => item.feedbackStatus === "pending") || this.history(taskId).some((run) => run.status === "Waiting" && run.commentId && ids.has(run.commentId)))
+      if (this.history(taskId).some((run) => run.status === "Waiting" && run.commentId && ids.has(run.commentId) && task.comments?.some((item) => item.runId === run.id && item.feedbackStatus === "pending" && !ids.has(item.id))))
         throw new CommentValidationError("Answer or cancel this feedback request before deleting it.");
       const remove = this.db.prepare("DELETE FROM comments WHERE workspaceId = workspace_id() AND taskId = ? AND id = ?");
       for (const id of ids) remove.run(taskId, id);
+      const pending = deleting.filter((item) => item.feedbackStatus === "pending");
+      for (const request of pending) {
+        this.db.prepare("UPDATE runs SET status = 'Stopped' WHERE workspaceId = workspace_id() AND taskId = ? AND id = ? AND status = 'Waiting'")
+          .run(taskId, request.runId ?? null);
+      }
+      if (pending.length) {
+        this.db.prepare(`UPDATE tasks SET agentStatus = 'Stopped'
+          WHERE workspaceId = workspace_id() AND id = ? AND agentStatus = 'Waiting'
+          AND NOT EXISTS (SELECT 1 FROM comments WHERE workspaceId = workspace_id() AND taskId = ? AND feedbackStatus = 'pending')`)
+          .run(taskId, taskId);
+      }
       return this.list().find((item) => item.id === taskId)!;
     });
   }

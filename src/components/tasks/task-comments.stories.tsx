@@ -244,3 +244,26 @@ export const DeleteFeedbackThread: Story = {
     await expect(canvas.getByText("Use the filter.")).toBeVisible();
   },
 };
+
+function DeletePendingFeedbackExample() {
+  const [comments, setComments] = useState<TaskComment[]>([request]);
+  return <TaskComments comments={comments} agentStatus={comments.length ? "Waiting" : "Stopped"}
+    onAnswerFeedback={async () => {}}
+    onDeleteComment={async (id) => setComments((current) => current.filter((comment) => comment.id !== id))} />;
+}
+
+export const DeletePendingFeedback: Story = {
+  render: () => <DeletePendingFeedbackExample />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    const control = canvas.getByRole("button", { name: "Delete message" });
+    await expect(control).toBeEnabled();
+    await userEvent.click(control);
+    await userEvent.click(within(await body.findByRole("alertdialog")).getByRole("button", { name: "Cancel" }));
+    await expect(canvas.getByLabelText("Your feedback")).toBeVisible();
+    await userEvent.click(control);
+    await userEvent.click(within(await body.findByRole("alertdialog")).getByRole("button", { name: "Delete" }));
+    await expect(canvas.getByText("No activity yet. Send a message to get started.")).toBeVisible();
+  },
+};
