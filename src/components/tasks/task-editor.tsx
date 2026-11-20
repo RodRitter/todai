@@ -1,6 +1,5 @@
 "use client";
 
-import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TaskChat } from "@/components/chat/task-chat";
 import { commentChatDraft } from "@/domain/comment-reference";
@@ -294,10 +293,8 @@ function TaskEditorSession({
               }}
             />
             </> : (
-              <DialogTitle asChild>
-              <TaskTitle>
+              <DialogTitle variant="detail">
                 <TaskTitleButton title={title} disabled={busy} onClick={() => setIsEditingTitle(true)}>{title}</TaskTitleButton>
-              </TaskTitle>
               </DialogTitle>
             )}
             {titleError && (
@@ -601,10 +598,6 @@ function TaskEditorSession({
       )}
     </Dialog>
   );
-}
-
-function TaskTitle({ className, ...props }: ComponentProps<"h2">) {
-  return <h2 className={cn(className, "min-w-0 text-left text-xl font-semibold leading-tight tracking-tight text-foreground sm:text-2xl")} {...props} />;
 }
 
 function TaskTitleButton(props: ComponentProps<"button">) {

@@ -1,3 +1,4 @@
+import { ReferenceChip } from "./reference-chip";
 import { parseCommentReference } from "@/domain/comment-reference";
 import { CommentReference } from "@/components/tasks/comment-reference";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -37,8 +38,8 @@ function markdownComponents(compact: boolean): Components {
         <CommentReference reference={parseCommentReference(href)!}>{children}</CommentReference>
       ) : href && parseArtifactMention(href) ? (
         <ArtifactMention reference={parseArtifactMention(href)!}>{children}</ArtifactMention>
-      ) : typeof children === "string" && /^[$@/]/.test(children) && (href?.startsWith("/") || href?.startsWith("#agent/")) ? (
-        <span title={href} className="rounded bg-accent px-1 py-0.5 font-medium text-accent-foreground">{children}</span>
+      ) : href?.startsWith("#agent/") || (typeof children === "string" && /^[$/]/.test(children) && href?.startsWith("/")) ? (
+        <ReferenceChip asChild kind={href?.startsWith("#agent/") ? "agent" : typeof children === "string" && children.startsWith("$") ? "skill" : "file"}><span title={href}>{children}</span></ReferenceChip>
       ) : (
         <a
           href={href}

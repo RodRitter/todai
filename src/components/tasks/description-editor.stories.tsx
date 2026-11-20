@@ -266,3 +266,30 @@ export const CompactArtifactTagging: Story = {
   ...QuickArtifact,
   args: { ...QuickArtifact.args, variant: "compact" },
 };
+
+export const ReferenceBadges: Story = {
+  play: async ({ canvasElement }) => {
+    await waitFor(() => {
+      const references = Array.from(canvasElement.querySelectorAll<HTMLElement>(".tiptap a"));
+      expect(references).toHaveLength(5);
+      const styles = references.map((reference) => getComputedStyle(reference));
+      expect(new Set(styles.map((style) => style.backgroundColor)).size).toBe(5);
+      for (const style of styles) {
+        expect(style.fontWeight).toBe("400");
+        expect(style.borderRadius).toBe("9999px");
+      }
+    });
+  },
+  args: {
+    artifacts: true,
+    value: "[@Reviewer](#agent/reviewer) [Design evidence](#artifact/evidence/r1) [$Review](/workspace/skills/review/SKILL.md) [/src/app.tsx](/workspace/src/app.tsx) [Comment by Reviewer](#comment/task/comment)",
+  },
+};
+export const ReferenceBadgesDark: Story = {
+  ...ReferenceBadges,
+  decorators: [(Story) => <div className="dark bg-background text-foreground p-4"><Story /></div>],
+};
+export const ReferenceBadgesNarrow: Story = {
+  ...ReferenceBadges,
+  decorators: [(Story) => <div className="max-w-64"><Story /></div>],
+};

@@ -24,7 +24,7 @@ export function ModalCloseButton(props: React.ComponentProps<typeof Button>) {
 export function ModalHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      className={cn("sticky top-0 z-10 -mx-4 -mt-4 grid grid-cols-[minmax(0,1fr)_2rem] items-center gap-x-3 gap-y-2 bg-background p-4 [&>[data-slot=dialog-description]]:col-span-full [&>[data-slot=dialog-close]]:col-start-2 [&>[data-slot=dialog-close]]:row-start-1", className)}
+      className={cn("sticky top-0 z-10 -mx-4 -mt-4 grid grid-cols-[minmax(0,1fr)_2rem] items-center gap-x-3 gap-y-2 bg-background px-4 pb-4 pt-6 [&>[data-slot=dialog-description]]:col-span-full [&>[data-slot=dialog-close]]:col-start-2 [&>[data-slot=dialog-close]]:row-start-1", className)}
       {...props}
     />
   );
@@ -76,7 +76,7 @@ function DialogContent({
   showCloseButton?: boolean;
   closeDisabled?: boolean;
   size?: "default" | "wide" | "large" | "expanded";
-  layout?: "default" | "workspace" | "prompt";
+  layout?: "default" | "workspace" | "prompt" | "preview";
 }) {
   return (
     <DialogPortal>
@@ -90,6 +90,7 @@ function DialogContent({
           size === "large" && "sm:max-w-3xl",
           size === "expanded" && "sm:max-w-[calc(100%-2rem)]",
           layout === "workspace" && "grid h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 px-4 [&>[data-slot=dialog-header]]:mt-0",
+          layout === "preview" && "px-4 [&>[data-slot=dialog-header]]:mt-0 [&>[data-slot=dialog-header]]:shrink-0",
           layout === "prompt" && "rounded-xl",
           className,
         )}
@@ -112,7 +113,7 @@ function DialogContent({
         }}
       >
         <DialogCloseContext.Provider value={{ show: showCloseButton, disabled: closeDisabled }}>
-          {layout === "workspace" ? children : <ScrollArea variant="modal">{children}</ScrollArea>}
+          {layout === "workspace" || layout === "preview" ? children : <ScrollArea variant="modal">{children}</ScrollArea>}
         </DialogCloseContext.Provider>
       </DialogPrimitive.Content>
     </DialogPortal>
@@ -131,14 +132,16 @@ function DialogHeader({ children, className, variant = "default", ...props }: Re
     </ModalHeader>
   );
 }
-function DialogFooter({ className, variant = "default", ...props }: React.ComponentProps<"div"> & { variant?: "default" | "workspace" | "task" }) {
+function DialogFooter({ className, variant = "default", ...props }: React.ComponentProps<"div"> & { variant?: "default" | "workspace" | "task" | "metadata" }) {
+  const Component = variant === "metadata" ? "footer" : "div";
   return (
-    <div
+    <Component
       data-slot="dialog-footer"
       className={cn(
         "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
         variant !== "default" && "z-10 shrink-0 flex-row flex-wrap items-center justify-end bg-background px-4 py-2",
         variant === "task" && "px-6 py-4",
+        variant === "metadata" && "block -mx-4 space-y-1 px-4 py-3 text-xs leading-relaxed text-muted-foreground",
         className,
       )}
       {...props}
@@ -147,12 +150,13 @@ function DialogFooter({ className, variant = "default", ...props }: React.Compon
 }
 function DialogTitle({
   className,
+  variant = "default",
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Title>) {
+}: React.ComponentProps<typeof DialogPrimitive.Title> & { variant?: "default" | "detail" }) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn(modalTitleClassName, className)}
+      className={cn(modalTitleClassName, variant === "detail" && "text-xl font-semibold leading-tight tracking-tight text-foreground sm:text-2xl", className)}
       {...props}
     />
   );

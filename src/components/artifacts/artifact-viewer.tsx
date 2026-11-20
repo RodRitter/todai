@@ -10,7 +10,7 @@ import remarkGfm from "remark-gfm";
 import { artifactPreviewKind, type Artifact } from "@/domain/artifact";
 import { workspaceFetch } from "@/lib/workspace-fetch";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { richTextClassName } from "@/components/ui/rich-text-styles";
 
 async function fetchContent(artifact: Artifact, preview: boolean, signal?: AbortSignal) {
@@ -66,16 +66,15 @@ export function ArtifactViewer({ artifact, onClose }: { artifact: Artifact; onCl
   }
 
   return <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-    <DialogContent size="large">
+    <DialogContent size="large" layout="preview">
       <DialogHeader>
-        <DialogTitle>{artifact.title}</DialogTitle>
+        <div className="col-start-1 row-start-1 flex min-w-0 flex-wrap items-center gap-2">
+          <ArtifactTypePill kind={kind} />
+          <DialogTitle className="min-w-0 flex-1">{artifact.title}</DialogTitle>
+        </div>
         <DialogDescription className="sr-only">Preview of revision {artifact.revisionNumber} by {artifact.creator}.</DialogDescription>
       </DialogHeader>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="min-w-0 break-words text-xs text-muted-foreground">{artifact.creator}<span className="mx-2" aria-hidden="true">·</span><span>Revision {artifact.revisionNumber}</span><span className="mx-2" aria-hidden="true">·</span><time dateTime={artifact.updatedAt} title={new Date(artifact.updatedAt).toLocaleString()}>{new Date(artifact.updatedAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}</time>{artifact.archived ? " · Archived" : ""}</p>
-        {kind !== "link" && <Button size="icon-xs" variant="ghost-muted" className="shrink-0" disabled={downloading} aria-label={downloading ? "Downloading…" : "Download"} title="Download this revision" onClick={() => void download()}><Download aria-hidden="true" className="size-4" /></Button>}
-        {downloadError && <p role="alert" className="w-full text-sm text-destructive">{downloadError}</p>}
-      </div>
+      <ScrollArea variant="modal" className="-mx-4">
       {kind === "link" ? <div className="space-y-3">
         <p>This external link stores only its URL and metadata. Remote content may change; it is not a preserved snapshot.</p>
         <p className="break-all text-sm">{artifact.url}</p>
@@ -102,10 +101,21 @@ export function ArtifactViewer({ artifact, onClose }: { artifact: Artifact; onCl
           {kind === "pdf" && <PdfPreview url={content.url!} />}
         </div>}
       </>}
-      {(artifact.description || artifact.filename) && <footer className="space-y-1 border-t pt-3 text-xs leading-relaxed text-muted-foreground">
+      </ScrollArea>
+      <DialogFooter variant="metadata" aria-label="Artifact details">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="min-w-0 break-words text-xs text-muted-foreground">{artifact.creator}<span className="mx-2" aria-hidden="true">·</span><span>Revision {artifact.revisionNumber}</span><span className="mx-2" aria-hidden="true">·</span><time dateTime={artifact.updatedAt} title={new Date(artifact.updatedAt).toLocaleString()}>{new Date(artifact.updatedAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}</time>{artifact.archived ? " · Archived" : ""}</p>
+          {kind !== "link" && <Button size="icon-xs" variant="ghost-muted" className="shrink-0" disabled={downloading} aria-label={downloading ? "Downloading…" : "Download"} title="Download this revision" onClick={() => void download()}><Download aria-hidden="true" className="size-4" /></Button>}
+          {downloadError && <p role="alert" className="w-full text-sm text-destructive">{downloadError}</p>}
+        </div>
         {artifact.description && <p className="whitespace-pre-wrap break-words">{artifact.description}</p>}
         {artifact.filename && <p className="break-words">{artifact.filename} · {artifact.mediaType} · {artifact.byteSize?.toLocaleString()} bytes</p>}
-      </footer>}
+      </DialogFooter>
     </DialogContent>
   </Dialog>;
+}
+
+function ArtifactTypePill({ kind }: { kind: ReturnType<typeof artifactPreviewKind> }) {
+  const labels = { markdown: "Markdown", text: "Plain text", image: "Image", pdf: "PDF", link: "External link", unsupported: "File" };
+  return <span aria-label={`Document type: ${labels[kind]}`} className="inline-flex shrink-0 items-center rounded-full bg-muted px-2 py-0.5 text-xs font-normal leading-5 text-muted-foreground">{labels[kind]}</span>;
 }

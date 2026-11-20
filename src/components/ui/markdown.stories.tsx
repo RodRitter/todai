@@ -49,3 +49,27 @@ export const UntrustedContent: Story = {
     ).toBeNull();
   },
 };
+
+export const ReferencePills: Story = {
+  args: {
+    children: "[@Reviewer](#agent/reviewer) [Comment by Reviewer](#comment/task/source) [Design evidence](#artifact/evidence/r1) [$Review](/workspace/skills/review/SKILL.md) [/src/app.tsx](/workspace/src/app.tsx)",
+  },
+  play: async ({ canvasElement }) => {
+    const pills = Array.from(canvasElement.querySelectorAll<HTMLElement>('[data-slot="reference-chip"]'));
+    await expect(pills).toHaveLength(5);
+    const styles = pills.map((pill) => getComputedStyle(pill));
+    await expect(new Set(styles.map((style) => style.backgroundColor)).size).toBe(5);
+    await expect(new Set(styles.map((style) => style.color)).size).toBe(5);
+    for (const style of styles) {
+      await expect(style.fontWeight).toBe("400");
+      await expect(style.borderRadius).toBe("9999px");
+      for (const property of ["display", "padding", "lineHeight", "fontSize", "borderWidth"] as const) {
+        await expect(style[property]).toBe(styles[0][property]);
+      }
+    }
+  },
+};
+export const ReferencePillsDark: Story = {
+  ...ReferencePills,
+  decorators: [(Story) => <div className="dark bg-background text-foreground"><Story /></div>],
+};

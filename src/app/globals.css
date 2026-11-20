@@ -111,3 +111,66 @@
     animation: none;
   }
 }
+
+/* Reference badges share their format in the editor and rendered Markdown. */
+:where([data-slot="reference-chip"], .tiptap a:is([href^="#agent/"], [href^="#artifact/"], [href^="#comment/"], [href^="/"]:not([href^="//"]))) {
+  --reference-color: var(--color-slate-700);
+  --reference-background: var(--color-slate-100);
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: baseline;
+  padding: 0.125rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--reference-color) 20%, transparent);
+  border-radius: 9999px;
+  background: var(--reference-background);
+  color: var(--reference-color);
+  font-size: 0.875rem;
+  font-family: inherit;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1.25rem;
+  text-align: start;
+  text-decoration: none;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+:is([data-reference-kind="agent"], .tiptap a[href^="#agent/"]) {
+  --reference-color: var(--color-blue-700);
+  --reference-background: var(--color-blue-50);
+}
+:is([data-reference-kind="artifact"], .tiptap a[href^="#artifact/"]) {
+  --reference-color: var(--color-violet-700);
+  --reference-background: var(--color-violet-50);
+}
+:is([data-reference-kind="comment"], .tiptap a[href^="#comment/"]) {
+  --reference-color: var(--color-amber-800);
+  --reference-background: var(--color-amber-50);
+}
+:is([data-reference-kind="skill"], .tiptap a[href$="/SKILL.md"]) {
+  --reference-color: var(--color-emerald-700);
+  --reference-background: var(--color-emerald-50);
+}
+.dark :where([data-slot="reference-chip"], .tiptap a:is([href^="#agent/"], [href^="#artifact/"], [href^="#comment/"], [href^="/"]:not([href^="//"]))) {
+  --reference-color: var(--color-slate-300);
+  --reference-background: var(--color-slate-800);
+}
+.dark :is([data-reference-kind="agent"], .tiptap a[href^="#agent/"]) {
+  --reference-color: var(--color-blue-300);
+  --reference-background: var(--color-blue-950);
+}
+.dark :is([data-reference-kind="artifact"], .tiptap a[href^="#artifact/"]) {
+  --reference-color: var(--color-violet-300);
+  --reference-background: var(--color-violet-950);
+}
+.dark :is([data-reference-kind="comment"], .tiptap a[href^="#comment/"]) {
+  --reference-color: var(--color-amber-300);
+  --reference-background: var(--color-amber-950);
+}
+.dark :is([data-reference-kind="skill"], .tiptap a[href$="/SKILL.md"]) {
+  --reference-color: var(--color-emerald-300);
+  --reference-background: var(--color-emerald-950);
+}
+[data-slot="reference-chip"] strong,
+.tiptap a:is([href^="#agent/"], [href^="#artifact/"], [href^="#comment/"], [href^="/"]) strong {
+  font-weight: inherit;
+}

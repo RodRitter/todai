@@ -94,12 +94,12 @@ export const LongContent: Story = {
     await Promise.all(dialog.getAnimations().map((animation) => animation.finished));
     const initialTop = header.getBoundingClientRect().top;
     const initialInset = close.getBoundingClientRect().top - initialTop;
-    await expect(initialInset).toBeGreaterThanOrEqual(16);
+    await expect(initialInset).toBeGreaterThanOrEqual(24);
     viewport.scrollTop = 240;
     await waitFor(() => {
       expect(viewport.scrollTop).toBeGreaterThan(0);
       expect(Math.abs(header.getBoundingClientRect().top - initialTop)).toBeLessThanOrEqual(1);
-      expect(close.getBoundingClientRect().top - header.getBoundingClientRect().top).toBeGreaterThanOrEqual(16);
+      expect(close.getBoundingClientRect().top - header.getBoundingClientRect().top).toBeGreaterThanOrEqual(24);
     });
   },
 };
@@ -108,3 +108,5 @@ export const LongContentDark: Story = { ...LongContent, globals: { theme: "dark"
 export const LongContentNarrow: Story = { ...LongContent, render: () => <LongContentExample narrow /> };
 
 export const Prompt: Story = { args: { defaultOpen: true, layout: "prompt" } };
+
+export const Workspace: Story = { args: { defaultOpen: true, layout: "workspace" } };

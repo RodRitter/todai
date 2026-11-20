@@ -3,7 +3,6 @@
 import { useRef, useState, type ReactNode } from "react";
 import { HoverCard } from "radix-ui";
 import { ReferenceChip } from "@/components/ui/reference-chip";
-import { FileText } from "lucide-react";
 import { artifactCategory, type Artifact, type ArtifactReference } from "@/domain/artifact";
 import { workspaceFetch } from "@/lib/workspace-fetch";
 import { toast } from "@/components/ui/toast";
@@ -41,7 +40,7 @@ function Citation({ reference, children }: { reference: ArtifactReference; child
   return <>
     <HoverCard.Root openDelay={300} onOpenChange={(open) => { if (open) void load().catch(() => {}); }}>
       <HoverCard.Trigger asChild>
-        <ReferenceChip icon={<FileText />} type="button" disabled={busy} onFocus={() => void load().catch(() => {})}
+        <ReferenceChip kind="artifact" type="button" disabled={busy} onFocus={() => void load().catch(() => {})}
           title="Open cited artifact revision"
           onClick={() => void open()}>{children}</ReferenceChip>
       </HoverCard.Trigger>

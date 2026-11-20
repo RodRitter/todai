@@ -34,7 +34,25 @@ export const Markdown: Story = {};
 export const Document: Story = { args: { artifact: { ...artifact, title: "A quieter workspace" } }, parameters: { document: true } };
 export const PlainText: Story = { args: { artifact: { ...artifact, type: "text", mediaType: "text/plain" } } };
 export const Empty: Story = { parameters: { empty: true } };
-export const LongContent: Story = { parameters: { long: true } };
+export const LongContent: Story = {
+  parameters: { long: true },
+  play: async ({ canvasElement }) => {
+    await userEvent.click(within(canvasElement).getByRole("button"));
+    const dialog = await within(document.body).findByRole("dialog");
+    await within(dialog).findByRole("article", { name: "Markdown document" });
+    await Promise.all(dialog.getAnimations().map((animation) => animation.finished));
+    const footer = within(dialog).getByLabelText("Artifact details");
+    const viewport = dialog.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')!;
+    const top = footer.getBoundingClientRect().top;
+    viewport.scrollTop = 240;
+    await waitFor(() => {
+      expect(viewport.scrollTop).toBeGreaterThan(0);
+      expect(Math.abs(footer.getBoundingClientRect().top - top)).toBeLessThanOrEqual(1);
+    });
+    await expect(within(footer).getByText("Revision 1")).toBeVisible();
+    await expect(within(footer).getByRole("button", { name: "Download" })).toBeVisible();
+  },
+};
 export const Loading: Story = { parameters: { loading: true } };
 export const MissingContent: Story = { parameters: { failure: true } };
 export const Image: Story = { args: { artifact: { ...artifact, type: "file", mediaType: "image/png", filename: "screenshot.png" } }, parameters: { image: true } };
@@ -48,5 +66,30 @@ export const OpenAndClose: Story = {
     await waitFor(() => expect(dialog.getByText("This is revision one.")).toBeVisible());
     await userEvent.click(dialog.getByRole("button", { name: "Close" }));
     await waitFor(() => expect(within(document.body).queryByRole("dialog")).not.toBeInTheDocument());
+  },
+};
+
+export const LongTitle: Story = {
+  args: { artifact: { ...artifact, title: "Evidence from the workspace review with a long title that wraps across multiple lines" } },
+};
+export const Dark: Story = { globals: { theme: "dark" } };
+
+export const Archived: Story = {
+  args: { artifact: { ...artifact, archived: true } },
+};
+export const MetadataWithoutDescription: Story = {
+  args: { artifact: { ...artifact, description: "", filename: null } },
+};
+
+export const SubtleDocumentHeader: Story = {
+  ...Document,
+  play: async ({ canvasElement }) => {
+    await userEvent.click(within(canvasElement).getByRole("button"));
+    const dialog = await within(document.body).findByRole("dialog");
+    const header = dialog.querySelector<HTMLElement>('[data-slot="dialog-header"]')!;
+    await expect(within(header).getByLabelText("Document type: Markdown")).toBeVisible();
+    await expect(within(header).getByRole("heading", { name: "A quieter workspace" })).toBeVisible();
+    await expect(within(header).queryByRole("textbox")).not.toBeInTheDocument();
+    await expect(await within(dialog).findByRole("heading", { name: "A quieter workspace", level: 1 })).toBeVisible();
   },
 };
