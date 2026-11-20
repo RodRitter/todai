@@ -10,10 +10,10 @@ import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowUp, Copy, MessageCircle, Link, Ellipsis, LoaderCircle, Reply, Trash2 } from "lucide-react";
-import { Markdown } from "@/components/ui/markdown";
-import { MessageGroup, Message, MessageContent, MessageHeader, MessageAvatar, MessageAuthor, MessageThread, MessageReply, MessageReplyComposer, MessageAgentStatus } from "@/components/ui/message";
-import { Bubble, BubbleContent } from "@/components/ui/bubble";
-import { Confirmation, ConfirmationActions } from "@/components/ui/confirmation";
+import { ConversationMessage, ConversationMessageBody } from "@/components/conversation/conversation-message";
+import { useMessageDeletion } from "@/components/conversation/use-message-deletion";
+import { MessageGroup, MessageThread, MessageReply, MessageReplyComposer, MessageAgentStatus } from "@/components/ui/message";
+import { ConfirmationActions } from "@/components/ui/confirmation";
 import { PromptSend } from "@/components/ui/prompt-send";
 import { toast } from "@/components/ui/toast";
 import { DescriptionEditor } from "./description-editor";
@@ -90,7 +90,7 @@ function ActivityMessage({ agents, attentionId, onChat, comment, replies = [], a
   const renderReply = (reply: TaskComment) => <MessageReply attention={attentionId === reply.id} key={reply.id} id={`comment-${reply.id}`} avatarName={reply.authorName || "Agent"} label={comment.feedbackStatus && reply.runId === comment.runId && reply.authorName === "Human" ? "Your answer" : reply.authorName || "Agent"}
           createdAt={reply.createdAt}
           actions={<CommentActions comment={reply} onDelete={onDeleteComment} disabled={disabled} />}>
-          <Markdown>{reply.body}</Markdown>
+          <ConversationMessageBody message={reply} />
         </MessageReply>;
   return (
     <MessageGroup>
@@ -104,29 +104,15 @@ function ActivityMessage({ agents, attentionId, onChat, comment, replies = [], a
         </MessageReplyComposer>}
         {replies.slice(0, -1).toReversed().map(renderReply)}
       </MessageThread>}
-      <Message attention={attentionId === comment.id}>
-        <MessageAvatar name={comment.authorName || "Agent"} />
-        <MessageContent>
-          <MessageHeader><MessageAuthor createdAt={comment.createdAt}>{comment.authorName || "Agent"}</MessageAuthor>
+      <ConversationMessage message={comment} variant="comment" attention={attentionId === comment.id}
+        actions={<>
             {onPostComment && <Button ref={replyButton} type="button" size="xs" variant="ghost-muted" disabled={disabled}
               aria-expanded={threadOpen && (replies.length > 0 || replying)} aria-controls={`thread-${comment.id}`} onClick={() => { setThreadOpen(true); setReplying(true); requestAnimationFrame(() => replyInput.current?.querySelector<HTMLElement>('[role="textbox"]')?.focus()); }}><Reply aria-hidden="true" />Reply</Button>}
             {onChat && <Button type="button" size="xs" variant="ghost-muted" onClick={() => onChat(comment)}><MessageCircle aria-hidden="true" />Chat</Button>}
             <CommentActions comment={comment} replyCount={replies.length} onDelete={onDeleteComment} disabled={disabled} />
-          </MessageHeader>
-          {comment.feedbackStatus ? (
-            <Confirmation state={comment.feedbackStatus} question={<Markdown>{comment.body}</Markdown>}
-              recommendation={comment.recommendation && <Markdown>{comment.recommendation}</Markdown>}>
-              {comment.feedbackStatus === "pending" && <FeedbackInput commentId={comment.id} onAnswer={onAnswerFeedback} />}
+        </>}
+        feedback={comment.feedbackStatus === "pending" ? <FeedbackInput commentId={comment.id} onAnswer={onAnswerFeedback} /> : undefined} />
 
-            </Confirmation>
-          ) : (
-            <Bubble variant="ghost">
-              <BubbleContent><Markdown>{comment.body}</Markdown></BubbleContent>
-            </Bubble>
-          )}
-
-        </MessageContent>
-      </Message>
     </MessageGroup>
   );
 }
@@ -137,17 +123,8 @@ function CommentActions({ comment, replyCount = 0, onDelete, disabled }: {
   onDelete?: (commentId: string) => Promise<void>;
   disabled: boolean;
 }) {
-  const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   const trigger = useRef<HTMLButtonElement>(null);
-  async function remove() {
-    if (!onDelete || busy || disabled) return;
-    setBusy(true); setError("");
-    try { await onDelete(comment.id); setConfirming(false); }
-    catch (error) { setError(error instanceof Error ? error.message : "Could not delete message."); }
-    finally { setBusy(false); }
-  }
+  const deletion = useMessageDeletion<string>({ disabled, onDelete: async (id) => { await onDelete?.(id); } });
   async function copy(reference = false) {
     try { await navigator.clipboard.writeText(reference ? commentReference(comment) : comment.body); toast.success(reference ? "Comment reference copied." : "Message copied."); }
     catch { toast.error("Could not copy message."); }
@@ -155,18 +132,15 @@ function CommentActions({ comment, replyCount = 0, onDelete, disabled }: {
   return <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild><Button ref={trigger} type="button" size="icon-xs" variant="ghost-muted" aria-label="Message actions" title="Message actions"><Ellipsis aria-hidden="true" /></Button></DropdownMenuTrigger>
-      <DropdownMenuContent align="end" onCloseAutoFocus={(event) => { if (confirming) event.preventDefault(); }}>
+      <DropdownMenuContent align="end" onCloseAutoFocus={(event) => { if (deletion.confirmation.open) event.preventDefault(); }}>
         <DropdownMenuItem onSelect={() => void copy()}><Copy aria-hidden="true" />Copy message</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => void copy(true)}><Link aria-hidden="true" />Copy comment reference</DropdownMenuItem>
-        {onDelete && <DropdownMenuItem variant="destructive" disabled={disabled || busy} onSelect={() => { setError(""); setConfirming(true); }}><Trash2 aria-hidden="true" />Delete message</DropdownMenuItem>}
+        {onDelete && <DropdownMenuItem variant="destructive" disabled={disabled || deletion.busy} onSelect={() => deletion.request(comment.id, trigger.current)}><Trash2 aria-hidden="true" />Delete message</DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>
-    <DeleteConfirmation open={confirming} onOpenChange={(open) => {
-      setConfirming(open);
-      if (!open) { setError(""); trigger.current?.focus(); }
-    }} title="Delete message?"
+    <DeleteConfirmation {...deletion.confirmation} title="Delete message?"
       description={`${replyCount ? `Delete this message and its ${replyCount} nested ${replyCount === 1 ? "reply" : "replies"}?` : "Delete this message?"} Artifacts linked only to the deleted messages will also be deleted. This cannot be undone.`}
-      busy={busy} disabled={disabled} error={error} onConfirm={() => void remove()} />
+      />
   </>;
 }
 

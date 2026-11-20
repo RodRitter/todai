@@ -2,9 +2,9 @@
 import { useEffect, useRef, useState } from "react";
 import { ConversationEmptyState } from "@/components/ui/conversation-empty-state";
 import { Button } from "@/components/ui/button";
-import { Bubble, BubbleContent } from "@/components/ui/bubble";
-import { Markdown } from "@/components/ui/markdown";
-import { Message, MessageAvatar, MessageContent, MessageHeader, MessageAuthor, MessageAgentStatus, MessageBubbleRow } from "@/components/ui/message";
+import { MessageAgentStatus } from "@/components/ui/message";
+import { ConversationMessage } from "@/components/conversation/conversation-message";
+import { useMessageDeletion } from "@/components/conversation/use-message-deletion";
 import { DescriptionEditor } from "@/components/tasks/description-editor";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { PromptSend } from "@/components/ui/prompt-send";
@@ -20,10 +20,6 @@ export function ChatConversation({ session, busy, onSend, onDelete, onClear, age
   onDelete: (messageId: string) => Promise<void>; onClear: () => Promise<void>;
   body: string; onBodyChange: (body: string) => void; draftVersion?: number;
 }) {
-  const [deletion, setDeletion] = useState<{ messageId?: string; trigger: HTMLButtonElement } | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState("");
-  const removing = useRef(false);
   const region = useRef<HTMLElement>(null);
   const [version, setVersion] = useState(0);
   const [error, setError] = useState("");
@@ -35,7 +31,15 @@ export function ChatConversation({ session, busy, onSend, onDelete, onClear, age
     !pending.previousIds.has(message.id) && message.authorName === "Human" && message.body === pending.message.body);
   const messages = pending && !accepted ? [...session.messages, pending.message] : session.messages;
   const agentStatus = session.running ? "Running" : pending && !accepted ? "Queued" : undefined;
-  const locked = busy || session.running || deleting || pending !== null;
+  const deletion = useMessageDeletion<string | null>({
+    disabled: busy || session.running || pending !== null,
+    onDelete: async (messageId) => {
+      if (messageId) await onDelete(messageId);
+      else { await onClear(); setError(""); }
+    },
+    onDeleted: () => requestAnimationFrame(() => region.current?.querySelector<HTMLElement>('[role="textbox"]')?.focus()),
+  });
+  const locked = busy || session.running || deletion.busy || pending !== null;
   async function submit() {
     if (locked || submitting.current || !body.trim()) return;
     submitting.current = true;
@@ -52,24 +56,13 @@ export function ChatConversation({ session, busy, onSend, onDelete, onClear, age
     }
     finally { submitting.current = false; setPending(null); }
   }
-  async function remove() {
-    if (!deletion || busy || session.running || removing.current) return;
-    removing.current = true; setDeleting(true); setDeleteError("");
-    try {
-      if (deletion.messageId) await onDelete(deletion.messageId);
-      else { await onClear(); setError(""); }
-      setDeletion(null);
-      requestAnimationFrame(() => region.current?.querySelector<HTMLElement>('[role="textbox"]')?.focus());
-    } catch (error) { setDeleteError(error instanceof Error ? error.message : "Could not delete chat messages."); }
-    finally { removing.current = false; setDeleting(false); }
-  }
   return <section ref={region} aria-label="Task chat" className="space-y-6">
     <DescriptionEditor key={`${draftVersion}:${version}`} id="task-chat-message" label="Your chat message" variant="prompt" compact
       autoFocus={draftVersion > 0} agents={agents} artifacts value={body} onChange={onBodyChange} disabled={locked}
       toolbarActions={(session.messages.length > 0 || session.error) ? <Tooltip>
         <TooltipTrigger asChild>
           <Button type="button" variant="ghost-muted" size="icon-xs" aria-label="Clear chat" disabled={locked}
-            onClick={(event) => { setDeleteError(""); setDeletion({ trigger: event.currentTarget }); }}><Trash2 aria-hidden="true" /></Button>
+            onClick={(event) => deletion.request(null, event.currentTarget)}><Trash2 aria-hidden="true" /></Button>
         </TooltipTrigger>
         <TooltipContent>Clear chat</TooltipContent>
       </Tooltip> : undefined}
@@ -79,30 +72,16 @@ export function ChatConversation({ session, busy, onSend, onDelete, onClear, age
     {!messages.length && !locked && !error && !session.error && <ConversationEmptyState variant="chat" />}
     {messages.length ? <ol aria-label="Chat messages, newest first" className="space-y-6">
       {[...messages].reverse().map((message) => {
-        const personal = message.authorName === "Human";
         const deleteButton = <Button type="button" variant="ghost-destructive" size="icon-xs" reveal="hover" aria-label="Delete chat message" disabled={locked}
-          onClick={(event) => { setDeleteError(""); setDeletion({ messageId: message.id, trigger: event.currentTarget }); }}><Trash2 aria-hidden="true" /></Button>;
+          onClick={(event) => deletion.request(message.id, event.currentTarget)}><Trash2 aria-hidden="true" /></Button>;
         return <li key={message.id}>
-          <Message className="group" align={personal ? "end" : "start"}>
-            {!personal && <MessageAvatar name={message.authorName || "Agent"} />}
-            <MessageContent>
-              {personal ? <MessageBubbleRow>
-                {deleteButton}
-                <Bubble align="end" variant="muted"><BubbleContent><Markdown>{message.body}</Markdown></BubbleContent></Bubble>
-              </MessageBubbleRow> : <>
-                <MessageHeader><MessageAuthor createdAt={message.createdAt}>{message.authorName || "Agent"}</MessageAuthor>{deleteButton}</MessageHeader>
-                <Markdown>{message.body}</Markdown>
-              </>}
-            </MessageContent>
-          </Message>
+          <ConversationMessage message={message} variant="chat" actions={deleteButton} />
         </li>;
       })}
     </ol> : null}
-    <DeleteConfirmation open={deletion !== null} onOpenChange={(open) => {
-      if (!open) { setDeletion(null); setDeleteError(""); deletion?.trigger.focus(); }
-    }} title={deletion?.messageId ? "Delete chat message?" : "Clear chat?"}
-      description={deletion?.messageId ? "Delete this message from the chat? This cannot be undone." : "Delete all messages from this task chat? This cannot be undone."}
-      confirmLabel={deletion?.messageId ? "Delete" : "Clear chat"} busy={deleting} disabled={busy || session.running} error={deleteError} onConfirm={() => void remove()} />
+    <DeleteConfirmation {...deletion.confirmation} title={deletion.target ? "Delete chat message?" : "Clear chat?"}
+      description={deletion.target ? "Delete this message from the chat? This cannot be undone." : "Delete all messages from this task chat? This cannot be undone."}
+      confirmLabel={deletion.target ? "Delete" : "Clear chat"} />
   </section>;
 }
 

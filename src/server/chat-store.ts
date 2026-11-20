@@ -1,3 +1,4 @@
+import { removeConversationMessages } from "./conversation-messages.ts";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import type { TaskStore } from "./task-store.ts";
@@ -79,13 +80,9 @@ export class ChatStore {
       if (!row) throw new Error("Chat message not found.");
       const session = this.get(String(row.id));
       if (session.running) throw new Error("Wait for the chat response before deleting messages.");
-      if (messageId) {
-        const result = this.db.prepare("DELETE FROM chat_messages WHERE id = ? AND sessionId = ?").run(messageId, session.id);
-        if (!result.changes) throw new Error("Chat message not found.");
-      } else {
-        this.db.prepare("DELETE FROM chat_messages WHERE sessionId = ?").run(session.id);
-        this.db.prepare("UPDATE chat_sessions SET lease = NULL, error = NULL WHERE id = ?").run(session.id);
-      }
+      if (messageId && !session.messages.some((message) => message.id === messageId)) throw new Error("Chat message not found.");
+      removeConversationMessages(this.db, { kind: "chat", workspaceId: this.tasks.workspaceId, taskId, sessionId: session.id }, session.messages, messageId);
+      if (!messageId) this.db.prepare("UPDATE chat_sessions SET lease = NULL, error = NULL WHERE id = ?").run(session.id);
       this.db.prepare("UPDATE chat_sessions SET updatedAt = ? WHERE id = ?").run(new Date().toISOString(), session.id);
       this.db.exec("COMMIT");
       return this.get(session.id);

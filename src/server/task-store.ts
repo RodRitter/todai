@@ -1,3 +1,4 @@
+import { conversationDeletion, removeConversationMessages } from "./conversation-messages.ts";
 import { groupActivity } from "../domain/activity.ts";
 import { parseWorkspaceSetup, starterAgentProfile } from "../domain/workspace-setup.ts";
 import type { ArtifactReference } from "../domain/artifact.ts";
@@ -841,26 +842,11 @@ export class TaskStore {
       if (!task || !comment) throw new CommentValidationError("This comment no longer exists.");
       if (task.agentStatus === "Running" || task.agentStatus === "Queued")
         throw new CommentValidationError("Stop the agent or wait for it to finish before deleting comments.");
-      const replies = groupActivity(task.comments ?? []).find(({ message }) => message.id === commentId)?.replies ?? [];
-      const deleting = [comment, ...replies];
+      const deleting = conversationDeletion(task.comments ?? [], commentId);
       const ids = new Set(deleting.map((item) => item.id));
       if (this.history(taskId).some((run) => run.status === "Waiting" && run.commentId && ids.has(run.commentId) && task.comments?.some((item) => item.runId === run.id && item.feedbackStatus === "pending" && !ids.has(item.id))))
         throw new CommentValidationError("Answer or cancel this feedback request before deleting it.");
-      const artifactIds = new Set(deleting.flatMap((item) => (item.artifacts ?? []).map((ref) => ref.artifactId)));
-      const remove = this.db.prepare("DELETE FROM comments WHERE workspaceId = workspace_id() AND taskId = ? AND id = ?");
-      for (const id of ids) remove.run(taskId, id);
-      // Only remove artifacts from this thread that have no remaining links, at any revision.
-      const unlinked = this.db.prepare(`SELECT id FROM artifacts
-        WHERE workspaceId = workspace_id() AND id = ?
-        AND NOT EXISTS (SELECT 1 FROM comment_artifacts WHERE artifactId = artifacts.id)
-        AND NOT EXISTS (SELECT 1 FROM task_artifacts WHERE artifactId = artifacts.id)`);
-      const removeRevisions = this.db.prepare("DELETE FROM artifact_revisions WHERE workspaceId = workspace_id() AND id = ?");
-      const removeArtifact = this.db.prepare("DELETE FROM artifacts WHERE workspaceId = workspace_id() AND id = ?");
-      for (const id of artifactIds) {
-        if (!unlinked.get(id)) continue;
-        removeRevisions.run(id);
-        removeArtifact.run(id);
-      }
+      removeConversationMessages(this.db, { kind: "comments", workspaceId: this.workspaceId, taskId }, task.comments ?? [], commentId);
       const pending = deleting.filter((item) => item.feedbackStatus === "pending");
       for (const request of pending) {
         this.db.prepare("UPDATE runs SET status = 'Stopped' WHERE workspaceId = workspace_id() AND taskId = ? AND id = ? AND status = 'Waiting'")
