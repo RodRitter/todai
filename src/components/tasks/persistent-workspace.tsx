@@ -5,9 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { ConfigurationTransfer } from "./configuration-transfer";
-import { WorkspaceArchive } from "./workspace-archive";
-import { WorkspaceSettings } from "./workspace-settings";
-import { CreateWorkspace } from "./create-workspace";
+import { WorkspaceSettingsTab } from "./workspace-settings-tab";
 import { ExecutorSettings } from "./executor-settings";
 import { ColumnSettings } from "./column-settings";
 import { AgentLibrary } from "./agent-library";
@@ -97,13 +95,7 @@ export function PersistentWorkspace({
         )}
         executorSettings={<ExecutorSettings />}
         generalSettings={<ConfigurationTransfer onImported={() => setAttempt((value) => value + 1)} />}
-        workspaceSettings={
-          <>
-            <WorkspaceSettings />
-            <CreateWorkspace />
-            <WorkspaceArchive />
-          </>
-        }
+        workspaceSettings={<WorkspaceSettingsTab />}
         {...columnApi}
       />
     );

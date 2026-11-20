@@ -2,7 +2,7 @@
 
 import type { ArtifactReference } from "@/domain/artifact";
 import { useRef, useState, type FormEvent } from "react";
-import { Bot, LayoutGrid, CircleDot, CirclePlay, CircleStop, Workflow, Zap } from "lucide-react";
+import { Bot, Maximize2, Minimize2, LayoutGrid, CircleDot, CirclePlay, CircleStop, Workflow, Zap } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TaskComments } from "./task-comments";
 import { AgentStatus } from "./agent-status";
@@ -78,6 +78,7 @@ function TaskEditorSession({
   const movedBoard = selectedBoard !== (editing?.boardId ?? boardId);
   const pendingRun =
     editing?.agentStatus === "Queued" || editing?.agentStatus === "Running";
+  const [expanded, setExpanded] = useState(false);
   const [tab, setTab] = useState("detail");
   const draftId = useRef<string | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(!editing);
@@ -181,7 +182,7 @@ function TaskEditorSession({
         }
       }}
     >
-      <DialogContent closeDisabled={busy} aria-describedby={undefined} size="large" layout="workspace">
+      <DialogContent closeDisabled={busy} aria-describedby={undefined} size={expanded ? "expanded" : "large"} layout="workspace">
         <DialogHeader variant="actions">
           <DialogTitle>{editing ? "Task details" : "Create task"}</DialogTitle>
 
@@ -238,12 +239,29 @@ function TaskEditorSession({
                 </Tooltip>
               </TooltipProvider>
             )}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={expanded ? "Collapse task panel" : "Expand task panel"}
+                    aria-pressed={expanded}
+                    onClick={() => setExpanded((value) => !value)}
+                  >
+                    {expanded ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{expanded ? "Collapse task panel" : "Expand task panel"}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </DialogHeader>
         <form
           onSubmit={saveTask}
           key={editing?.id ?? "new"}
-          className="-mx-6 min-h-0 min-w-0"
+          className="min-h-0 min-w-0 w-[calc(100%+3rem)] max-w-5xl justify-self-center"
         >
           <Tabs value={tab} onValueChange={setTab} asChild>
           <fieldset disabled={busy} className="flex h-full min-h-0 min-w-0 flex-col">

@@ -1,11 +1,13 @@
 "use client";
 
+import { ReferencePopover } from "./reference-popover";
+import { referenceMatch, type Match } from "./description-references";
 import { ArtifactCreateDialog } from "@/components/artifacts/artifact-create-dialog";
 import { Button } from "@/components/ui/button";
 import { workspaceFetch } from "@/lib/workspace-fetch";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
+import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "@tiptap/markdown";
 import { TableKit } from "@tiptap/extension-table";
@@ -22,16 +24,6 @@ import type { TaskReference } from "@/domain/reference";
 import { Bold, Italic, Heading2, List, ListOrdered, Code } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-
-type Match = { from: number; to: number; kind: "skill" | "file" | "agent" | "artifact"; query: string };
-function referenceMatch(editor: Editor, allowAgents: boolean, allowArtifacts: boolean): Match | null {
-  const { $from, empty } = editor.state.selection;
-  if (!empty || $from.parent.type.spec.code || editor.isActive("link")) return null;
-  const before = $from.parent.textBetween(0, $from.parentOffset, "\n", "\ufffc");
-  const match = /(?:^|\s)([$@/#])([^\s$@#]*)$/.exec(before);
-  if (!match || (match[1] === "@" && !allowAgents) || (match[1] === "#" && !allowArtifacts)) return null;
-  return { from: $from.pos - match[2].length - 1, to: $from.pos, kind: match[1] === "#" ? "artifact" : match[1] === "$" ? "skill" : match[1] === "@" ? "agent" : "file", query: match[2] };
-}
 
 export function DescriptionEditor({ value, onChange, disabled = false, autoFocus = false, agents, artifacts = false, onArtifactSelect, label = "Description", id = "task-description", actions, footer, toolbarActions, controlsOnFocus = false, compact = false, variant = "default", onSubmit }: {
   variant?: "default" | "prompt"; onSubmit?: () => void;
@@ -63,7 +55,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
       attributes: {
         id, role: "textbox", "aria-label": label, "aria-multiline": "true", "aria-disabled": String(disabled),
         "data-placeholder": variant === "prompt" ? "Send a message… Use @ to mention an agent" : "",
-        class: `${variant === "prompt" ? "[&:has(>p:only-child>br:only-child)]:before:content-[attr(data-placeholder)] [&:has(>p:only-child>br:only-child)]:before:text-muted-foreground [&:has(>p:only-child>br:only-child)]:before:pointer-events-none [&:has(>p:only-child>br:only-child)]:before:float-left [&:has(>p:only-child>br:only-child)]:before:h-0" : ""} ${richTextClassName} max-h-96 overflow-y-auto p-3 outline-none [&_.tableWrapper]:my-3 [&_.tableWrapper]:overflow-x-auto [&_.tableWrapper]:rounded-lg [&_.tableWrapper]:border [&_ul[data-type=taskList]]:list-none [&_li[data-type=taskItem]]:flex [&_li[data-type=taskItem]]:gap-2 [&_li[data-type=taskItem]>label]:mt-1 [&_li[data-type=taskItem]>div]:min-w-0 [&_li[data-type=taskItem]>div]:flex-1 [&_li[data-type=taskItem]>div>p]:my-1`,
+        class: `${variant === "prompt" ? "[&:has(>p:only-child>br:only-child)]:before:content-[attr(data-placeholder)] [&:has(>p:only-child>br:only-child)]:before:text-muted-foreground [&:has(>p:only-child>br:only-child)]:before:pointer-events-none [&:has(>p:only-child>br:only-child)]:before:float-left [&:has(>p:only-child>br:only-child)]:before:h-0" : ""} ${richTextClassName} max-h-96 overflow-auto p-3 outline-none [&_.tableWrapper]:my-3 [&_.tableWrapper]:overflow-x-auto [&_.tableWrapper]:rounded-lg [&_.tableWrapper]:border [&_ul[data-type=taskList]]:list-none [&_li[data-type=taskItem]]:flex [&_li[data-type=taskItem]]:gap-2 [&_li[data-type=taskItem]>label]:mt-1 [&_li[data-type=taskItem]>div]:min-w-0 [&_li[data-type=taskItem]>div]:flex-1 [&_li[data-type=taskItem]>div>p]:my-1`,
       },
       handleKeyDown: (_view, event) => keyboard.current(event),
     },
@@ -185,7 +177,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
       }}
     >
       <label htmlFor={id} className={variant === "prompt" ? "sr-only" : editorLabelClassName}>{label}</label>
-      <div className={`flex flex-col [&_.tiptap]:px-0 [&_.tiptap]:pt-0 ${compact ? "[&_.tiptap]:min-h-12" : "[&_.tiptap]:min-h-24"}`}>
+      <div className={`min-w-0 flex flex-col [&_.tiptap]:px-0 [&_.tiptap]:pt-0 ${compact ? "[&_.tiptap]:min-h-12" : "[&_.tiptap]:min-h-24"}`}>
         <div className={`order-last mt-2 flex-wrap items-center justify-between gap-3 ${variant === "prompt" ? "" : "border-t pt-3"} ${controlsOnFocus ? "hidden group-focus-within/editor:flex group-has-[[data-state=open]]/editor:flex" : "flex"}`}>
           <TooltipProvider>
             <div role="group" aria-label={`${label} formatting`} className="flex flex-wrap items-center gap-1">
@@ -220,21 +212,21 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
           </TooltipProvider>
           {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
         </div>
-        <EditorContent editor={editor} />
-        {match && !disabled && (
-          <div className="max-h-52 overflow-y-auto border-t p-1" role="listbox" aria-label={agentMode ? "Available agents" : match.kind === "artifact" ? "Workspace artifacts" : match.kind === "skill" ? "Available skills" : "Workspace files"}>
+        <EditorContent editor={editor} className="min-w-0 max-w-full" />
+        {match && !disabled && editor && (
+          <ReferencePopover editor={editor} id={`${id}-references`} activeIndex={activeIndex} onDismiss={() => setMatch(null)} label={agentMode ? "Available agents" : match.kind === "artifact" ? "Workspace artifacts" : match.kind === "skill" ? "Available skills" : "Workspace files"}>
             {agentMode && !results.length && <p role="status" className="p-2 text-xs text-muted-foreground">No matching agents.</p>}
             {!agentMode && (response.key !== matchKey || status) && <p role="status" className="p-2 text-xs text-muted-foreground">{response.key !== matchKey && !status.startsWith("Could not") ? "Loading references…" : status}</p>}
             {results.map((reference, index) => (
-              <button key={reference.path} type="button" role="option" aria-selected={index === activeIndex} className={`block w-full rounded px-2 py-1.5 text-left text-sm ${index === activeIndex ? "bg-accent" : "hover:bg-muted"}`} onMouseDown={(event) => event.preventDefault()} onClick={() => insert(reference)}>
-                <span className="block font-medium">{reference.label}</span>
+              <button key={reference.path} id={`${id}-references-${index}`} type="button" role="option" aria-selected={index === activeIndex} className={`block w-full rounded px-2 py-1.5 text-left text-sm ${index === activeIndex ? "bg-accent" : "hover:bg-muted"}`} onMouseDown={(event) => event.preventDefault()} onClick={() => insert(reference)}>
+                <span className="block break-words font-medium">{reference.label}</span>
                 <span className="block truncate text-xs text-muted-foreground">{reference.detail}</span>
               </button>
             ))}
-            {canCreate && <Button type="button" variant={activeIndex === results.length ? "secondary" : "ghost"} align="start" className="w-full" role="option" aria-selected={activeIndex === results.length} onMouseDown={(event) => event.preventDefault()} onClick={create}>
+            {canCreate && <Button type="button" variant={activeIndex === results.length ? "secondary" : "ghost"} align="start" className="w-full" id={`${id}-references-${results.length}`} role="option" aria-selected={activeIndex === results.length} onMouseDown={(event) => event.preventDefault()} onClick={create}>
               {match.query ? `Create artifact “${match.query}”` : "Create new artifact"}
             </Button>}
-          </div>
+          </ReferencePopover>
         )}
       </div>
       {footer && <div className="space-y-2 [&:not(:empty)]:mt-3">{footer}</div>}

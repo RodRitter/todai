@@ -13,6 +13,8 @@ export function DeleteConfirmation({
   disabled = false,
   error,
   onConfirm,
+  confirmLabel = "Delete",
+  busyLabel = "Deleting…",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -22,6 +24,8 @@ export function DeleteConfirmation({
   disabled?: boolean;
   error?: string;
   onConfirm: () => void;
+  confirmLabel?: string;
+  busyLabel?: string;
 }) {
   return (
     <AlertDialog.Root open={open} onOpenChange={(value) => {
@@ -47,7 +51,7 @@ export function DeleteConfirmation({
               <Button type="button" variant="outline" disabled={busy}>Cancel</Button>
             </AlertDialog.Cancel>
             <Button type="button" variant="destructive" disabled={busy || disabled} onClick={onConfirm}>
-              {busy ? "Deleting…" : "Delete"}
+              {busy ? busyLabel : confirmLabel}
             </Button>
           </div>
         </AlertDialog.Content>

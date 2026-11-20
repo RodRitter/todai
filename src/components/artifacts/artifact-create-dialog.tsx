@@ -46,7 +46,7 @@ export function ArtifactCreateDialog({ title, onSave, onCancel, onRestoreFocus }
         <DialogTitle>Create artifact</DialogTitle>
         <DialogDescription>Save a document and insert its reference into your draft.</DialogDescription>
       </DialogHeader>
-      <form onSubmit={save} className="space-y-4">
+      <form onSubmit={save} className="min-w-0 space-y-4">
         <div className="space-y-2"><Label htmlFor="quick-artifact-title">Title</Label><Input id="quick-artifact-title" name="title" defaultValue={title} required maxLength={300} disabled={saving} /></div>
         <DescriptionEditor id="quick-artifact-content" label="Document content" value={content} onChange={setContent} disabled={saving} />
         {error && <p role="alert">{error}</p>}

@@ -508,3 +508,34 @@ export const EditDescriptionReferences: Story = {
   ...DescriptionReferences,
   args: { ...DescriptionReferences.args, task: { ...exampleTasks[2], description: "" } },
 };
+
+
+export const ExpandTaskPanel: Story = {
+  args: { open: true, task: exampleTasks[2] },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    const panel = await page.findByRole("dialog");
+    const dialog = within(panel);
+    await userEvent.click(dialog.getByRole("button", { name: "Edit title" }));
+    await userEvent.clear(dialog.getByLabelText("Title"));
+    await userEvent.type(dialog.getByLabelText("Title"), "Retained expanded draft{Enter}");
+    const originalWidth = panel.getBoundingClientRect().width;
+    const expand = dialog.getByRole("button", { name: "Expand task panel" });
+    expand.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(dialog.getByRole("button", { name: "Collapse task panel" })).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() => {
+      const width = panel.getBoundingClientRect().width;
+      expect(width).toBeGreaterThanOrEqual(originalWidth);
+      if (canvasElement.ownerDocument.documentElement.clientWidth > 800) expect(width).toBeGreaterThan(originalWidth);
+      expect(panel.querySelector("form")!.getBoundingClientRect().width).toBeLessThanOrEqual(1024);
+    });
+    await expect(dialog.getByRole("button", { name: "Edit title" })).toHaveTextContent("Retained expanded draft");
+    await userEvent.click(dialog.getByRole("tab", { name: "Activity" }));
+    await userEvent.click(dialog.getByRole("button", { name: "Collapse task panel" }));
+    await waitFor(() => expect(panel.getBoundingClientRect().width).toBe(originalWidth));
+    await expect(dialog.getByRole("tab", { name: "Activity" })).toHaveAttribute("aria-selected", "true");
+    await userEvent.click(dialog.getByRole("tab", { name: "Detail" }));
+    await expect(dialog.getByRole("button", { name: "Edit title" })).toHaveTextContent("Retained expanded draft");
+  },
+};

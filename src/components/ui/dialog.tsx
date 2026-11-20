@@ -74,7 +74,7 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
   closeDisabled?: boolean;
-  size?: "default" | "wide" | "large";
+  size?: "default" | "wide" | "large" | "expanded";
   layout?: "default" | "workspace";
 }) {
   return (
@@ -87,6 +87,7 @@ function DialogContent({
           "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-200 motion-reduce:animate-none",
           size === "wide" && "sm:max-w-2xl",
           size === "large" && "sm:max-w-3xl",
+          size === "expanded" && "sm:max-w-[calc(100%-2rem)]",
           layout === "workspace" && "h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden pb-0",
           className,
         )}

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
+import { expect, fn, userEvent, within } from "storybook/test";
 import { useState } from "react";
 import { WorkspaceArchiveView } from "./workspace-archive";
 
@@ -21,5 +22,25 @@ export const ArchiveAndRestore: Story = {
     const [items, setItems] = useState<typeof archived>([]);
     return <WorkspaceArchiveView archived={items} allowArchive={!items.length}
       onArchive={() => setItems(archived)} onRestore={() => setItems([])} onRefresh={() => {}} />;
+  },
+};
+
+export const CurrentWorkspace: Story = { args: { allowRestore: false } };
+export const ConfirmArchive: Story = {
+  args: { allowRestore: false, onArchive: fn() },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole("button", { name: "Archive this workspace" }));
+    let dialog = within(await page.findByRole("alertdialog"));
+    await expect(args.onArchive).not.toHaveBeenCalled();
+    await expect(dialog.getByText(/You can restore it from Archived/)).toBeVisible();
+    await userEvent.click(dialog.getByRole("button", { name: "Cancel" }));
+    await expect(page.queryByRole("alertdialog")).not.toBeInTheDocument();
+    await expect(args.onArchive).not.toHaveBeenCalled();
+    await userEvent.click(canvas.getByRole("button", { name: "Archive this workspace" }));
+    dialog = within(await page.findByRole("alertdialog"));
+    await userEvent.click(dialog.getByRole("button", { name: "Archive workspace" }));
+    await expect(args.onArchive).toHaveBeenCalledTimes(1);
   },
 };

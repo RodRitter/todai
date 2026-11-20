@@ -81,7 +81,7 @@ export const QuickArtifact: Story = {
     const editor = await canvas.findByRole("textbox", { name: "Description" });
     await userEvent.click(editor);
     await userEvent.keyboard("#Notes");
-    await canvas.findByRole("option", { name: "Create artifact “Notes”" });
+    await within(canvasElement.ownerDocument.body).findByRole("option", { name: "Create artifact “Notes”" });
     await userEvent.keyboard("{Enter}");
     const dialog = await page.findByRole("dialog");
     await expect(within(dialog).getByLabelText("Title")).toHaveValue("Notes");
@@ -91,7 +91,7 @@ export const QuickArtifact: Story = {
     await expect(artifactSaved).not.toHaveBeenCalled();
     await userEvent.click(editor);
     await userEvent.keyboard("{End}x{Backspace}");
-    await canvas.findByRole("option", { name: "Create artifact “Notes”" });
+    await within(canvasElement.ownerDocument.body).findByRole("option", { name: "Create artifact “Notes”" });
     await userEvent.keyboard("{Enter}");
     const reopened = await page.findByRole("dialog");
     await userEvent.click(within(reopened).getByRole("textbox", { name: "Document content" }));
@@ -115,7 +115,7 @@ export const ExistingArtifact: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole("textbox", { name: "Description" }));
     await userEvent.keyboard("#Notes");
-    await canvas.findByRole("option", { name: /Notes Revision/ });
+    await within(canvasElement.ownerDocument.body).findByRole("option", { name: /Notes Revision/ });
     await userEvent.keyboard("{Enter}");
     await expect(artifactSaved).toHaveBeenCalledWith(artifact);
     await expect(canvas.getByRole("link", { name: "Notes" })).toHaveAttribute("href", "#artifact/quick/r1");
@@ -138,7 +138,7 @@ export const ArtifactSaveFailure: Story = {
     const page = within(canvasElement.ownerDocument.body);
     await userEvent.click(await canvas.findByRole("textbox", { name: "Description" }));
     await userEvent.keyboard("#Notes");
-    await canvas.findByRole("option", { name: "Create artifact “Notes”" });
+    await within(canvasElement.ownerDocument.body).findByRole("option", { name: "Create artifact “Notes”" });
     await userEvent.keyboard("{Enter}");
     const dialog = within(await page.findByRole("dialog"));
     await userEvent.click(dialog.getByRole("textbox", { name: "Document content" }));
@@ -147,5 +147,64 @@ export const ArtifactSaveFailure: Story = {
     await expect(await dialog.findByRole("alert")).toHaveTextContent("Could not save artifact");
     await expect(dialog.getByRole("textbox", { name: "Document content" })).toHaveTextContent("Keep this draft");
     await expect(artifactSaved).not.toHaveBeenCalled();
+  },
+};
+
+export const ReplacePastedLinkWithArtifact: Story = {
+  args: { artifacts: true, onArtifactSelect: artifactSaved },
+  beforeEach: ExistingArtifact.beforeEach,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const editor = await canvas.findByRole("textbox", { name: "Description" });
+    await userEvent.click(editor);
+    const clipboard = new DataTransfer();
+    clipboard.setData("text/html", '<p>See <a href="https://example.com/document">Document</a> for context.</p>');
+    clipboard.setData("text/plain", "See Document for context.");
+    editor.dispatchEvent(new ClipboardEvent("paste", { clipboardData: clipboard, bubbles: true, cancelable: true }));
+    const link = await canvas.findByRole("link", { name: "Document" });
+    const selection = canvasElement.ownerDocument.getSelection();
+    const range = canvasElement.ownerDocument.createRange();
+    range.selectNodeContents(link);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    canvasElement.ownerDocument.dispatchEvent(new Event("selectionchange"));
+    await userEvent.keyboard("#Notes");
+    await within(canvasElement.ownerDocument.body).findByRole("option", { name: /Notes Revision/ });
+    await userEvent.keyboard("{Enter}");
+    await expect(canvas.getByRole("link", { name: "Notes" })).toHaveAttribute("href", "#artifact/quick/r1");
+    await expect(editor).toHaveTextContent("See Notes for context.");
+    await expect(artifactSaved).toHaveBeenCalledWith(artifact);
+  },
+};
+
+
+export const LongDescriptionSuggestions: Story = {
+  args: {
+    artifacts: true,
+    value: Array.from({ length: 24 }, (_, index) => `Paragraph ${index + 1}: Background and requirements for this task.`).join("\n\n"),
+  },
+  beforeEach: ExistingArtifact.beforeEach,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const editor = await canvas.findByRole("textbox", { name: "Description" });
+    await userEvent.click(editor);
+    await userEvent.keyboard("{Control>}{Home}{/Control}#Notes");
+    const option = await page.findByRole("option", { name: /Notes Revision/ });
+    await expect(editor).toHaveFocus();
+    const list = page.getByRole("listbox", { name: "Workspace artifacts" });
+    await waitFor(() => {
+      const bounds = list.getBoundingClientRect();
+      const editorBounds = editor.getBoundingClientRect();
+      expect(bounds.top).toBeLessThan(editorBounds.bottom);
+      expect(bounds.left).toBeGreaterThanOrEqual(0);
+    });
+    await userEvent.keyboard("{ArrowDown}");
+    await expect(page.getByRole("option", { name: "Create artifact “Notes”" })).toHaveAttribute("aria-selected", "true");
+    await userEvent.keyboard("{ArrowUp}");
+    await expect(option).toHaveAttribute("aria-selected", "true");
+    await userEvent.keyboard("{Escape}");
+    await expect(page.queryByRole("listbox")).not.toBeInTheDocument();
+    await expect(editor).toHaveFocus();
   },
 };
