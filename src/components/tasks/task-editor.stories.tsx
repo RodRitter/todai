@@ -477,10 +477,10 @@ export const ExpandTaskPanel: Story = {
     await userEvent.clear(dialog.getByLabelText("Title"));
     await userEvent.type(dialog.getByLabelText("Title"), "Retained expanded draft{Enter}");
     const originalWidth = panel.getBoundingClientRect().width;
-    const expand = dialog.getByRole("button", { name: "Expand task panel" });
+    const expand = dialog.getByRole("button", { name: "Task actions" });
     expand.focus();
     await userEvent.keyboard("{Enter}");
-    await expect(dialog.getByRole("button", { name: "Collapse task panel" })).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(await page.findByRole("menuitem", { name: "Expand task panel" }));
     await waitFor(() => {
       const width = panel.getBoundingClientRect().width;
       expect(width).toBeGreaterThanOrEqual(originalWidth);
@@ -489,7 +489,8 @@ export const ExpandTaskPanel: Story = {
     });
     await expect(dialog.getByRole("button", { name: "Edit title" })).toHaveTextContent("Retained expanded draft");
     await userEvent.click(dialog.getByRole("tab", { name: "Activity" }));
-    await userEvent.click(dialog.getByRole("button", { name: "Collapse task panel" }));
+    await userEvent.click(dialog.getByRole("button", { name: "Task actions" }));
+    await userEvent.click(await page.findByRole("menuitem", { name: "Collapse task panel" }));
     await waitFor(() => expect(panel.getBoundingClientRect().width).toBe(originalWidth));
     await expect(dialog.getByRole("tab", { name: "Activity" })).toHaveAttribute("aria-selected", "true");
     await userEvent.click(dialog.getByRole("tab", { name: "Detail" }));
@@ -574,7 +575,7 @@ export const HeaderWithLongTitle: Story = {
     const panel = await within(canvasElement.ownerDocument.body).findByRole("dialog");
     const header = within(panel.querySelector('[data-slot="dialog-header"]') as HTMLElement);
     const title = header.getByRole("button", { name: "Edit title" });
-    const expand = header.getByRole("button", { name: "Expand task panel" });
+    const expand = header.getByRole("button", { name: "Task actions" });
     const close = header.getByRole("button", { name: "Close" });
     const run = within(panel).getByRole("button", { name: "Run" });
     await expect(expand.getBoundingClientRect().left).toBeGreaterThanOrEqual(title.getBoundingClientRect().right);
@@ -584,6 +585,7 @@ export const HeaderWithLongTitle: Story = {
     await expect(titleStyle.whiteSpace).toBe("nowrap");
     await expect(titleStyle.textOverflow).toBe("ellipsis");
     await userEvent.click(expand);
+    await userEvent.click(await within(canvasElement.ownerDocument.body).findByRole("menuitem", { name: "Expand task panel" }));
     await waitFor(() => {
       const headerBounds = panel.querySelector('[data-slot="dialog-header"]')!.getBoundingClientRect();
       const contentBounds = panel.querySelector("form")!.getBoundingClientRect();

@@ -6,7 +6,7 @@ import { commentChatDraft } from "@/domain/comment-reference";
 import { TaskArtifacts } from "@/components/artifacts/artifact-attachments";
 import type { ArtifactReference } from "@/domain/artifact";
 import { useId, useRef, useState, type ComponentProps, type FormEvent } from "react";
-import { Bot, Maximize2, Minimize2, LayoutGrid, CircleDot, CirclePlay, CircleStop, Workflow, Zap } from "lucide-react";
+import { Bot, Ellipsis, Trash2, Maximize2, Minimize2, LayoutGrid, CircleDot, CirclePlay, CircleStop, Workflow, Zap } from "lucide-react";
 import { Tabs, TabsContent, TabsCount, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ActivityTabTrigger } from "./activity-tab-trigger";
 import { TaskComments } from "./task-comments";
@@ -15,6 +15,7 @@ import { DescriptionField } from "./description-field";
 import { notifyOperation, toast } from "@/components/ui/toast";
 import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogClose,
@@ -305,23 +306,29 @@ function TaskEditorSession({
           </div>
 
           <div className="col-start-2 row-start-1">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={expanded ? "Collapse task panel" : "Expand task panel"}
-                    aria-pressed={expanded}
-                    onClick={() => setExpanded((value) => !value)}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="ghost" size="icon-sm" aria-label="Task actions" disabled={busy}>
+                  <Ellipsis aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => setExpanded((value) => !value)}>
+                  {expanded ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
+                  {expanded ? "Collapse task panel" : "Expand task panel"}
+                </DropdownMenuItem>
+                {editing && onDelete && (
+                  <DropdownMenuItem
+                    variant="destructive"
+                    disabled={busy || pendingRun || saving}
+                    onSelect={() => setConfirmDelete(true)}
                   >
-                    {expanded ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{expanded ? "Collapse task panel" : "Expand task panel"}</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+                    <Trash2 aria-hidden="true" />
+                    Delete task
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </DialogHeader>
         <form
@@ -544,23 +551,8 @@ function TaskEditorSession({
                 />
               </TabsContent>}
             </div></ScrollArea>
-            <DialogFooter variant="task">
-              {editing && onDelete && (
-                <Button
-                  type="button"
-                  variant="ghost-destructive"
-                  size="sm"
-                  aria-label="Delete task"
-                  disabled={pendingRun || saving}
-                  className="mr-auto"
-                  onClick={() => {
-                    setConfirmDelete(true);
-                  }}
-                >
-                  Delete
-                </Button>
-              )}
-              {!editing && <div className="flex items-center gap-1.5">
+            {!editing && <DialogFooter variant="task">
+              <div className="flex items-center gap-1.5">
                 <DialogClose asChild>
                   <Button
                     type="button"
@@ -578,8 +570,8 @@ function TaskEditorSession({
                 >
                   Create task
                 </Button>
-              </div>}
-            </DialogFooter>
+              </div>
+            </DialogFooter>}
           </fieldset>
           </Tabs>
         </form>
