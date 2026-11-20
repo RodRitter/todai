@@ -140,9 +140,9 @@ export function ArtifactsPage() {
   return <AppShell screen="artifacts"><main className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
     <div className="flex items-center justify-between gap-4"><div><h2 className="text-xl font-semibold">Workspace artifacts</h2><p className="text-sm text-muted-foreground">Documents, files, and references shared across this workspace.</p></div>
       <div className="flex shrink-0 items-center" role="group" aria-label="Create artifact">
-        <Button className="rounded-r-none" onClick={() => create("document")} disabled={saving || creating}>Create artifact</Button>
+        <Button segment="start" onClick={() => create("document")} disabled={saving || creating}>Create artifact</Button>
         <DropdownMenu.Root>
-          <DropdownMenu.Trigger asChild><Button size="icon" className="rounded-l-none border-l border-primary-foreground/25" disabled={saving || creating} aria-label="Choose artifact type"><ChevronDown aria-hidden="true" /></Button></DropdownMenu.Trigger>
+          <DropdownMenu.Trigger asChild><Button size="icon" segment="end" disabled={saving || creating} aria-label="Choose artifact type"><ChevronDown aria-hidden="true" /></Button></DropdownMenu.Trigger>
           <DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={4} className="z-50 min-w-44 rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
             <DropdownMenu.Item className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground" onSelect={() => create("document")}><FileText className="size-4" aria-hidden="true" />Document</DropdownMenu.Item>
             <DropdownMenu.Item className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground" onSelect={() => create("image")}><ImageIcon className="size-4" aria-hidden="true" />Image</DropdownMenu.Item>

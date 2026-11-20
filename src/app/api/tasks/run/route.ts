@@ -1,6 +1,6 @@
 import { withTaskStore } from "../../../../server/database.ts";
 import { execution } from "../../../../server/execution.ts";
-import { RunValidationError, PendingRunError } from "../../../../server/task-store.ts";
+import { RunValidationError } from "../../../../server/task-store.ts";
 import type { RunHistoryEntry } from "../../../../domain/execution.ts";
 
 export const runtime = "nodejs";
@@ -27,11 +27,11 @@ export function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const { taskId } = await request.json();
-    const task = withTaskStore(request, (store) => { store.requireWorkflowMode(); return store.runTask(taskId); });
+    const task = withTaskStore(request, (store) => store.runTask(taskId));
     execution();
     return Response.json(task);
   } catch (error) {
-    if (error instanceof RunValidationError || error instanceof PendingRunError)
+    if (error instanceof RunValidationError)
       return Response.json({ error: error.message }, { status: 409 });
     return Response.json({ error: "Could not start the agent. Reload the task and try again." }, { status: 400 });
   }

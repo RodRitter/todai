@@ -46,3 +46,5 @@ export const WithLabel: Story = {
 export const Password: Story = {
   args: { type: "password", defaultValue: "example-password" },
 };
+export const Title: Story = { args: { variant: "title", defaultValue: "Task title" } };
+export const Search: Story = { args: { variant: "search", placeholder: "Search…" } };

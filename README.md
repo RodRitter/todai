@@ -1,6 +1,6 @@
 # Todai
 
-A local task board for managing work with AI coding agents. Organize tasks by status, choose reusable agent workflows, and follow their progress from one workspace.
+A local task board for managing work with AI coding agents. Organize tasks, assign agents to columns, and follow their progress from one workspace.
 
 Built with Next.js, React, TypeScript, Tailwind CSS, and SQLite.
 
@@ -10,9 +10,9 @@ Built with Next.js, React, TypeScript, Tailwind CSS, and SQLite.
 - Rich text task descriptions and human comments, with @agent mentions and ordered agent replies.
 - Reusable Codex CLI and Claude Code profiles with tool-specific model, effort, instructions, and permissions.
 - Queued agent execution with live status updates and persisted run history.
-- Explicit Run control for reusable workflows, with human checkpoints and bounded review loops.
-- Optional workflow milestones update board status without coupling agents to columns.
-- Versioned JSON import and export of agents, columns, workflows, and status mappings.
+- Manual execution by default, with a Run button in each task and optional Auto-run on column entry.
+- Optional auto-workflow to move tasks to the next column after a successful run.
+- JSON import and export of agents, columns, and their assignments.
 - Workspace artifact library for text, Markdown, file uploads, and external links.
 - Local SQLite storage and a Storybook component explorer.
 
@@ -30,23 +30,17 @@ Open [localhost:3000](http://127.0.0.1:3000).
 1. In **Settings → Workspace**, select your workspace directory.
 2. In **Settings → Executors**, check tool status, test connections, and choose a default executor for new agents.
 3. In **Agents**, choose an executor, model, effort, and permissions.
-4. Create a task, choose or create a workflow in its **Workflow** tab, and save. Press **Run** to start it. Moving a task never starts agents.
+4. Assign an agent through a column’s settings, then create or move a task into that column. Open the saved task and press **Run** to queue its agent.
 
-Add another named workspace in **Settings → Workspace → Add workspace**, then switch using the sidebar selector. Each workspace has its own tasks, agents, columns, workflows, and default executor. Selection lives in the browser URL, so separate tabs can work independently. Switching clears unsaved drafts and leaves queued and active runs in their original directories.
+Add another named workspace in **Settings → Workspace → Add workspace**, then switch using the sidebar selector. Each workspace has its own tasks, agents, columns, assignments, and default executor. Selection lives in the browser URL, so separate tabs can work independently. Switching clears unsaved drafts and leaves queued and active runs in their original directories.
 
-Saved tasks can use a reusable single-step workflow. In the task’s **Workflow** tab, choose **Create workflow**, name it, select an existing agent, and enter step instructions. Save the workflow and task, then press **Run**. Workflows belong to their workspace and run without a column assignment. Edit a selected workflow to change future executions; each execution retains its original workflow and agent configuration.
-
-Expand **Workflow executions** to inspect each attempt’s outcome, result, step instructions, and exact prompt supplied by Todai. Provider instructions and private reasoning are not included. Feedback resumes the same snapshotted step; stopping, failing, or interrupting preserves history. Comment replies remain separate. Tasks without a workflow show a chooser before they can run.
-
-Workflow milestones can map **Ready**, **Working**, **Human review**, and **Completed** to board statuses. Matching default columns receive To do, In progress, In review, and Done respectively. On custom boards, explicitly select each unmapped milestone or choose **Keep current status**. Selecting a workflow applies Ready; agent steps and internal reviews use Working; checkpoints and review-limit interventions use Human review; successful completion uses Completed. Ordinary agent steps need no individual column assignment. Runs retain their saved mappings, and renaming a column updates references.
-
-Manual moves are disabled while workflow work is queued, running, or waiting. Stop the workflow first; a running process must finish stopping before a move is accepted. Changing the selected workflow is also blocked while work is active.
+Task automation is opt-in. Enable **Auto-run** to start the assigned agent when a task enters a column. Enable **Auto-workflow** to move to the next column after a successful run; the next agent waits for **Run** unless Auto-run is also enabled. Save task edits before pressing Run.
 
 New boards start with **To do**, **In progress**, **In review**, and **Done**. Customize them in **Settings → Board**.
 
 In a task’s Comments section, write a rich text comment and type **@** to select agents. Comments without mentions stay as context. A lightweight intent agent selects which tagged agents are being asked to respond and orders their replies; agents mentioned only as context do not respond. For example, “@Reviewer what do you think of @Implementor's comment?” asks only Reviewer to reply. Each responding agent sees earlier responses. The intent agent uses the default executor with `gpt-6-luna` (Codex) or `haiku` (Claude), at low effort. If intent detection fails, no replies start; post the comment again to retry. Comment replies keep the task in its current column.
 
-Saved task details open on **Overview**, with pending feedback, recommendations, and evidence first, or the description and latest result. **Workflow** shows execution status and run history; **Activity** keeps comments, feedback, and run-history access; **Artifacts** collects linked work and pinned comment revisions. Use the expand button for more room. Tabs and expansion preserve drafts and reading position. Open **Run history** in Workflow or Activity to inspect previous runs, their statuses, and saved summaries. The history refreshes while expanded.
+Open **Run history** in a saved task’s Comments tab to inspect previous runs, their statuses, and saved summaries. The history refreshes while expanded.
 
 The header’s execution indicator shows the active agent, task, and workspace, along with queued jobs across workspaces. **Stop current run** terminates the agent and its commands, preserves saved files and history, and pauses the queue across all workspaces. The pause survives app restarts. **Run again** on a stopped task requests a new run using saved work and history; **Resume queue** is a separate action. Other queued requests remain queued, and requests for a stopped task wait until you explicitly run it again.
 
@@ -60,9 +54,7 @@ Agents run one at a time. Keep the server running while they work. Todai is desi
 
 Data is stored in `.todai/tasks.sqlite`. Set `TODAI_DB_PATH` to use another database file. Preserve the database to keep your tasks, profiles, settings, and run history across restarts.
 
-The agent workspace is configured separately in Settings. Version 2 configuration exports include selected agents, columns, workflows, and milestone mappings; they do not include tasks or workspace paths. A workflow is included only when all its agents and mapped columns are selected. Imports remap references when making copies and reject missing agents or statuses. Replacing columns requires stopping active workflows, including waiting checkpoints, and resolving milestones that would reference removed columns.
-
-On first workspace access after upgrading, drained legacy column pipelines convert transactionally into explicit workflows. Tasks keep their placement and history, and conversion never starts work. Both legacy automatic settings enabled becomes automatic continuation between adjacent assigned columns; unassigned gaps and every other combination retain a human checkpoint before the next agent. Tasks without a current column assignment stay unconfigured. The board reports affected tasks. Queued, running, or waiting legacy work blocks conversion until it finishes or is explicitly stopped. Repeated access and restarts do not duplicate workflows. Unused assigned pipelines remain available as manual workflows. Version 1 imports use the same pipeline conversion with manual checkpoints, because the old export format contains no task-level automation preferences.
+The agent workspace is configured separately in Settings. Configuration exports include selected agents, columns, and assignments; they do not include tasks or workspace paths.
 
 Settings tabs can be linked directly with `/settings?tab=general`, `/settings?tab=workspaces`, `/settings?tab=board`, or `/settings?tab=executors`.
 
@@ -118,45 +110,3 @@ Shared styling conventions and component usage are documented in Storybook under
 ## Contributing
 
 Keep changes focused, add tests for new behavior, and run lint, type checks, and tests before opening a pull request.
-
-### Ordered task workflows
-
-In a task’s **Workflow** tab, create or edit a reusable workflow. Add agent steps, set instructions for each step, and use the up/down controls to order them. Steps connect automatically and execute from top to bottom. Save the workflow and task selection, then **Run** to start a new execution.
-
-Successful steps advance exactly once. The Workflow tab shows persisted step progress, configuration snapshots, supplied prompts, attempts, and results. Failed, interrupted, or stopped executions stay paused. **Retry current step** continues the latest execution using its original configuration and existing workspace files; it preserves completed steps and does not roll back files. **Run** starts a new execution from the beginning. After a server restart, abandoned running steps become interrupted and require explicit retry. Resuming a paused queue alone does not restart stopped tasks; retrying a task does not resume the queue.
-
-### Human approval checkpoints
-
-Use **Add human checkpoint** in the workflow editor and describe what needs review. Checkpoints can appear before, between, or after agent steps. Reaching one saves a waiting state without starting another agent. In **Overview**, inspect the question, the preceding result, and its pinned artifact revisions. **View evidence in Activity** opens the original handover.
-
-Choose **Approve** to continue once, or enter feedback and choose **Request changes** to keep waiting. Requesting changes records your response and opens a fresh decision; it does not automatically run a revision agent or return to an earlier step. Resolve the changes before approving, or stop the workflow and revise it. **Retry current step** reopens a stopped checkpoint using its saved instructions. Queue pause remains a separate control.
-
-Agent questions still use **Submit feedback** and resume the agent step that asked. Activity retains workflow requests, human responses, decisions, and their execution/step references. These records and checkpoint evidence cannot be individually deleted. Waiting states and responses survive restarts; old or duplicate answers cannot advance a later execution.
-
-### Bounded review and revision
-
-Choose **Add review section** in the workflow editor, select reviewer and revision agents, and enter their instructions. The round limit defaults to three. The section repeats **Review → Changes requested → Revise → Review** and exits only on explicit approval.
-
-Reviewers must return JSON with an `outcome` of `approved` or `changes-requested` and a nonempty `findings` string. A successful process exit or ordinary handover is never approval. Invalid output pauses as a failed attempt for explicit retry. Each queued reviewer attempt, including retries and feedback continuations, counts as a round.
-
-At the limit, the workflow waits before running another revision. In **Overview**, choose **Allow one additional round** or **Stop workflow**. An additional round authorizes a revision followed by another review; it does not approve the work or resume a paused queue. Retrying a stopped intervention reopens the same decision.
-
-The task summary and **Workflow** tab show the current step and round. Execution history retains reviewer outcomes, findings, reviewed attempts, and pinned evidence revisions. Failure, cancellation, feedback, and restart recovery retain the section position and original agent settings.
-
-### Reading review history
-
-**Overview** links outstanding findings to their records in **Activity**, with access to pinned review artifacts. Activity groups work by execution, step, and review round. Older rounds start collapsed; findings, rounds, executions, and discussion load incrementally. Open **Full original content** for the original handover and supplied prompt. Unrelated discussion remains below workflow activity. Tab switches keep expanded history and reading positions.
-
-Reviewer results can include `findingUpdates`: an array of `{ "id": "focus", "body": "Restore keyboard focus", "status": "outstanding", "note": "Reproduced with Escape" }`. New IDs must be unique within the review section. Later reviewers reuse an ID, omit `body`, and supply an explicit `outstanding` or `resolved` disposition with verification notes. Omitted findings remain unchanged; revision-agent claims cannot resolve them. Approval fails while any tracked finding remains outstanding. A changes-requested result using the older string-only format creates a single tracked finding for that attempt. Active older loops receive stable outstanding records from their original changes-requested reports before resuming. Completed historical records retain their original summaries without inferred dispositions.
-
-Each review keeps the attempt and exact artifact revisions it reviewed. Publishing a newer artifact revision does not change this evidence.
-
-### Starter workflows and defaults
-
-New tasks show the workspace default workflow and allow an explicit override. With a default configured, create the task, press **Run**, inspect progress, and respond to feedback or approvals when needed.
-
-Open **Workflows** in the sidebar to create and edit reusable workflows for the current workspace. Choose **New workflow** to start from scratch, or select **Single agent**, **Implement and review**, or **Plan–implement–review**, then **Create from template**. Select existing agents for each role and resolve any unmapped status milestones. Save the editable workflow; templates never create agent profiles. The iterative templates include bounded review and revision plus final human approval. The planning template also requires approval of the plan before implementation. Workflow setup also remains available during task creation and in a saved task’s **Workflow** tab.
-
-On the Workflows page, choose **Use for new tasks** to set a workspace default, or **Clear workspace default** to remove it.
-
-Select **Use selected workflow for new tasks** to set the workspace default, or **Clear workspace default** to remove it. Defaults affect only newly created tasks; existing tasks and execution snapshots retain their selections. Unavailable defaults display setup guidance and never substitute an unrelated workflow.

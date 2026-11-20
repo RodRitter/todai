@@ -21,15 +21,10 @@ export type Task = {
   description: string;
   status: Status;
   agentStatus: AgentStatus;
-  workflowId?: string | null;
-  workflowActive?: boolean;
-  workflowProgress?: { step: number; total: number; round: number; limit: number; phase: "review" | "revise" | "intervention" | "complete" };
   autoWorkflow?: boolean;
   autoRun?: boolean;
   comments?: TaskComment[];
 };
-
-export type FeedbackDecision = "approve" | "changes-requested" | "additional-round" | "stop";
 
 export type TaskComment = {
   artifacts?: ArtifactReference[];
@@ -41,15 +36,4 @@ export type TaskComment = {
   recommendation?: string | null;
   feedbackStatus?: "pending" | "answered" | "cancelled" | null;
   runId?: string | null;
-  feedbackKind?: "checkpoint" | "review-limit" | null;
-  workflowExecutionId?: string | null;
-  stepId?: string | null;
-  evidenceCommentId?: string | null;
-  responseTo?: string | null;
-  decision?: FeedbackDecision | null;
 };
-
-export function isWorkflowHistoryComment(comment: TaskComment, comments: TaskComment[]): boolean {
-  return Boolean(comment.workflowExecutionId && (comment.feedbackStatus || comment.responseTo)) ||
-    comments.some((request) => request.evidenceCommentId === comment.id);
-}

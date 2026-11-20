@@ -36,3 +36,17 @@ export const Unavailable: Story = { args: { load: async () => { throw new Error(
 } };
 export const Narrow: Story = { ...Expanded, decorators: [(Story) => <div className="max-w-72"><Story /></div>] };
 export const Failed: Story = { ...Expanded, args: { load: async () => [runs[0], { ...runs[1], status: "Failed", summary: runs[1].summary }] } };
+
+export const PreservesSummary: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole("button", { name: "Run history" });
+    await userEvent.click(trigger);
+    await userEvent.click(await canvas.findByRole("button", { name: "View summary" }));
+    await expect(canvas.getByText("Implemented artifact previews.")).toBeVisible();
+    await userEvent.click(trigger);
+    await expect(canvas.getByText("Implemented artifact previews.")).not.toBeVisible();
+    await userEvent.click(trigger);
+    await expect(canvas.getByText("Implemented artifact previews.")).toBeVisible();
+  },
+};

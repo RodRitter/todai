@@ -22,7 +22,7 @@ export function SkillTree({ label, data, readOnly, search, selectedId, disabled,
         <Tooltip>
           <TooltipTrigger asChild>
             <CollapsibleTrigger asChild>
-        <Button variant="ghost" size="sm" className="group w-full justify-start text-xs">
+        <Button align="start" variant="ghost" size="xs" className="group w-full">
           <ChevronRight className="size-3.5 transition-transform group-aria-expanded:rotate-90" />
           <span>{label}</span>
           <span className="text-muted-foreground">{data?.skills.length ?? 0}</span>
@@ -39,14 +39,14 @@ export function SkillTree({ label, data, readOnly, search, selectedId, disabled,
             <li key={skill.id}>
               <Collapsible defaultOpen={selectedId === skill.id}>
                 <CollapsibleTrigger asChild>
-                  <Button variant="ghost" size="sm" className="group w-full justify-start font-normal" title={skill.id}>
+                  <Button align="start" variant="ghost" size="sm" weight="normal" className="group w-full" title={skill.id}>
                     <ChevronRight className="size-3 transition-transform group-aria-expanded:rotate-90" />
                     <Folder className="size-3.5 text-muted-foreground" />
                     <span className="truncate">{skill.id}</span>
                   </Button>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="ml-5 border-l pl-2">
-                  <Button variant={selectedId === skill.id ? "secondary" : "ghost"} size="sm" className="w-full justify-start text-xs font-normal" disabled={disabled} aria-pressed={selectedId === skill.id} aria-label={`${label}: ${skill.id}/SKILL.md`} onClick={() => onSelect(skill)}>
+                  <Button align="start" variant={selectedId === skill.id ? "secondary" : "ghost"} size="xs" weight="normal" className="w-full" disabled={disabled} aria-pressed={selectedId === skill.id} aria-label={`${label}: ${skill.id}/SKILL.md`} onClick={() => onSelect(skill)}>
                     <FileText className="size-3.5 text-muted-foreground" /> SKILL.md
                   </Button>
                 </CollapsibleContent>

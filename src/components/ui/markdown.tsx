@@ -1,6 +1,6 @@
 import { parseArtifactMention } from "@/domain/artifact-mentions";
 import { ArtifactMention } from "@/components/artifacts/artifact-mention";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { richTextClassName } from "./rich-text-styles";
 
@@ -16,55 +16,63 @@ export function Markdown({
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         skipHtml
-        components={{
-          a: ({ href, children }) =>
-            compact ? (
-              <span>{children}</span>
-            ) : href && parseArtifactMention(href) ? (
-              <ArtifactMention reference={parseArtifactMention(href)!}>{children}</ArtifactMention>
-            ) : typeof children === "string" && /^[$@/]/.test(children) && (href?.startsWith("/") || href?.startsWith("#agent/")) ? (
-              <span title={href} className="rounded bg-accent px-1 py-0.5 font-medium text-accent-foreground">{children}</span>
-            ) : (
-              <a
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {children}
-              </a>
-            ),
-          img: ({ src, alt }) =>
-            compact ? (
-              <span>{alt}</span>
-            ) : (
-              // Markdown images have arbitrary sources and sizes, unlike app-owned optimized images.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={src}
-                alt={alt ?? ""}
-                loading="lazy"
-              />
-            ),
-          table: ({ children }) => (
-            <div className="my-3 overflow-x-auto rounded-lg border">
-              <table>
-                {children}
-              </table>
-            </div>
-          ),
-          input: ({ checked }) => (
-            <span
-              role="img"
-              aria-label={checked ? "Completed" : "Not completed"}
-              className="mr-2"
-            >
-              {checked ? "☑" : "☐"}
-            </span>
-          ),
-        }}
+        components={compact ? compactComponents : fullComponents}
       >
         {children}
       </ReactMarkdown>
     </div>
   );
 }
+
+// Stable component identities keep citation preview state during parent polling.
+function markdownComponents(compact: boolean): Components {
+  return {
+    a: ({ href, children }) =>
+      compact ? (
+        <span>{children}</span>
+      ) : href && parseArtifactMention(href) ? (
+        <ArtifactMention reference={parseArtifactMention(href)!}>{children}</ArtifactMention>
+      ) : typeof children === "string" && /^[$@/]/.test(children) && (href?.startsWith("/") || href?.startsWith("#agent/")) ? (
+        <span title={href} className="rounded bg-accent px-1 py-0.5 font-medium text-accent-foreground">{children}</span>
+      ) : (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {children}
+        </a>
+      ),
+    img: ({ src, alt }) =>
+      compact ? (
+        <span>{alt}</span>
+      ) : (
+        // Markdown images have arbitrary sources and sizes, unlike app-owned optimized images.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={src}
+          alt={alt ?? ""}
+          loading="lazy"
+        />
+      ),
+    table: ({ children }) => (
+      <div className="my-3 overflow-x-auto rounded-lg border">
+        <table>
+          {children}
+        </table>
+      </div>
+    ),
+    input: ({ checked }) => (
+      <span
+        role="img"
+        aria-label={checked ? "Completed" : "Not completed"}
+        className="mr-2"
+      >
+        {checked ? "☑" : "☐"}
+      </span>
+    ),
+  };
+}
+
+const fullComponents = markdownComponents(false);
+const compactComponents = markdownComponents(true);

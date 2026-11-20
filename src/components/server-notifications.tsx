@@ -118,7 +118,7 @@ export function ServerNotifications({ load = loadServers }: { load?: () => Promi
                   <p className="mt-1"><DirectoryPath directory={server.directory} workspace={snapshot.workspace} /></p>
                   </div>
                   <div className="shrink-0">
-                    <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/10" disabled={stopping !== null || !server.identity} title={!server.identity ? "This process is protected or its identity could not be verified." : "Stop server"} aria-label={`Kill ${server.command} server (PID ${server.pid})`} onClick={() => void stopServer(server)}>
+                    <Button variant="ghost-destructive" size="sm"  disabled={stopping !== null || !server.identity} title={!server.identity ? "This process is protected or its identity could not be verified." : "Stop server"} aria-label={`Kill ${server.command} server (PID ${server.pid})`} onClick={() => void stopServer(server)}>
                       {stopping === server.pid ? "Stopping…" : "Kill"}
                     </Button>
                   </div>

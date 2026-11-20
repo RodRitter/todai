@@ -100,7 +100,9 @@ process.stdin.on('end', () => {
       "Keep keyboard navigation",
       "Earlier handover",
       "nominate_artifact",
-      "Todai artifact operations needed for this task are authorized.",
+      "Artifact operations meeting the publication policy above are authorized.",
+      "Do not create an artifact when the useful context can be found in a message.",
+      "A normal run may produce no artifacts.",
       "report the actual error and continue any independent work",
     ])
       assert.ok(received.prompt.includes(context), context);

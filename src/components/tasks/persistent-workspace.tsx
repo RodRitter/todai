@@ -11,7 +11,6 @@ import { CreateWorkspace } from "./create-workspace";
 import { ExecutorSettings } from "./executor-settings";
 import { ColumnSettings } from "./column-settings";
 import { AgentLibrary } from "./agent-library";
-import { WorkflowLibrary } from "./workflow-library";
 import { TaskBoard } from "./task-board";
 import type { AgentProfile, ExecutionTool, ExecutorStatus } from "@/domain/column-agent";
 import {
@@ -25,7 +24,7 @@ import {
 export function PersistentWorkspace({
   screen = "board",
 }: {
-  screen?: "board" | "agents" | "workflows" | "settings";
+  screen?: "board" | "agents" | "settings";
 }) {
   const [board, setBoard] = useState<BoardSnapshot | null>(null);
   const [agents, setAgents] = useState<AgentProfile[] | null>(null);
@@ -62,7 +61,7 @@ export function PersistentWorkspace({
   }, [attempt, screen]);
   if (!board || !agents)
     return (
-      <main className="p-8" aria-busy={!failed}>
+      <main className="p-4 md:p-8" aria-busy={!failed}>
         {failed && (
           <Button
             onClick={() => {
@@ -75,8 +74,7 @@ export function PersistentWorkspace({
         )}
       </main>
     );
-  const { columns, tasks } = board;
-  if (screen === "workflows") return <WorkflowLibrary agents={agents} columns={columns} />;
+  const { columns, tasks, assignments } = board;
   if (screen === "settings")
     return (
       <UrlColumnSettings
@@ -106,15 +104,17 @@ export function PersistentWorkspace({
         defaultExecutor={defaultExecutor}
         executorStatuses={executorStatuses}
         initialAgents={agents}
+        initialAssignments={assignments}
         persistence={agentApi}
       />
     );
   return (
     <TaskBoard
       columns={columns}
-      initialMigration={board.migration}
       initialTasks={tasks}
       initialAgents={agents}
+      initialAssignments={assignments}
+      assignAgent={agentApi.assign}
       persistence={taskApi}
     />
   );

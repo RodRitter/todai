@@ -8,10 +8,11 @@ import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { Button } from "@/components/ui/button";
 import { notifyOperation } from "@/components/ui/toast";
 import { AgentEditor } from "./agent-editor";
-import { executorLabel, type ExecutionTool, type ExecutorStatus, type AgentProfile } from "@/domain/column-agent";
+import { executorLabel, type ExecutionTool, type ExecutorStatus, type AgentProfile, type ColumnAssignment } from "@/domain/column-agent";
 
 export function AgentLibrary({
   initialAgents = [],
+  initialAssignments = [],
   persistence,
   defaultExecutor = "codex",
   executorStatuses = [],
@@ -19,12 +20,14 @@ export function AgentLibrary({
   defaultExecutor?: ExecutionTool;
   executorStatuses?: ExecutorStatus[];
   initialAgents?: AgentProfile[];
+  initialAssignments?: ColumnAssignment[];
   persistence?: {
     save: (agent: AgentProfile) => Promise<AgentProfile>;
     delete: (id: string) => Promise<void>;
   };
 }) {
   const [agents, setAgents] = useState(initialAgents);
+  const [assignments, setAssignments] = useState(initialAssignments);
   const [editing, setEditing] = useState<AgentProfile | null | undefined>(
     undefined,
   );
@@ -44,11 +47,13 @@ export function AgentLibrary({
           setAgents((current) =>
             current.filter((item) => item.id !== agent.id),
           );
-
+          setAssignments((current) =>
+            current.filter((item) => item.agentId !== agent.id),
+          );
         },
         {
           loading: "Deleting agent…",
-          success: "Agent deleted. Update any workflows that used it.",
+          success: "Agent deleted and removed from its columns.",
           error: "Could not delete agent. Try again or reload to check.",
         },
       );
@@ -70,10 +75,13 @@ export function AgentLibrary({
       }
     >
       <main className="p-4 md:p-8" aria-label="Agents">
-        <Card className="max-w-5xl gap-0 overflow-hidden py-0">
+        <Card variant="flush" className="max-w-5xl">
           {agents.length ? (
             <ul className="divide-y">
               {agents.map((agent) => {
+                const columns = assignments
+                  .filter((item) => item.agentId === agent.id)
+                  .map((item) => item.column);
                 return (
                   <li key={agent.id}>
                     <section
@@ -96,15 +104,15 @@ export function AgentLibrary({
                         {executorStatuses.some((status) => status.tool === agent.tool && (!status.installed || !status.signedIn)) && <span className="block">Executor unavailable — check Settings → Executors</span>}
                       </p>
                       <p className="pointer-events-none relative col-start-1 text-xs text-muted-foreground md:col-start-auto">
-                        Available for workflows
+                        {columns.length ? columns.join(", ") : "Unassigned"}
                       </p>
                       <div className="relative col-start-2 row-start-1 row-span-3 flex gap-1 md:col-start-auto md:row-auto md:row-span-1">
                         <Button
                           size="icon"
-                          variant="ghost"
+                          variant="ghost-destructive"
                           aria-label="Delete agent"
                           title="Delete agent"
-                          className="text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 hover:text-destructive motion-reduce:transition-none [@media(hover:none)]:opacity-100"
+                          reveal="hover"
                           disabled={busy}
                           onClick={() => setPendingDelete(agent)}
                         >
@@ -142,7 +150,7 @@ export function AgentLibrary({
           open={pendingDelete !== null}
           onOpenChange={(open) => { if (!open) setPendingDelete(null); }}
           title="Delete agent?"
-          description={`Delete “${pendingDelete?.name ?? ""}” and update any workflows that use it? This cannot be undone.`}
+          description={`Delete “${pendingDelete?.name ?? ""}” and remove it from its columns? This cannot be undone.`}
           busy={busy}
           onConfirm={() => { if (pendingDelete) void deleteAgent(pendingDelete); }}
         />

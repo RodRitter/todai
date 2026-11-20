@@ -2,7 +2,7 @@
 
 import { WorkspaceLink as Link } from "@/components/workspace-selection";
 import { useState, type ReactNode } from "react";
-import { BookOpen, Bot, Files, LayoutGrid, PanelLeft, Settings, Workflow } from "lucide-react";
+import { BookOpen, Bot, Files, LayoutGrid, PanelLeft, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { WorkspaceSwitcher } from "@/components/workspace-selection";
 import { ExecutionActivity } from "@/components/execution-activity";
@@ -15,7 +15,7 @@ export function AppShell({
 }: {
   children: ReactNode;
   headerActions?: ReactNode;
-  screen?: "board" | "agents" | "workflows" | "skills" | "artifacts" | "settings";
+  screen?: "board" | "agents" | "skills" | "artifacts" | "settings";
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -39,9 +39,8 @@ export function AppShell({
           </div>
           <WorkspaceSwitcher />
           <nav className="p-3" aria-label="Main navigation">
-            <Button
+            <Button align="navigation"
               variant={screen === "board" ? "secondary" : "ghost"}
-              className="w-full md:justify-start"
               asChild
             >
               <Link
@@ -53,9 +52,9 @@ export function AppShell({
                 <span className="hidden md:inline">Board</span>
               </Link>
             </Button>
-            <Button
+            <Button align="navigation"
               variant={screen === "agents" ? "secondary" : "ghost"}
-              className="mt-1 w-full md:justify-start"
+              className="mt-1"
               asChild
             >
               <Link
@@ -67,14 +66,9 @@ export function AppShell({
                 <span className="hidden md:inline">Agents</span>
               </Link>
             </Button>
-            <Button variant={screen === "workflows" ? "secondary" : "ghost"} className="mt-1 w-full md:justify-start" asChild>
-              <Link href="/workflows" aria-current={screen === "workflows" ? "page" : undefined} aria-label="Workflows">
-                <Workflow /><span className="hidden md:inline">Workflows</span>
-              </Link>
-            </Button>
-            <Button
+            <Button align="navigation"
               variant={screen === "skills" ? "secondary" : "ghost"}
-              className="mt-1 w-full md:justify-start"
+              className="mt-1"
               asChild
             >
               <Link href="/skills" aria-current={screen === "skills" ? "page" : undefined} aria-label="Skills">
@@ -82,14 +76,14 @@ export function AppShell({
                 <span className="hidden md:inline">Skills</span>
               </Link>
             </Button>
-            <Button variant={screen === "artifacts" ? "secondary" : "ghost"} className="mt-1 w-full md:justify-start" asChild>
+            <Button align="navigation" variant={screen === "artifacts" ? "secondary" : "ghost"} className="mt-1" asChild>
               <Link href="/artifacts" aria-current={screen === "artifacts" ? "page" : undefined} aria-label="Artifacts">
                 <Files /><span className="hidden md:inline">Artifacts</span>
               </Link>
             </Button>
-            <Button
+            <Button align="navigation"
               variant={screen === "settings" ? "secondary" : "ghost"}
-              className="mt-1 w-full md:justify-start"
+              className="mt-1"
               asChild
             >
               <Link
@@ -121,8 +115,6 @@ export function AppShell({
               ? "Settings"
               : screen === "agents"
                 ? "Agents"
-                : screen === "workflows"
-                  ? "Workflows"
                 : screen === "skills"
                   ? "Skills"
                   : screen === "artifacts"

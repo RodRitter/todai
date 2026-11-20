@@ -31,7 +31,8 @@ function referenceMatch(editor: Editor, allowAgents: boolean, allowArtifacts: bo
   return { from: $from.pos - match[2].length - 1, to: $from.pos, kind: match[1] === "#" ? "artifact" : match[1] === "$" ? "skill" : match[1] === "@" ? "agent" : "file", query: match[2] };
 }
 
-export function DescriptionEditor({ value, onChange, disabled = false, autoFocus = false, agents, artifacts = false, label = "Description", id = "task-description", actions, footer, toolbarActions, controlsOnFocus = false, compact = false }: {
+export function DescriptionEditor({ value, onChange, disabled = false, autoFocus = false, agents, artifacts = false, label = "Description", id = "task-description", actions, footer, toolbarActions, controlsOnFocus = false, compact = false, variant = "default", onSubmit }: {
+  variant?: "default" | "prompt"; onSubmit?: () => void;
   value: string; onChange: (value: string) => void; disabled?: boolean; autoFocus?: boolean;
   agents?: AgentProfile[]; artifacts?: boolean; label?: string; id?: string; actions?: ReactNode; footer?: ReactNode; toolbarActions?: ReactNode; controlsOnFocus?: boolean; compact?: boolean;
 }) {
@@ -55,7 +56,8 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
     editorProps: {
       attributes: {
         id, role: "textbox", "aria-label": label, "aria-multiline": "true", "aria-disabled": String(disabled),
-        class: `${richTextClassName} max-h-96 overflow-y-auto p-3 outline-none [&_.tableWrapper]:my-3 [&_.tableWrapper]:overflow-x-auto [&_.tableWrapper]:rounded-lg [&_.tableWrapper]:border [&_ul[data-type=taskList]]:list-none [&_li[data-type=taskItem]]:flex [&_li[data-type=taskItem]]:gap-2 [&_li[data-type=taskItem]>label]:mt-1 [&_li[data-type=taskItem]>div]:min-w-0 [&_li[data-type=taskItem]>div]:flex-1 [&_li[data-type=taskItem]>div>p]:my-1`,
+        "data-placeholder": variant === "prompt" ? "Send a message… Use @ to mention an agent" : "",
+        class: `${variant === "prompt" ? "[&:has(>p:only-child>br:only-child)]:before:content-[attr(data-placeholder)] [&:has(>p:only-child>br:only-child)]:before:text-muted-foreground [&:has(>p:only-child>br:only-child)]:before:pointer-events-none [&:has(>p:only-child>br:only-child)]:before:float-left [&:has(>p:only-child>br:only-child)]:before:h-0" : ""} ${richTextClassName} max-h-96 overflow-y-auto p-3 outline-none [&_.tableWrapper]:my-3 [&_.tableWrapper]:overflow-x-auto [&_.tableWrapper]:rounded-lg [&_.tableWrapper]:border [&_ul[data-type=taskList]]:list-none [&_li[data-type=taskItem]]:flex [&_li[data-type=taskItem]]:gap-2 [&_li[data-type=taskItem]>label]:mt-1 [&_li[data-type=taskItem]>div]:min-w-0 [&_li[data-type=taskItem]>div]:flex-1 [&_li[data-type=taskItem]>div>p]:my-1`,
       },
       handleKeyDown: (_view, event) => keyboard.current(event),
     },
@@ -133,7 +135,11 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
   }
   useEffect(() => {
   keyboard.current = (event) => {
-    if (!match || disabled || event.isComposing) return false;
+    if (disabled || event.isComposing) return false;
+    if (!match) {
+      if (variant === "prompt" && event.key === "Enter" && !event.shiftKey) { event.preventDefault(); onSubmit?.(); return true; }
+      return false;
+    }
     if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setMatch(null); return true; }
     if (results.length && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
       event.preventDefault();
@@ -150,6 +156,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
   return (
     <EditorSurface
       className="group/editor"
+      variant={variant}
       disabled={disabled}
       onClick={(event) => {
         if (
@@ -159,12 +166,12 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
         ) editor?.chain().focus().run();
       }}
     >
-      <label htmlFor={id} className={editorLabelClassName}>{label}</label>
+      <label htmlFor={id} className={variant === "prompt" ? "sr-only" : editorLabelClassName}>{label}</label>
       <div className={`flex flex-col [&_.tiptap]:px-0 [&_.tiptap]:pt-0 ${compact ? "[&_.tiptap]:min-h-12" : "[&_.tiptap]:min-h-24"}`}>
-        <div className={`order-last mt-2 flex-wrap items-center justify-between gap-3 border-t pt-3 ${controlsOnFocus ? "hidden group-focus-within/editor:flex group-has-[[data-state=open]]/editor:flex" : "flex"}`}>
+        <div className={`order-last mt-2 flex-wrap items-center justify-between gap-3 ${variant === "prompt" ? "" : "border-t pt-3"} ${controlsOnFocus ? "hidden group-focus-within/editor:flex group-has-[[data-state=open]]/editor:flex" : "flex"}`}>
           <TooltipProvider>
             <div role="group" aria-label={`${label} formatting`} className="flex flex-wrap items-center gap-1">
-              {formatGroups.map((group, index) => (
+              {variant !== "prompt" && formatGroups.map((group, index) => (
                 <ToggleGroup
                   key={group.label}
                   type="multiple"

@@ -1,12 +1,15 @@
 import type { ComponentProps } from "react";
+import { InputGroup } from "./input-group";
 import { cn } from "@/lib/utils";
 
 // The editor owns its background, padding, and focus ring, including in preview mode.
 export function EditorSurface({
   disabled = false,
+  variant = "default",
   className,
   ...props
-}: ComponentProps<"div"> & { disabled?: boolean }) {
+}: ComponentProps<"div"> & { disabled?: boolean; variant?: "default" | "prompt" }) {
+  if (variant === "prompt") return <InputGroup data-disabled={disabled} className={cn("h-auto flex-col items-stretch p-3 has-[[contenteditable=true]:focus-visible]:border-ring has-[[contenteditable=true]:focus-visible]:ring-3 has-[[contenteditable=true]:focus-visible]:ring-ring/50", className)} {...props} />;
   return (
     <div
       data-slot="editor-surface"

@@ -16,11 +16,13 @@ const meta = {
         "secondary",
         "outline",
         "ghost",
+        "ghost-muted",
+        "ghost-destructive",
         "destructive",
         "link",
       ],
     },
-    size: { control: "select", options: ["default", "sm", "lg", "icon"] },
+    size: { control: "select", options: ["default", "xs", "sm", "lg", "icon", "icon-xs", "row"] },
   },
 } satisfies Meta<typeof Button>;
 export default meta;
@@ -65,3 +67,10 @@ export const AsChild: Story = {
     </Button>
   ),
 };
+
+export const Quiet: Story = { args: { variant: "ghost-muted" } };
+export const QuietDestructive: Story = { args: { variant: "ghost-destructive", children: "Delete" } };
+export const ExtraSmall: Story = { args: { size: "xs" } };
+export const CompactIcon: Story = { args: { size: "icon-xs", "aria-label": "Add item", children: <PlusIcon /> } };
+export const MultilineRow: Story = { args: { size: "row", variant: "ghost-muted", children: "A long action label that wraps in a narrow container" }, decorators: [(Story) => <div className="w-48"><Story /></div>] };
+export const SplitAction: Story = { render: () => <div className="flex"><Button segment="start">Create artifact</Button><Button segment="end" size="icon" aria-label="Choose artifact type"><PlusIcon /></Button></div> };

@@ -1,6 +1,6 @@
 import { withTaskStore } from "@/server/database";
 import { execution } from "@/server/execution";
-import { PendingRunError, RunValidationError } from "@/server/task-store";
+import { PendingRunError } from "@/server/task-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export function GET(request: Request) {
       ),
     );
   } catch (error) {
-    if (error instanceof PendingRunError || error instanceof RunValidationError)
+    if (error instanceof PendingRunError)
       return Response.json({ error: error.message }, { status: 409 });
     return Response.json(
       {
@@ -30,11 +30,11 @@ export function GET(request: Request) {
 export async function PUT(request: Request) {
   try {
     const input: unknown = await request.json();
-    const task = withTaskStore(request, (store) => { store.requireWorkflowMode(); return store.save(input); });
+    const task = withTaskStore(request, (store) => store.save(input));
     execution();
     return Response.json(task);
   } catch (error) {
-    if (error instanceof PendingRunError || error instanceof RunValidationError)
+    if (error instanceof PendingRunError)
       return Response.json({ error: error.message }, { status: 409 });
     return Response.json(
       {
@@ -57,7 +57,7 @@ export async function DELETE(request: Request) {
     withTaskStore(request, (store) => store.delete(id));
     return new Response(null, { status: 204 });
   } catch (error) {
-    if (error instanceof PendingRunError || error instanceof RunValidationError)
+    if (error instanceof PendingRunError)
       return Response.json({ error: error.message }, { status: 409 });
     return Response.json(
       {

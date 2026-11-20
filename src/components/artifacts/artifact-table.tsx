@@ -47,7 +47,7 @@ export function ArtifactTable({ artifacts, label = "Artifacts", busy = false, on
             <td className="px-3 py-2 text-xs text-muted-foreground"><time dateTime={artifact.updatedAt} title={new Date(artifact.updatedAt).toLocaleString()}>{new Date(artifact.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</time></td>
             {hasActions && <td className="pr-2 text-right">
               <DropdownMenu.Root>
-                <DropdownMenu.Trigger asChild><Button type="button" variant="ghost" size="icon" className="size-7" disabled={busy} aria-label={`Actions for ${artifact.title}`}><MoreHorizontal aria-hidden="true" /></Button></DropdownMenu.Trigger>
+                <DropdownMenu.Trigger asChild><Button type="button" variant="ghost" size="icon-xs"  disabled={busy} aria-label={`Actions for ${artifact.title}`}><MoreHorizontal aria-hidden="true" /></Button></DropdownMenu.Trigger>
                 <DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={4} className="z-50 min-w-44 rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
                   {onEdit && <DropdownMenu.Item className={menuItemClass} onSelect={() => onEdit(artifact)}><Upload aria-hidden="true" />Publish revision</DropdownMenu.Item>}
                   {onHistory && <DropdownMenu.Item className={menuItemClass} onSelect={() => onHistory(artifact)}><History aria-hidden="true" />Revision history</DropdownMenu.Item>}

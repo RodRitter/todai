@@ -16,18 +16,35 @@ const agentStatusColors: Record<Status, string> = {
   Blocked: "text-red-600 dark:text-red-400",
 };
 
+const statusBackgrounds: Record<Status, string> = {
+  "Not started": "bg-muted",
+  Queued: "bg-amber-50 dark:bg-amber-950/40",
+  Complete: "bg-emerald-50 dark:bg-emerald-950/40",
+  Failed: "bg-red-50 dark:bg-red-950/40",
+  Stopped: "bg-amber-50 dark:bg-amber-950/40",
+  Interrupted: "bg-amber-50 dark:bg-amber-950/40",
+  Running: "bg-emerald-50 dark:bg-emerald-950/40",
+  Waiting: "bg-amber-50 dark:bg-amber-950/40",
+  Paused: "bg-amber-50 dark:bg-amber-950/40",
+  Review: "bg-blue-50 dark:bg-blue-950/40",
+  Blocked: "bg-red-50 dark:bg-red-950/40",
+};
+
 export function AgentStatus({
   status,
   className,
+  variant = "default",
 }: {
   status: Status;
   className?: string;
+  variant?: "default" | "badge";
 }) {
   return (
     <span
       className={cn(
         "flex items-center gap-1.5 text-xs",
         agentStatusColors[status],
+        variant === "badge" && cn("min-h-8 w-fit rounded-xl px-2.5 py-1.5 font-medium", statusBackgrounds[status]),
         className,
       )}
     >

@@ -4,9 +4,17 @@ import { cn } from "@/lib/utils";
 function Card({
   className,
   variant = "default",
+  elevation = "default",
+  interactive = false,
+  dragging = false,
+  attention = false,
   ...props
 }: React.ComponentProps<"div"> & {
-  variant?: "default" | "compact" | "task";
+  variant?: "default" | "compact" | "task" | "flush";
+  elevation?: "default" | "flat";
+  interactive?: boolean;
+  dragging?: boolean;
+  attention?: boolean;
 }) {
   return (
     <div
@@ -14,7 +22,12 @@ function Card({
       data-variant={variant}
       className={cn(
         "bg-card text-card-foreground flex min-w-0 flex-col rounded-2xl border border-border/40 shadow-[0_2px_3px_-1px_rgb(0_0_0/0.03),0_8px_18px_-8px_rgb(0_0_0/0.12)]",
-        variant === "compact"
+        interactive && "relative cursor-pointer overflow-hidden outline-none transition-[box-shadow,border-color,opacity] duration-150 ease-out focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] active:cursor-grabbing motion-reduce:transition-none",
+        interactive && !dragging && "hover:border-ring/30 hover:shadow-md",
+        dragging && "opacity-40",
+        attention && "relative before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-destructive",
+        elevation === "flat" && "shadow-none",
+        variant === "flush" ? "gap-0 overflow-hidden py-0" : variant === "compact"
           ? "gap-3 py-3 [&>[data-slot=card-header]]:px-3 [&>[data-slot=card-footer]]:px-3"
           : variant === "task"
             ? "gap-5 py-5"

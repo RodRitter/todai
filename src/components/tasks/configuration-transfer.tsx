@@ -46,7 +46,6 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
 
   const conflicts = operation === "import" && selected && existing ? [
     ...selected.agents.filter((agent) => existing.agents.some((item) => item.id === agent.id)).map((agent) => `Agent: ${agent.name} (${agent.id})`),
-    ...(selected.workflows ?? []).filter((workflow) => existing.workflows?.some((item) => item.id === workflow.id)).map((workflow) => `Workflow: ${workflow.name} (${workflow.id})`),
     ...selected.columns.filter((column) => existing.columns.some((item) => item.id === column.id)).map((column) => `Column: ${column.name} (${column.id})`),
   ] : [];
 
@@ -64,29 +63,29 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
             {mode !== "columns" && <Selection title="Agents" items={source.agents.map((agent) => ({ id: agent.id, label: agent.name }))} selected={agents} onChange={setAgents} />}
             {mode !== "agents" && <Selection title="Columns" items={source.columns.map((column) => ({ id: column.id, label: column.name, detail: column.id }))} selected={columns} onChange={setColumns} />}
           </div>
-          <p className="text-sm text-muted-foreground">Workflows are included when all their agents and mapped status columns are selected. Legacy assignments are converted to workflows with manual checkpoints.</p>
+          <p className="text-sm text-muted-foreground">Assignments are included only when both the column and its agent are selected. Other selected columns remain unassigned.</p>
           {operation === "import" && selected.columns.length > 0 && (
             <fieldset className="space-y-2">
               <legend className="text-sm font-medium">How should columns be imported?</legend>
               <label className="flex items-center gap-2 text-sm"><input type="radio" name="column-import-mode" checked={columnMode === "add"} onChange={() => setColumnMode("add")} />Add imported columns</label>
               <label className="flex items-center gap-2 text-sm"><input type="radio" name="column-import-mode" checked={columnMode === "replace"} onChange={() => setColumnMode("replace")} />Replace all existing columns</label>
-              {columnMode === "replace" && <p className="text-sm text-muted-foreground">All existing columns will be replaced. Existing tasks will move to “{selected.columns[0].name}” without starting agents. Queued or active runs must finish first. Existing agents will be kept.</p>}
+              {columnMode === "replace" && <p className="text-sm text-muted-foreground">All existing columns and their assignments will be removed. Existing tasks will move to “{selected.columns[0].name}” without starting agents. Queued or active runs must finish first. Existing agents will be kept.</p>}
             </fieldset>
           )}
-          {operation === "import" && columnMode !== "replace" && conflictMode !== "overwrite" && <p className="text-sm text-muted-foreground">Import creates new agents and appends columns in file order. Conflicting column names receive an “imported” suffix. Existing agents, columns, tasks, and workflows stay unchanged.</p>}
+          {operation === "import" && columnMode !== "replace" && conflictMode !== "overwrite" && <p className="text-sm text-muted-foreground">Import creates new agents and appends columns in file order. Conflicting column names receive an “imported” suffix. Existing agents, columns, tasks, and assignments stay unchanged.</p>}
           {conflicts.length > 0 && <fieldset className="space-y-2 rounded border p-3">
             <legend className="text-sm font-medium">Matching IDs found — overwrite existing entries?</legend>
             <ul className="max-h-40 overflow-auto text-xs text-muted-foreground">{conflicts.map((conflict) => <li key={conflict}>{conflict}</li>)}</ul>
             <label className="flex items-center gap-2 text-sm"><input type="radio" name="conflicts" checked={conflictMode === "copy"} onChange={() => setConflictMode("copy")} />Keep existing entries and import new copies</label>
             <label className="flex items-center gap-2 text-sm"><input type="radio" name="conflicts" checked={conflictMode === "overwrite"} onChange={() => setConflictMode("overwrite")} />Overwrite entries with matching IDs</label>
-            {conflictMode === "overwrite" && <p className="text-sm text-muted-foreground">Matching agents will receive the imported settings. Matching columns will receive the imported names and the selected workflows will receive imported settings. Replace all columns still removes every existing column.</p>}
+            {conflictMode === "overwrite" && <p className="text-sm text-muted-foreground">Matching agents will receive the imported settings. Matching columns will receive the imported names and selected assignments; omitted assignments will be cleared. Replace all columns still removes every existing column.</p>}
           </fieldset>}
-          <p className="text-sm" role="status">{selected.agents.length} agents, {selected.columns.length} columns, {selected.workflows?.length ?? 0} workflows selected.</p>
+          <p className="text-sm" role="status">{selected.agents.length} agents, {selected.columns.length} columns, {selected.assignments.length} assignments selected.</p>
           <div className="flex gap-2">
             <Button disabled={busy || (conflicts.length > 0 && conflictMode === null) || (!selected.agents.length && !selected.columns.length) || (operation === "import" && selected.columns.length > 0 && columnMode === null)} onClick={() => run(async () => {
               if (operation === "import") {
                 const result = await configurationApi.import(selected, columnMode ?? "add", conflicts.length ? conflictMode ?? "copy" : "copy");
-                toast.success(`Imported ${result.agents} agents, ${result.columns} columns, and ${result.workflows} workflows.`);
+                toast.success(`Imported ${result.agents} agents, ${result.columns} columns, and ${result.assignments} assignments.`);
                 setSource(null);
                 onImported();
               } else {
@@ -159,8 +158,8 @@ function Selection({ title, items, selected, onChange }: {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs text-muted-foreground">{selected.length} of {items.length} selected</span>
         <div className="flex gap-1">
-          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" aria-label={`Select all ${title.toLowerCase()}`} onClick={() => onChange(items.map((item) => item.id))}>Select all</Button>
-          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" aria-label={`Clear ${title.toLowerCase()}`} onClick={() => onChange([])}>Clear</Button>
+          <Button size="xs" variant="ghost"  aria-label={`Select all ${title.toLowerCase()}`} onClick={() => onChange(items.map((item) => item.id))}>Select all</Button>
+          <Button size="xs" variant="ghost"  aria-label={`Clear ${title.toLowerCase()}`} onClick={() => onChange([])}>Clear</Button>
         </div>
       </div>
       <div className="max-h-60 divide-y overflow-auto rounded-md border">

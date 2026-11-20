@@ -87,10 +87,10 @@ export function SkillsPage() {
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <p role="status" className={loading || message ? "text-sm text-muted-foreground" : "sr-only"}>{loading ? "Loading skills…" : message}</p>
           {!loading && snapshots && (
-            <Card className="grid min-h-[calc(100svh-8rem)] min-w-0 gap-0 overflow-hidden py-0 shadow-none md:grid-cols-[16rem_minmax(0,1fr)]">
+            <Card variant="flush" elevation="flat" className="grid min-h-[calc(100svh-8rem)] md:grid-cols-[16rem_minmax(0,1fr)]">
               <aside className="min-w-0 border-b bg-muted/20 md:border-r md:border-b-0" aria-label="Skill library">
                 <div className="border-b p-3">
-                  <div className="relative"><Search className="pointer-events-none absolute top-2.5 left-3 size-4 text-muted-foreground" /><Input className="bg-background pl-9" aria-label="Search skills" placeholder="Find a skill…" value={search} onChange={(event) => setSearch(event.target.value)} /></div>
+                  <div className="relative"><Search className="pointer-events-none absolute top-2.5 left-3 size-4 text-muted-foreground" /><Input variant="search" aria-label="Search skills" placeholder="Find a skill…" value={search} onChange={(event) => setSearch(event.target.value)} /></div>
                 </div>
                 <div className="max-h-[calc(100svh-13rem)] space-y-1 overflow-y-auto p-2 py-3">
                   {([{ scope: "workspace", label: "Workspace", data: snapshots.workspace }, { scope: "todai", label: "Todai", data: snapshots.todai }, { scope: "root", label: "Root", data: snapshots.root }] as const).map((group) => (
@@ -113,7 +113,7 @@ export function SkillsPage() {
                 <Tabs defaultValue="preview" className="p-5">
                   <TabsList aria-label="Skill view"><TabsTrigger value="preview">Preview</TabsTrigger><TabsTrigger value="source">{scope !== "root" ? "Edit source" : "View source"}</TabsTrigger></TabsList>
                   <TabsContent value="preview" className="mt-4 max-h-[65vh] overflow-y-auto"><Markdown>{draft.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "")}</Markdown></TabsContent>
-                  <TabsContent value="source" className="mt-4"><Textarea readOnly={scope === "root"} aria-label="Skill Markdown source" spellCheck={false} className="min-h-[55vh] resize-y font-mono text-sm" value={draft} disabled={saving} onChange={(event) => { setDraft(event.target.value); setMessage(""); }} /><p className="mt-2 text-xs text-muted-foreground">{scope !== "root" ? "Edit the complete SKILL.md, including its YAML frontmatter." : "Root skill source is read-only."}</p></TabsContent>
+                  <TabsContent value="source" className="mt-4"><Textarea readOnly={scope === "root"} aria-label="Skill Markdown source" spellCheck={false} variant="code" className="min-h-[55vh]" value={draft} disabled={saving} onChange={(event) => { setDraft(event.target.value); setMessage(""); }} /><p className="mt-2 text-xs text-muted-foreground">{scope !== "root" ? "Edit the complete SKILL.md, including its YAML frontmatter." : "Root skill source is read-only."}</p></TabsContent>
                 </Tabs>
               </section> : <div className="flex min-h-80 flex-col items-center justify-center gap-3 p-8 text-center text-muted-foreground"><BookOpen className="size-8" /><p className="text-sm">Select a skill to view its instructions.</p><p className="max-w-sm text-xs">Add a folder containing SKILL.md to Todai’s or your workspace’s .agents/skills directory to create a local skill.</p></div>}
             </Card>

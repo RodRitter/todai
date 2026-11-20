@@ -26,3 +26,5 @@ export const Disabled: Story = {
     </div>
   ),
 };
+export const Metadata: Story = { ...Default, args: { variant: "metadata" } };
+export const Caption: Story = { ...Default, args: { variant: "caption" } };

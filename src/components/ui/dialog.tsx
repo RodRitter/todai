@@ -67,13 +67,15 @@ function DialogContent({
   showCloseButton = true,
   closeDisabled = false,
   size = "default",
+  layout = "default",
   onInteractOutside,
   onEscapeKeyDown,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
   closeDisabled?: boolean;
-  size?: "default" | "wide" | "large" | "expanded";
+  size?: "default" | "wide" | "large";
+  layout?: "default" | "workspace";
 }) {
   return (
     <DialogPortal>
@@ -85,7 +87,7 @@ function DialogContent({
           "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-200 motion-reduce:animate-none",
           size === "wide" && "sm:max-w-2xl",
           size === "large" && "sm:max-w-3xl",
-          size === "expanded" && "sm:max-w-[calc(100%-2rem)]",
+          layout === "workspace" && "h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden pb-0",
           className,
         )}
         {...props}
@@ -113,10 +115,10 @@ function DialogContent({
     </DialogPortal>
   );
 }
-function DialogHeader({ children, ...props }: React.ComponentProps<"div">) {
+function DialogHeader({ children, className, variant = "default", ...props }: React.ComponentProps<"div"> & { variant?: "default" | "actions" }) {
   const { show, disabled } = React.useContext(DialogCloseContext);
   return (
-    <ModalHeader data-slot="dialog-header" {...props}>
+    <ModalHeader data-slot="dialog-header" className={cn(variant === "actions" && "grid-cols-[minmax(0,1fr)_auto_2.25rem] [&>button]:col-start-3 [&>button]:row-start-1 [&>[data-slot=dialog-title]]:col-start-1 [&>[data-slot=dialog-title]]:text-left", className)} {...props}>
       {show ? (
         <DialogPrimitive.Close asChild>
           <ModalCloseButton disabled={disabled} />
@@ -126,12 +128,13 @@ function DialogHeader({ children, ...props }: React.ComponentProps<"div">) {
     </ModalHeader>
   );
 }
-function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
+function DialogFooter({ className, variant = "default", ...props }: React.ComponentProps<"div"> & { variant?: "default" | "workspace" }) {
   return (
     <div
       data-slot="dialog-footer"
       className={cn(
         "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+        variant === "workspace" && "z-10 shrink-0 flex-row flex-wrap items-center justify-end border-t bg-background px-6 py-4",
         className,
       )}
       {...props}

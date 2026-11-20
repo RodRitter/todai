@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import type { Artifact, TaskArtifact } from "@/domain/artifact";
@@ -68,14 +68,14 @@ export const InlineCitation: Story = {
   render: () => <Composer />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const editor = await canvas.findByRole("textbox", { name: "Your comment" });
+    const editor = await canvas.findByRole("textbox", { name: "Your message" });
     await userEvent.click(editor);
     await userEvent.keyboard("#Revised");
     await userEvent.click(await canvas.findByRole("option", { name: /Revised design evidence/ }));
-    await userEvent.click(canvas.getByRole("button", { name: "Post comment" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Send message" }));
     await expect(await canvas.findByRole("button", { name: "Revised design evidence" })).toBeVisible();
-    await userEvent.click(canvas.getByRole("textbox", { name: "Your comment" }));
-    const toolbar = canvas.getByRole("group", { name: "Your comment formatting" });
+    await userEvent.click(canvas.getByRole("textbox", { name: "Your message" }));
+    const toolbar = canvas.getByRole("group", { name: "Your message formatting" });
     await expect(within(toolbar).getByRole("button", { name: "Attach artifact" })).toBeVisible();
   },
 };
@@ -83,7 +83,7 @@ export const PaperclipLoadError: Story = {
   parameters: { failure: true },
   render: () => <Composer />,
   play: async ({ canvasElement }) => {
-    await userEvent.click(await within(canvasElement).findByRole("textbox", { name: "Your comment" }));
+    await userEvent.click(await within(canvasElement).findByRole("textbox", { name: "Your message" }));
     await userEvent.click(within(canvasElement).getByRole("button", { name: "Attach artifact" }));
     await expect(await within(document.body).findByRole("alert")).toHaveTextContent("Connection lost");
   },
@@ -115,5 +115,31 @@ export const CitationPreview: Story = {
     const dialog = within(await within(document.body).findByRole("dialog"));
     await waitFor(() => expect(dialog.getByText("Evidence")).toBeVisible());
     await expect(dialog.getByText("Revision 1", { exact: true })).toBeVisible();
+  },
+};
+
+function RefreshingActivity() {
+  const [refresh, setRefresh] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setRefresh((value) => value + 1), 250);
+    return () => clearInterval(timer);
+  }, []);
+  return <><output aria-label="Refresh count">{refresh}</output><TaskComments comments={[{
+    id: "citation", taskId: "task", authorName: "Builder", createdAt: first.createdAt,
+    body: `[Design evidence](#artifact/${first.id}/${first.revisionId})`,
+    artifacts: [{ artifactId: first.id, revisionId: first.revisionId }],
+  }]} /></>;
+}
+export const CitationSurvivesRefresh: Story = {
+  render: () => <RefreshingActivity />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "Design evidence" }));
+    const dialog = await within(document.body).findByRole("dialog");
+    const count = Number(canvas.getByLabelText("Refresh count").textContent);
+    await waitFor(() => expect(Number(canvas.getByLabelText("Refresh count").textContent)).toBeGreaterThan(count + 1));
+    await expect(dialog).toBeVisible();
+    await expect(within(dialog).getByText("Revision 1", { exact: true })).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: /Open .*revision 1/ })).not.toBeInTheDocument();
   },
 };

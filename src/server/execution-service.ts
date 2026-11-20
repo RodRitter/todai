@@ -1,4 +1,3 @@
-import { agentPrompt } from "./agent-prompt.ts";
 import { openRunArtifacts, type RunArtifactConnection } from "./run-artifacts.ts";
 import { executionWorkspacePath } from "./workspace-settings.ts";
 import { orderedReplies } from "./comment-intent.ts";
@@ -72,9 +71,7 @@ export class ExecutionService {
       this.store.finishRun(
         run.id,
         "Interrupted",
-        run.workflowExecutionId
-          ? "Agent run interrupted because the app stopped. Workspace changes were preserved. Retry the current step in the Workflow tab to continue."
-          : "Agent run interrupted because the app stopped. Workspace changes were preserved. Move the task to an agent column to start a new run.",
+        "Agent run interrupted because the app stopped. Workspace changes were preserved. Move the task to an agent column to start a new run.",
       );
     }
     while (true) {
@@ -91,7 +88,7 @@ export class ExecutionService {
         if (run.kind !== "intent") artifacts = await openRunArtifacts(this.store, run, controller.signal);
         if (this.store.interruptionRequested(run.id)) controller.abort();
         controller.signal.throwIfAborted();
-        const request: RunRequest = {
+        summary = await this.runner({
           artifacts: artifacts?.connection,
           run,
           task,
@@ -101,12 +98,7 @@ export class ExecutionService {
             this.store.recordRunner(run.id, pid);
             if (this.store.interruptionRequested(run.id)) controller.abort();
           },
-        };
-        if (run.workflowExecutionId) {
-          run.prompt = agentPrompt(request);
-          this.store.recordPrompt(run.id, run.prompt);
-        }
-        summary = await this.runner(request);
+        });
         artifacts?.close();
         if (run.kind === "intent") {
           const order = orderedReplies(summary, run.replyPlan ?? []);

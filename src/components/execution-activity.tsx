@@ -66,9 +66,9 @@ export function ExecutionActivityView({ state, error = null, busy = false, onAct
     <>
     <Popover.Root>
       <Popover.Trigger asChild>
-        <Button variant="ghost" size="sm" aria-label={`Execution: ${label}`}>
+        <Button variant="ghost-muted" size="sm" aria-label={`Execution: ${label}`}>
           <Icon className={state?.active ? "size-4 animate-spin motion-reduce:animate-none" : "size-4"} />
-          <span className="text-xs text-muted-foreground">{label}</span>
+          <span className="text-xs">{label}</span>
         </Button>
       </Popover.Trigger>
       <Popover.Portal>

@@ -263,8 +263,8 @@ export function ColumnEditor({ initialColumns, initialTaskCounts = {}, create, r
                           <div className="flex gap-0.5 text-muted-foreground/60 transition-colors group-hover:text-muted-foreground group-focus-within:text-muted-foreground">
                             <Button
                               variant="ghost"
-                              size="icon"
-                              className="size-7 disabled:opacity-25"
+                              size="icon-xs"
+
                               disabled={busy || index === 0}
                               aria-label={`Move ${column} up`}
                               onClick={() => move(index, index - 1)}
@@ -273,8 +273,8 @@ export function ColumnEditor({ initialColumns, initialTaskCounts = {}, create, r
                             </Button>
                             <Button
                               variant="ghost"
-                              size="icon"
-                              className="size-7 disabled:opacity-25"
+                              size="icon-xs"
+
                               disabled={busy || index === columns.length - 1}
                               aria-label={`Move ${column} down`}
                               onClick={() => move(index, index + 1)}
@@ -283,8 +283,8 @@ export function ColumnEditor({ initialColumns, initialTaskCounts = {}, create, r
                             </Button>
                             <Button
                               variant="ghost"
-                              size="icon"
-                              className="size-7"
+                              size="icon-xs"
+
                               disabled={busy}
                               aria-label={`Rename ${column}`}
                               onClick={() => {
@@ -306,9 +306,9 @@ export function ColumnEditor({ initialColumns, initialTaskCounts = {}, create, r
                                   className="inline-flex rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 >
                                   <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="size-7 hover:text-destructive"
+                                    variant="ghost-destructive"
+                                    size="icon-xs"
+
                                     disabled={busy || !!deleteReason}
                                     aria-label={`Delete ${column}`}
                                     onClick={() => {

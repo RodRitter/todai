@@ -1,3 +1,4 @@
+import { artifactPublicationPolicy } from "./artifact-policy.ts";
 import { randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -8,7 +9,7 @@ import { MAX_ARTIFACT_BYTES, type ArtifactInput, type ArtifactReference, type Ta
 export type RunArtifactConnection = { url: string; token: string; context: TaskArtifact[] };
 const string = { type: "string" };
 const tools: { name: string; description: string; properties: Record<string, { type: string; enum?: string[] }>; required: string[] }[] = [
-  { name: "publish_artifact", description: "Publish text, Markdown, a file (base64 bytes), or an HTTP/HTTPS link immediately. Supply artifactId to publish a new revision. Ownership and creator come from this run. Returns stable id and revisionId; cite as [title](#artifact/ID/REVISION_ID).", properties: { title: string, description: string, type: { type: "string", enum: ["text", "markdown", "file", "link"] }, content: string, base64: string, filename: string, mediaType: string, url: string, artifactId: string }, required: ["title", "type"] },
+  { name: "publish_artifact", description: artifactPublicationPolicy + " Publish text, Markdown, a file (base64 bytes), or an HTTP/HTTPS link immediately. Supply artifactId to publish a new revision. Ownership and creator come from this run. Returns stable id and revisionId; cite as [title](#artifact/ID/REVISION_ID).", properties: { title: string, description: string, type: { type: "string", enum: ["text", "markdown", "file", "link"] }, content: string, base64: string, filename: string, mediaType: string, url: string, artifactId: string }, required: ["title", "type"] },
   { name: "search_artifacts", description: "Search this workspace's artifact metadata. Content is read separately. Use archived to discover archived artifacts.", properties: { search: string, archived: { type: "boolean" } }, required: [] },
   { name: "read_artifact", description: "Read an artifact's metadata and stored content (base64 for files), optionally at an exact revision. External links return their URL without fetching it.", properties: { artifactId: string, revisionId: string }, required: ["artifactId"] },
   { name: "link_artifact", description: "Link an artifact to the current task, following its latest revision.", properties: { artifactId: string }, required: ["artifactId"] },

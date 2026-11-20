@@ -72,7 +72,7 @@ export function ArtifactViewer({ artifact, onClose }: { artifact: Artifact; onCl
       </DialogHeader>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="min-w-0 break-words text-xs text-muted-foreground">{artifact.creator}<span className="mx-2" aria-hidden="true">·</span><span>Revision {artifact.revisionNumber}</span><span className="mx-2" aria-hidden="true">·</span><time dateTime={artifact.updatedAt} title={new Date(artifact.updatedAt).toLocaleString()}>{new Date(artifact.updatedAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}</time>{artifact.archived ? " · Archived" : ""}</p>
-        {kind !== "link" && <Button size="icon" variant="ghost" className="size-7 shrink-0 text-muted-foreground" disabled={downloading} aria-label={downloading ? "Downloading…" : "Download"} title="Download this revision" onClick={() => void download()}><Download aria-hidden="true" className="size-4" /></Button>}
+        {kind !== "link" && <Button size="icon-xs" variant="ghost-muted" className="shrink-0" disabled={downloading} aria-label={downloading ? "Downloading…" : "Download"} title="Download this revision" onClick={() => void download()}><Download aria-hidden="true" className="size-4" /></Button>}
         {downloadError && <p role="alert" className="w-full text-sm text-destructive">{downloadError}</p>}
       </div>
       {kind === "link" ? <div className="space-y-3">

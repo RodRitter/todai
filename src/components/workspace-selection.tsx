@@ -18,8 +18,8 @@ export function WorkspaceSelection({ workspaces, children }: { workspaces: Works
   const workspace = workspaces.find((item) => item.id === workspaceId);
   const invalid = workspaceId !== undefined && !workspace;
   if (!workspaces.length) return <GetStarted />;
-  if (invalid) return <main className="space-y-4 p-8"><p>This workspace is unavailable. Choose another workspace.</p>{workspaces.map((item) => <a className="block underline" key={item.id} href={`/?workspace=${encodeURIComponent(item.id)}`}>{item.name}</a>)}<WorkspaceArchive allowArchive={false} /></main>;
-  if (!workspace) return <main className="p-8" aria-busy="true">Loading workspace…</main>;
+  if (invalid) return <main className="space-y-4 p-4 md:p-8"><p>This workspace is unavailable. Choose another workspace.</p>{workspaces.map((item) => <a className="block underline" key={item.id} href={`/?workspace=${encodeURIComponent(item.id)}`}>{item.name}</a>)}<WorkspaceArchive allowArchive={false} /></main>;
+  if (!workspace) return <main className="p-4 md:p-8" aria-busy="true">Loading workspace…</main>;
   return <Selection.Provider value={{ workspace, workspaces }}>{children}</Selection.Provider>;
 }
 
@@ -35,7 +35,7 @@ export function WorkspaceSwitcher() {
   const selection = useContext(Selection);
   if (!selection) return null;
   return <div className="border-b px-2 py-4 md:px-4">
-    <Label htmlFor="workspace-switcher" className="mb-2 block truncate text-xs text-muted-foreground">Workspace</Label>
+    <Label htmlFor="workspace-switcher" variant="caption" className="mb-2">Workspace</Label>
     <Select value={selection.workspace.id} onValueChange={(workspaceId) => {
       const url = new URL(window.location.href);
       url.searchParams.set("workspace", workspaceId);

@@ -11,7 +11,6 @@ export function withTaskStore<T>(request: Request, operation: (store: TaskStore)
   if (!workspaceId) throw new WorkspaceOwnershipError("A workspace ID is required. Reload the page.");
   const store = openTaskStore(workspaceId);
   try {
-    store.migrateColumnAutomation();
     return operation(store);
   } finally {
     store.close();

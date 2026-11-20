@@ -29,7 +29,7 @@ export function ArtifactOpenButton({ artifact, latest = false, compact = false }
   }
   const label = latest ? `Open latest revision of ${artifact.title}` : `Open ${artifact.title}, revision ${artifact.revisionNumber}`;
   return <>
-    <Button type="button" size={compact ? "icon" : "sm"} variant={compact ? "ghost" : "outline"} className={compact ? "size-7" : undefined} disabled={busy} aria-label={label} title={label} onClick={() => void open()}>
+    <Button type="button" size={compact ? "icon-xs" : "sm"} variant={compact ? "ghost" : "outline"} disabled={busy} aria-label={label} title={label} onClick={() => void open()}>
       {compact ? <Eye aria-hidden="true" /> : latest ? "Open latest revision" : `Open · r${artifact.revisionNumber}`}
     </Button>
     {selected && <ArtifactViewer key={selected.revisionId} artifact={selected} onClose={() => setSelected(null)} />}
@@ -52,13 +52,13 @@ export function ArtifactPicker({ onSelect, disabled, label = "Attach artifact", 
   }
   const visible = items.filter((item) => `${item.title} ${item.description}`.toLowerCase().includes(search.toLowerCase()));
   const trigger = (
-    <Button type="button" variant={compact || attachmentIcon ? "ghost" : "outline"} size={compact || attachmentIcon ? "icon" : "sm"} className={compact ? "size-7 text-muted-foreground" : undefined} disabled={disabled} aria-label={open ? "Close artifact picker" : label} title={open ? "Close artifact picker" : label} aria-expanded={open} onClick={() => open ? setOpen(false) : void load()}>{attachmentIcon ? <Paperclip aria-hidden="true" /> : compact ? <Plus aria-hidden="true" className={open ? "rotate-45 transition-transform" : "transition-transform"} /> : open ? "Close artifact picker" : label}</Button>
+    <Button type="button" variant={compact ? "ghost-muted" : attachmentIcon ? "ghost" : "outline"} size={compact ? "icon-xs" : attachmentIcon ? "icon" : "sm"} disabled={disabled} aria-label={open ? "Close artifact picker" : label} title={open ? "Close artifact picker" : label} aria-expanded={open} onClick={() => open ? setOpen(false) : void load()}>{attachmentIcon ? <Paperclip aria-hidden="true" /> : compact ? <Plus aria-hidden="true" className={open ? "rotate-45 transition-transform" : "transition-transform"} /> : open ? "Close artifact picker" : label}</Button>
   );
   const panel = (
 <div className={compact ? "col-span-2 space-y-2" : "space-y-2"}>
       <Input aria-label="Search workspace artifacts" placeholder="Search artifacts" value={search} onChange={(event) => setSearch(event.target.value)} disabled={disabled} />
       {loading ? <p role="status" className="text-sm">Loading artifacts…</p> : error ? <div role="alert"><p>{error}</p><Button type="button" variant="outline" onClick={() => void load()}>Retry</Button></div> : <ul className="max-h-48 space-y-1 overflow-y-auto">
-        {visible.map((artifact) => <li key={artifact.id}><Button type="button" variant="ghost" className="h-auto whitespace-normal text-left" disabled={disabled} onClick={() => { onSelect(artifact); setOpen(false); }}>{artifact.title} · r{artifact.revisionNumber} · {artifact.type}</Button></li>)}
+        {visible.map((artifact) => <li key={artifact.id}><Button type="button" variant="ghost" size="row" disabled={disabled} onClick={() => { onSelect(artifact); setOpen(false); }}>{artifact.title} · r{artifact.revisionNumber} · {artifact.type}</Button></li>)}
         {!visible.length && <li className="text-sm text-muted-foreground">No matching artifacts.</li>}
       </ul>}
     </div>
@@ -133,7 +133,7 @@ export function TaskArtifacts({ taskId, commentsKey, onNavigateComment, onCountC
           {explicit && <ArtifactOpenButton artifact={artifact} latest compact />}
           {comments.length > 0 && <Popover.Root>
             <Popover.Trigger asChild>
-              <Button type="button" size="icon" variant="ghost" className="size-7" aria-label={`View ${comments.length} comment ${comments.length === 1 ? "reference" : "references"} for ${artifact.title}`} title="Comment references"><MessageSquare aria-hidden="true" className="size-4" /></Button>
+              <Button type="button" size="icon-xs" variant="ghost"  aria-label={`View ${comments.length} comment ${comments.length === 1 ? "reference" : "references"} for ${artifact.title}`} title="Comment references"><MessageSquare aria-hidden="true" className="size-4" /></Button>
             </Popover.Trigger>
             <Popover.Portal>
               <Popover.Content sideOffset={6} align="end" className="z-50 w-80 max-w-[calc(100vw-2rem)] space-y-2 rounded-md border bg-popover p-3 text-popover-foreground shadow-md">
@@ -146,7 +146,7 @@ export function TaskArtifacts({ taskId, commentsKey, onNavigateComment, onCountC
               </Popover.Content>
             </Popover.Portal>
           </Popover.Root>}
-          {explicit && <Button type="button" size="icon" variant="ghost" className="size-7 text-muted-foreground hover:text-destructive" disabled={busy} aria-label={`Unlink ${artifact.title} from task`} title="Unlink from task" onClick={() => void change(artifact.id, true)}><Unlink aria-hidden="true" /></Button>}
+          {explicit && <Button type="button" size="icon-xs" variant="ghost-destructive"  disabled={busy} aria-label={`Unlink ${artifact.title} from task`} title="Unlink from task" onClick={() => void change(artifact.id, true)}><Unlink aria-hidden="true" /></Button>}
         </div>
       </li>)}
     </ul>

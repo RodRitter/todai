@@ -1,19 +1,9 @@
 "use client";
 
-import { OutstandingFindings, ReviewHistory } from "./review-history";
-import type { WorkflowExecution } from "@/domain/workflow";
-import { reviewPhaseLabels } from "@/domain/workflow";
-import type { FeedbackDecision } from "@/domain/task";
-
 import type { ArtifactReference } from "@/domain/artifact";
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Bot, CircleDot, CirclePlay, CircleStop, Maximize2, Minimize2 } from "lucide-react";
-import { TaskActivity, TaskFeedback, TaskResult } from "./task-comments";
-import { TaskArtifacts } from "@/components/artifacts/artifact-attachments";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { NewTaskWorkflow } from "./new-task-workflow";
-import { TaskWorkflow } from "./task-workflow";
-import { RunHistory } from "./run-history";
+import { useRef, useState, type FormEvent } from "react";
+import { Bot, CircleDot, CirclePlay, CircleStop, Workflow, Zap } from "lucide-react";
+import { TaskComments } from "./task-comments";
 import { AgentStatus } from "./agent-status";
 import { DescriptionField } from "./description-field";
 import { notifyOperation } from "@/components/ui/toast";
@@ -30,6 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
+import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { DescriptionEditor } from "./description-editor";
 import type { AgentProfile } from "@/domain/column-agent";
@@ -37,6 +28,7 @@ import { statuses, type Status, type Task } from "@/domain/task";
 
 export type TaskEditorProps = {
   columns?: readonly string[];
+  assignedColumns?: readonly string[];
   onRun?: () => Promise<void>;
   onStop?: () => Promise<void>;
   agents?: AgentProfile[];
@@ -47,7 +39,7 @@ export type TaskEditorProps = {
   defaultStatus?: Status;
   onOpenChange: (open: boolean) => void;
   onSave: (task: Task) => void | Promise<void>;
-  onAnswerFeedback?: (commentId: string, body: string, decision?: FeedbackDecision) => Promise<void>;
+  onAnswerFeedback?: (commentId: string, body: string) => Promise<void>;
   onDelete?: (id: string) => void | Promise<void>;
 };
 
@@ -62,6 +54,7 @@ export function TaskEditor(props: TaskEditorProps) {
 
 function TaskEditorSession({
   columns = statuses,
+  assignedColumns = [],
   onRun,
   onStop,
   open,
@@ -75,45 +68,6 @@ function TaskEditorSession({
   onDeleteComment,
   agents,
 }: TaskEditorProps) {
-  const formRef = useRef<HTMLFormElement>(null);
-  const [workflowHistory, setWorkflowHistory] = useState<WorkflowExecution[]>([]);
-  const [navigationVersion, setNavigationVersion] = useState(0);
-  const [selectedRecord, setSelectedRecord] = useState<string>();
-  const [tab, setTab] = useState("overview");
-  const [expanded, setExpanded] = useState(false);
-  const pendingFeedback = editing?.comments?.filter((comment) => comment.feedbackStatus === "pending") ?? [];
-  const latestResult = editing?.comments?.filter((comment) => comment.authorName !== "Human" && !comment.feedbackStatus).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
-  function navigateRecord(nextTab: string, id: string) {
-    setSelectedRecord(id);
-    setNavigationVersion((value) => value + 1);
-    setTab(nextTab);
-  }
-  useEffect(() => {
-    if (!selectedRecord || !formRef.current) return;
-    const root = formRef.current;
-    function reveal() {
-      const record = document.getElementById(selectedRecord!);
-      if (!record || !record.getClientRects().length) return false;
-      record.focus({ preventScroll: true });
-      record.scrollIntoView({ block: "nearest" });
-      return true;
-    }
-    const observer = new MutationObserver(() => { if (reveal()) observer.disconnect(); });
-    if (!reveal()) observer.observe(root, { childList: true, subtree: true, attributes: true });
-    return () => observer.disconnect();
-  }, [selectedRecord, navigationVersion]);
-  function toggleExpansion() {
-    const panel = formRef.current?.querySelector<HTMLElement>('[data-state="active"][role="tabpanel"]');
-    const top = panel?.getBoundingClientRect().top ?? 0;
-    const anchor = panel && panel.scrollTop > 0
-      ? Array.from(panel.querySelectorAll<HTMLElement>("p, h2, h3, h4, textarea, li")).find((element) => element.getBoundingClientRect().bottom > top)
-      : undefined;
-    const offset = anchor ? anchor.getBoundingClientRect().top - top : 0;
-    setExpanded((value) => !value);
-    requestAnimationFrame(() => {
-      if (panel && anchor) panel.scrollTop += anchor.getBoundingClientRect().top - panel.getBoundingClientRect().top - offset;
-    });
-  }
   const pendingRun =
     editing?.agentStatus === "Queued" || editing?.agentStatus === "Running";
   const draftId = useRef<string | null>(null);
@@ -127,7 +81,10 @@ function TaskEditorSession({
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [workflowId, setWorkflowId] = useState<string | null | undefined>(editing ? editing.workflowId ?? null : undefined);
+  const [autoWorkflow, setAutoWorkflow] = useState(
+    editing?.autoWorkflow ?? false,
+  );
+  const [autoRun, setAutoRun] = useState(editing?.autoRun ?? false);
   const [title, setTitle] = useState(editing?.title ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
   const [savedDescription, setSavedDescription] = useState(
@@ -139,7 +96,8 @@ function TaskEditorSession({
       title.trim() !== editing.title.trim() ||
       description.trim() !== savedDescription.trim() ||
       currentStatus !== editing.status ||
-      workflowId !== (editing.workflowId ?? null));
+      autoWorkflow !== (editing.autoWorkflow ?? false) ||
+      autoRun !== (editing.autoRun ?? false));
 
   async function persist(
     operation: () => void | Promise<void>,
@@ -190,7 +148,8 @@ function TaskEditorSession({
         description,
         status,
         agentStatus,
-        workflowId,
+        autoWorkflow,
+        autoRun,
         comments: editing?.comments ?? [],
       });
       setSavedDescription(description);
@@ -211,20 +170,17 @@ function TaskEditorSession({
         }
       }}
     >
-      <DialogContent closeDisabled={busy} aria-describedby={undefined} size={expanded ? "expanded" : "large"} className="h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden pb-0">
-        <DialogHeader className="grid-cols-[minmax(0,1fr)_auto_2.25rem] [&>button]:col-start-3 [&>button]:row-start-1">
-          <DialogTitle className="col-start-1 text-left">{editing ? "Task details" : "Create task"}</DialogTitle>
+      <DialogContent closeDisabled={busy} aria-describedby={undefined} size="large" layout="workspace">
+        <DialogHeader variant="actions">
+          <DialogTitle>{editing ? "Task details" : "Create task"}</DialogTitle>
 
           <div className="col-start-2 row-start-1 flex items-center gap-2">
-            <Button type="button" variant="ghost" size="icon" aria-label={expanded ? "Collapse task details" : "Expand task details"} aria-pressed={expanded} onClick={toggleExpansion}>
-              {expanded ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
-            </Button>
             {editing && onRun && !pendingRun && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span>
-                      <Button type="button" size="sm" variant="default" disabled={busy || canSave || editing.agentStatus === "Waiting" || !editing.workflowId} onClick={async () => {
+                      <Button type="button" size="sm" variant="default" disabled={busy || canSave || editing.agentStatus === "Waiting" || !assignedColumns.includes(editing.status)} onClick={async () => {
                         setBusy(true);
                         try {
                           await notifyOperation(onRun, { loading: "Queuing agent…", success: "Agent queued.", error: "Could not start the agent. Reload the task and try again." });
@@ -237,12 +193,12 @@ function TaskEditorSession({
                     </span>
                   </TooltipTrigger>
                   <TooltipContent>
-                    {canSave ? "Save your changes before running the agent." : editing.agentStatus === "Waiting" ? "Answer the pending feedback first." : !editing.workflowId ? "Choose a workflow in the Workflow tab first." : editing.agentStatus === "Stopped" ? "Request a new run using saved work and history." : editing.workflowId ? "Run the selected workflow using saved task details." : "Choose a workflow before running."}
+                    {canSave ? "Save your changes before running the agent." : editing.agentStatus === "Waiting" ? "Answer the pending feedback first." : !assignedColumns.includes(editing.status) ? "Assign an agent to this column first." : editing.agentStatus === "Stopped" ? "Request a new run using saved work and history." : "Run the current column’s agent using the saved task details."}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             )}
-            {editing && (pendingRun || pendingFeedback.length > 0) && onStop && (
+            {editing && pendingRun && onStop && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -272,33 +228,21 @@ function TaskEditorSession({
               </TooltipProvider>
             )}
           </div>
-          {editing && <div className="col-span-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground"><span>{editing.status}</span>{editing.workflowProgress && <span>Step {editing.workflowProgress.step} of {editing.workflowProgress.total} · Round {editing.workflowProgress.round} of {editing.workflowProgress.limit} · {reviewPhaseLabels[editing.workflowProgress.phase]}</span>}<span role="status"><AgentStatus status={editing.agentStatus} /></span></div>}
         </DialogHeader>
         <form
-          ref={formRef}
           onSubmit={saveTask}
           key={editing?.id ?? "new"}
           className="-mx-6 min-h-0 min-w-0"
         >
           <fieldset disabled={busy} className="flex h-full min-h-0 min-w-0 flex-col">
-            <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
-              {editing && <TabsList aria-label="Task workspace" className="mx-6 mb-4 grid h-auto shrink-0 grid-cols-4">
-                <TabsTrigger value="overview" className="px-1">Overview{pendingFeedback.length > 0 && <span className="ml-1 size-2 shrink-0 rounded-full bg-primary" aria-label="Needs feedback" />}</TabsTrigger>
-                <TabsTrigger value="workflow" className="px-1">Workflow</TabsTrigger>
-                <TabsTrigger value="activity" className="px-1">Activity</TabsTrigger>
-                <TabsTrigger value="artifacts" className="px-1">Artifacts</TabsTrigger>
-              </TabsList>}
-              <TabsContent value="overview" forceMount {...(!editing ? { role: "region", "aria-labelledby": undefined, "aria-label": "Task details" } : {})} className="min-h-0 flex-1 space-y-7 overflow-y-auto px-6 pb-6">
-              {!editing && <NewTaskWorkflow value={workflowId} onChange={setWorkflowId} agents={agents ?? []} columns={columns} disabled={busy} />}
-              {editing && <OutstandingFindings executions={workflowHistory} onNavigate={(id) => navigateRecord("activity", id)} />}
-              {pendingFeedback.map((comment) => <TaskFeedback key={comment.id} comment={comment} comments={editing?.comments} onAnswer={onAnswerFeedback} onNavigate={(id) => navigateRecord("activity", `comment-${id}`)} />)}
+            <div className="min-h-0 flex-1 space-y-7 overflow-y-auto px-6 pb-6">
               <div className="space-y-2">
                 <input type="hidden" name="title" value={title} />
                 {isEditingTitle ? <>
                 <Label htmlFor="task-title">Title</Label>
                 <Input
                   id="task-title"
-                  className="h-auto py-2 text-lg font-semibold tracking-tight md:text-xl"
+                  variant="title"
                   value={title}
                   required
                   autoFocus
@@ -345,18 +289,17 @@ function TaskEditorSession({
                         <div className="grid min-h-9 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[14rem_minmax(0,1fr)]">
                           <Label
                             htmlFor="task-status"
-                            className="text-muted-foreground gap-3 leading-snug font-normal"
+                            variant="metadata"
                           >
                             <CircleDot className="size-4 shrink-0" aria-hidden="true" />
                             Status
                           </Label>
                           <NativeSelect
-                            disabled={busy || Boolean(editing?.workflowActive)}
                             id="task-status"
                             name="status"
                             value={currentStatus}
                             onChange={(event) => setSelectedStatus(event.target.value)}
-                            className="h-9 w-full max-w-48 rounded-lg border-transparent bg-primary/5 py-1 text-primary shadow-none hover:bg-primary/10 dark:bg-primary/10"
+                            variant="status" className="w-full max-w-48"
                           >
                             {columns.map((option) => (
                               <option key={option}>{option}</option>
@@ -365,7 +308,7 @@ function TaskEditorSession({
                         </div>
                       </TooltipTrigger>
                       <TooltipContent>
-                        Choose the task’s board column. Moving a task never starts agents. Stop active work before moving it.
+                        Choose the task’s board column. Its assigned agent starts on entry only when Auto-run is enabled.
                       </TooltipContent>
                     </Tooltip>
                     {editing && (
@@ -374,11 +317,45 @@ function TaskEditorSession({
                           <Bot className="size-4 shrink-0" aria-hidden="true" />
                           Agent status
                         </span>
-                        <div role="status" className="w-fit rounded-lg bg-muted px-3 py-2">
-                          <AgentStatus status={editing.agentStatus} className="font-medium" />
+                        <div role="status">
+                          <AgentStatus status={editing.agentStatus} variant="badge" />
                         </div>
                       </div>
                     )}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="grid min-h-9 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[14rem_minmax(0,1fr)]">
+                          <Label
+                            htmlFor="task-auto-workflow"
+                            variant="metadata"
+                          >
+                            <Workflow className="size-4 shrink-0" aria-hidden="true" />
+                            Auto-workflow
+                          </Label>
+                          <Switch
+                            id="task-auto-workflow"
+                            name="autoWorkflow"
+                            checked={autoWorkflow}
+                            onCheckedChange={setAutoWorkflow}
+                            disabled={busy}
+                          />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Move to the next column when the agent completes successfully. Its agent starts only when Auto-run is enabled.
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="grid min-h-9 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[14rem_minmax(0,1fr)]">
+                          <Label htmlFor="task-auto-run" variant="metadata"><Zap className="size-4 shrink-0" aria-hidden="true" />Auto-run</Label>
+                          <Switch id="task-auto-run" name="autoRun" checked={autoRun} onCheckedChange={setAutoRun} disabled={busy} />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Automatically start the assigned agent when this task enters a column. Leave off to start it with Run.
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 </TooltipProvider>
                 {pendingRun && (
@@ -408,32 +385,17 @@ function TaskEditorSession({
                   </>
                 )}
               </div>
-              {!pendingFeedback.length && latestResult && <TaskResult comment={latestResult} onNavigate={() => navigateRecord("activity", `comment-${latestResult.id}`)} />}
-              </TabsContent>
-              {editing && <>
-                <TabsContent value="workflow" forceMount className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-6">
-                  <TaskWorkflow columns={columns} onHistory={setWorkflowHistory} taskId={editing.id} workflowId={workflowId ?? null} onChange={setWorkflowId} agents={agents} disabled={busy || pendingRun || editing.agentStatus === "Waiting"} />
-                  <RunHistory taskId={editing.id} />
-                </TabsContent>
-                <TabsContent value="activity" forceMount className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-6">
-                  <RunHistory taskId={editing.id} />
-                  <ReviewHistory navigationVersion={navigationVersion} executions={workflowHistory} comments={editing.comments ?? []} selectedRecord={selectedRecord} onNavigate={(id) => navigateRecord("activity", id)} onNavigateFeedback={(id) => navigateRecord("overview", `feedback-request-${id}`)} />
-                  <TaskActivity selectedCommentId={selectedRecord?.replace(/^comment-/, "")} comments={editing.comments?.filter((comment) => !workflowHistory.some((execution) => execution.id === comment.workflowExecutionId && execution.steps?.some((step) => step.id === comment.stepId)))} agentStatus={editing.agentStatus} agents={agents} onPostComment={onPostComment} onDeleteComment={onDeleteComment} onNavigateFeedback={(id) => navigateRecord("overview", `feedback-request-${id}`)} />
-                </TabsContent>
-                <TabsContent value="artifacts" forceMount className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
-                  <TaskArtifacts taskId={editing.id} commentsKey={JSON.stringify((editing.comments ?? []).map((comment) => comment.id))} onNavigateComment={(id) => navigateRecord("activity", `comment-${id}`)} />
-                </TabsContent>
-              </>}
-            </Tabs>
-            <DialogFooter className="z-10 shrink-0 flex-row flex-wrap items-center justify-end gap-2 border-t bg-background px-6 py-4">
+              {editing && <TaskComments taskId={editing.id} comments={editing.comments} agentStatus={editing.agentStatus} onAnswerFeedback={onAnswerFeedback} agents={agents} onPostComment={onPostComment} onDeleteComment={onDeleteComment} />}
+            </div>
+            <DialogFooter variant="workspace">
               {editing && onDelete && (
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="ghost-destructive"
                   size="sm"
                   aria-label="Delete task"
                   disabled={pendingRun}
-                  className="text-muted-foreground mr-auto px-2 text-xs hover:bg-destructive/10 hover:text-destructive"
+                  className="mr-auto"
                   onClick={() => {
                     setConfirmDelete(true);
                   }}
@@ -445,9 +407,8 @@ function TaskEditorSession({
                 <DialogClose asChild>
                   <Button
                     type="button"
-                    variant="ghost"
+                    variant="ghost-muted"
                     size="sm"
-                    className="text-muted-foreground px-2 text-xs"
                   >
                     Cancel
                   </Button>
@@ -456,7 +417,6 @@ function TaskEditorSession({
                   type="submit"
                   size="sm"
                   disabled={busy || !canSave}
-                  className="px-3 text-xs"
                   aria-label={editing ? "Save changes" : "Create task"}
                 >
                   {editing ? "Save" : "Create task"}

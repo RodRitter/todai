@@ -43,3 +43,4 @@ export const WithLabel: Story = {
     </div>
   ),
 };
+export const Code: Story = { args: { variant: "code", defaultValue: "# Instructions\n\nUse existing components." } };

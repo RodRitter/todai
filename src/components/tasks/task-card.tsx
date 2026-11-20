@@ -12,21 +12,6 @@ import {
 import { Markdown } from "@/components/ui/markdown";
 import { AgentStatus } from "./agent-status";
 import type { Task } from "@/domain/task";
-import { cn } from "@/lib/utils";
-
-const statusBackgrounds: Record<Task["agentStatus"], string> = {
-  "Not started": "bg-muted",
-  Queued: "bg-amber-50 dark:bg-amber-950/40",
-  Complete: "bg-emerald-50 dark:bg-emerald-950/40",
-  Failed: "bg-red-50 dark:bg-red-950/40",
-  Stopped: "bg-amber-50 dark:bg-amber-950/40",
-  Interrupted: "bg-amber-50 dark:bg-amber-950/40",
-  Running: "bg-emerald-50 dark:bg-emerald-950/40",
-  Waiting: "bg-amber-50 dark:bg-amber-950/40",
-  Paused: "bg-amber-50 dark:bg-amber-950/40",
-  Review: "bg-blue-50 dark:bg-blue-950/40",
-  Blocked: "bg-red-50 dark:bg-red-950/40",
-};
 
 export type TaskCardProps = {
   task: Task;
@@ -51,16 +36,14 @@ export function TaskCard({
     <Card
       variant="task"
       data-task-id={task.id}
-      draggable={!task.workflowActive}
+      draggable
       role="button"
       tabIndex={0}
       aria-label={`Edit ${task.title}, ${task.agentStatus}`}
       aria-haspopup="dialog"
-      className={cn(
-        "relative cursor-pointer overflow-hidden outline-none transition-[box-shadow,border-color,opacity] duration-150 ease-out focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] active:cursor-grabbing motion-reduce:transition-none",
-        needsAttention && "before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-red-500",
-        isDragging ? "opacity-40" : "hover:border-ring/30 hover:shadow-md",
-      )}
+      interactive
+      attention={needsAttention}
+      dragging={isDragging}
       onPointerDown={() => {
         didDrag.current = false;
       }}
@@ -92,7 +75,7 @@ export function TaskCard({
       <CardFooter className="text-xs">
         <AgentStatus
           status={task.agentStatus}
-          className={cn("min-h-8 rounded-xl px-2.5 py-1.5 font-medium", statusBackgrounds[task.agentStatus])}
+          variant="badge"
         />
         {commentCount > 0 && (
           <span

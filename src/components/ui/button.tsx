@@ -18,13 +18,22 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80",
         ghost:
           "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
+        "ghost-muted": "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+        "ghost-destructive": "text-destructive hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/10",
         link: "text-primary underline-offset-4 hover:underline",
       },
+      weight: { medium: "font-medium", normal: "font-normal" },
+      reveal: { always: "", hover: "transition-opacity motion-reduce:transition-none [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 focus-visible:opacity-100" },
+      align: { center: "", start: "justify-start", navigation: "w-full md:justify-start" },
+      segment: { standalone: "", start: "rounded-r-none", end: "rounded-l-none border-l border-primary-foreground/25" },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",
         sm: "h-8 rounded-sm gap-1.5 px-3 has-[>svg]:px-2.5",
         lg: "h-10 rounded-sm px-6 has-[>svg]:px-4",
         icon: "size-9",
+        "icon-xs": "size-7",
+        xs: "h-7 gap-1.5 px-2 text-xs has-[>svg]:px-2",
+        row: "h-auto w-full justify-start whitespace-normal px-3 py-3 text-left",
       },
     },
     defaultVariants: { variant: "default", size: "default" },
@@ -35,6 +44,10 @@ function Button({
   className,
   variant,
   size,
+  align,
+  weight,
+  reveal,
+  segment,
   asChild = false,
   ...props
 }: React.ComponentProps<"button"> &
@@ -43,7 +56,7 @@ function Button({
   return (
     <Comp
       data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
+      className={cn(buttonVariants({ variant, size, align, segment, weight, reveal, className }))}
       {...props}
     />
   );

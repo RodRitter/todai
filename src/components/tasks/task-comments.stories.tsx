@@ -22,7 +22,7 @@ function FeedbackExample() {
 }
 
 const meta = {
-  title: "Tasks/Task comments",
+  title: "Tasks/Activity",
   component: TaskComments,
   parameters: { layout: "padded" },
 } satisfies Meta<typeof TaskComments>;
@@ -44,9 +44,13 @@ export const SubmitFeedback: Story = {
     await expect(canvas.getByRole("button", { name: "Submit feedback" })).toBeDisabled();
     await userEvent.type(canvas.getByLabelText("Your feedback"), "Yes, use the filter.");
     await userEvent.click(canvas.getByRole("button", { name: "Submit feedback" }));
-    await expect(canvas.getByText("Human")).toBeVisible();
+    await expect(canvas.getByText("Your answer")).toBeVisible();
+    await expect(canvas.getByText("Feedback received")).toBeVisible();
     await expect(canvas.getByText("Yes, use the filter.")).toBeVisible();
     await expect(canvas.getByText(request.body)).toBeVisible();
+    const feed = canvas.getByRole("list", { name: "Activity, newest first" });
+    await expect(feed.children).toHaveLength(1);
+    await expect(within(feed.children[0] as HTMLElement).getByText("Yes, use the filter.")).toBeVisible();
     await expect(canvas.queryByRole("textbox")).not.toBeInTheDocument();
   },
 };
@@ -76,25 +80,25 @@ export const HumanComment: Story = {
   render: () => <CommentExample />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const editor = await canvas.findByRole("textbox", { name: "Your comment" });
+    const editor = await canvas.findByRole("textbox", { name: "Your message" });
     await userEvent.click(editor);
-    await expect(canvas.getByRole("button", { name: "Post comment" })).toBeDisabled();
+    await expect(canvas.getByRole("button", { name: "Send message" })).toBeDisabled();
     await userEvent.type(editor, "@Rev");
     await userEvent.click(await canvas.findByRole("option", { name: /@Reviewer/ }));
     await userEvent.type(editor, "please review this.");
-    await userEvent.click(canvas.getByRole("button", { name: "Post comment" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Send message" }));
     await expect(await canvas.findByText("Human")).toBeVisible();
     await expect(canvas.getByText("@Reviewer")).toBeVisible();
-    await expect(canvas.getByRole("textbox", { name: "Your comment" })).toHaveTextContent("");
+    await expect(canvas.getByRole("textbox", { name: "Your message" })).toHaveTextContent("");
   },
 };
 export const FailedComment: Story = {
   args: { agents: commentAgents, onPostComment: async () => { throw new Error("Connection lost. Try again."); } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const editor = await canvas.findByRole("textbox", { name: "Your comment" });
+    const editor = await canvas.findByRole("textbox", { name: "Your message" });
     await userEvent.type(editor, "Keep this comment.");
-    await userEvent.click(canvas.getByRole("button", { name: "Post comment" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Send message" }));
     await expect(await canvas.findByRole("alert")).toHaveTextContent("Connection lost");
     await expect(editor).toHaveTextContent("Keep this comment.");
   },
@@ -111,14 +115,14 @@ export const DeleteComment: Story = {
   render: () => <DeletionExample />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const control = canvas.getByRole("button", { name: "Delete comment" });
+    const control = canvas.getByRole("button", { name: "Delete message" });
     await userEvent.hover(canvas.getByText("An outdated comment."));
     await userEvent.click(control);
     await userEvent.click(canvas.getByRole("button", { name: "Cancel" }));
     await expect(canvas.getByText("An outdated comment.")).toBeVisible();
-    await userEvent.click(canvas.getByRole("button", { name: "Delete comment" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Delete message" }));
     await userEvent.click(canvas.getByRole("button", { name: /^Delete$/ }));
-    await expect(canvas.getByText("No comments yet.")).toBeVisible();
+    await expect(canvas.getByText("No activity yet. Send a message to get started.")).toBeVisible();
   },
 };
 
@@ -129,3 +133,53 @@ export const Handovers: Story = {
   ] },
 };
 export const NarrowHandovers: Story = { ...Handovers, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
+
+export const Chat: Story = {
+  args: { ...Handovers.args, agents: commentAgents, onPostComment: async () => {} },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole("tab", { name: "Activity" })).toBeVisible();
+    const messages = canvas.getByRole("list", { name: "Activity, newest first" });
+    await expect(messages.children[0]).toHaveTextContent("Builder");
+    await expect(messages.children[1]).toHaveTextContent("Human");
+    await expect(canvas.queryByRole("button", { name: "Run history" })).not.toBeInTheDocument();
+  },
+};
+export const NarrowChat: Story = { ...Chat, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
+export const Queued: Story = { args: { agentStatus: "Queued", onPostComment: async () => {} } };
+export const LongMessage: Story = { args: { comments: [{ ...request, feedbackStatus: undefined, body: "## Findings\n\n" + "A detailed update remains fully readable in the activity feed.\n\n".repeat(20) }] } };
+export const KeyboardSend: Story = {
+  render: () => <CommentExample />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(await canvas.findByRole("textbox", { name: "Your message" }), "First line{shift>}{enter}{/shift}Second line{enter}");
+    await expect(await canvas.findByText("Human")).toBeVisible();
+    await expect(canvas.getByRole("list", { name: "Activity, newest first" })).toHaveTextContent("Second line");
+    await expect(canvas.getByRole("textbox", { name: "Your message" })).toHaveTextContent("");
+  },
+};
+
+export const DarkChat: Story = { ...Chat, decorators: [(Story) => <div className="dark bg-background text-foreground p-4"><Story /></div>] };
+
+export const AnsweredFeedback: Story = {
+  args: { comments: [
+    { ...request, feedbackStatus: "answered" },
+    { id: "answer", taskId: "task", runId: "run", authorName: "Human", body: "Yes, hide them by default.", createdAt: "2026-11-17T10:01:00Z" },
+  ] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Your answer")).toBeVisible();
+    await expect(canvas.getByText("Yes, hide them by default.")).toBeVisible();
+    await expect(canvas.getAllByRole("button", { name: "Copy message" })).toHaveLength(1);
+    await expect(canvas.getByRole("list", { name: "Activity, newest first" }).children).toHaveLength(1);
+  },
+};
+export const NarrowAnsweredFeedback: Story = { ...AnsweredFeedback, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
+export const DetailedAnswer: Story = { args: { comments: [
+  { ...request, feedbackStatus: "answered" },
+  { id: "answer", taskId: "task", runId: "run", authorName: "Human", body: "Yes, with these conditions:\n\n- Hide archived tasks by default.\n- Keep the filter accessible by keyboard.\n- Preserve the selected filter when navigating back.", createdAt: "2026-11-17T10:01:00Z" },
+] } };
+
+export const NarrowConfirmation: Story = { ...Waiting, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
+export const DarkConfirmation: Story = { ...Waiting, decorators: [(Story) => <div className="dark bg-background p-4 text-foreground"><Story /></div>] };
+export const ConfirmationWithoutRecommendation: Story = { args: { comments: [{ ...request, recommendation: undefined }], onAnswerFeedback: async () => {} } };

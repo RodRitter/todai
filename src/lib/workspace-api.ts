@@ -1,4 +1,3 @@
-import type { FeedbackDecision } from "@/domain/task";
 import type { ArtifactReference } from "@/domain/artifact";
 import type { Workspace } from "../domain/workspace.ts";
 import { workspaceFetch } from "./workspace-fetch.ts";
@@ -6,7 +5,6 @@ import type { AgentProfile, ColumnAssignment, ExecutionTool, ExecutorSettingsDat
 import type { Task } from "@/domain/task";
 
 export type BoardSnapshot = {
-  migration?: { state: "complete" | "blocked"; affectedTaskIds: string[]; blockedTaskIds: string[] };
   tasks: Task[];
   columns: string[];
   assignments: ColumnAssignment[];
@@ -43,8 +41,8 @@ export const taskApi = {
     request<Task>("/api/tasks/comments", { method: "DELETE", body: { taskId, commentId } }),
   postComment: (taskId: string, body: string, artifacts?: ArtifactReference[]) =>
     request<Task>("/api/tasks/comments", { method: "POST", body: { taskId, body, artifacts } }),
-  answerFeedback: (taskId: string, commentId: string, body: string, decision?: FeedbackDecision) =>
-    request<Task>("/api/tasks/feedback", { method: "POST", body: { taskId, commentId, body, decision } }),
+  answerFeedback: (taskId: string, commentId: string, body: string) =>
+    request<Task>("/api/tasks/feedback", { method: "POST", body: { taskId, commentId, body } }),
   list: () => request<BoardSnapshot>("/api/tasks?workspace=true"),
   save: (task: Task) =>
     request<Task>("/api/tasks", { method: "PUT", body: task }),
@@ -62,7 +60,11 @@ export const agentApi = {
     request<void>(`/api/agents?id=${encodeURIComponent(id)}`, {
       method: "DELETE",
     }),
-
+  assign: (column: string, agentId: string | null) =>
+    request<ColumnAssignment | null>("/api/column-agents", {
+      method: "PUT",
+      body: { column, agentId },
+    }),
 };
 
 export const columnApi = {
@@ -119,5 +121,5 @@ export const workspaceApi = {
 export const configurationApi = {
   get: () => request<import("@/domain/configuration").Configuration>("/api/configuration"),
   import: (data: import("@/domain/configuration").Configuration, columnMode: "add" | "replace" = "add", conflictMode: "copy" | "overwrite" = "copy") =>
-    request<{ agents: number; columns: number; assignments: number; workflows: number }>(`/api/configuration?columns=${columnMode}&conflicts=${conflictMode}`, { method: "POST", body: data }),
+    request<{ agents: number; columns: number; assignments: number }>(`/api/configuration?columns=${columnMode}&conflicts=${conflictMode}`, { method: "POST", body: data }),
 };
