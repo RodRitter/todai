@@ -70,7 +70,7 @@ export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
             WHERE runs.taskId = comments.taskId AND runs.finishedAt = comments.createdAt AND runs.summary = comments.body) = 1;
         `);
     }
-    for (const column of ["recommendation", "feedbackStatus", "runId"]) {
+    for (const column of ["recommendation", "feedbackStatus", "runId", "parentCommentId"]) {
       if (!commentColumns.some((item) => item.name === column))
         db.exec(`ALTER TABLE comments ADD COLUMN ${column} TEXT`);
     }

@@ -139,7 +139,7 @@ export const Chat: Story = {
   args: { ...Handovers.args, agents: commentAgents, onPostComment: async () => {} },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole("tab", { name: "Activity" })).toBeVisible();
+    await expect(canvas.queryByRole("tablist")).not.toBeInTheDocument();
     const messages = canvas.getByRole("list", { name: "Activity, newest first" });
     await expect(messages.children[0]).toHaveTextContent("Builder");
     await expect(messages.children[1]).toHaveTextContent("Human");
@@ -171,7 +171,7 @@ export const AnsweredFeedback: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByText("Your answer")).toBeVisible();
     await expect(canvas.getByText("Yes, hide them by default.")).toBeVisible();
-    await expect(canvas.getAllByRole("button", { name: "Copy message" })).toHaveLength(1);
+    await expect(canvas.getAllByRole("button", { name: "Copy message" })).toHaveLength(2);
     await expect(canvas.getByRole("list", { name: "Activity, newest first" }).children).toHaveLength(1);
   },
 };
@@ -237,7 +237,7 @@ export const DeleteFeedbackThread: Story = {
     const body = within(canvasElement.ownerDocument.body);
     const thread = canvasElement.querySelector("#comment-request") as HTMLElement;
     const buttons = within(thread).getAllByRole("button", { name: "Delete message" });
-    await userEvent.click(buttons[buttons.length - 1]);
+    await userEvent.click(buttons[0]);
     const modal = within(await body.findByRole("alertdialog"));
     await expect(modal.getByText("Delete this message and its 1 nested reply? This cannot be undone.")).toBeVisible();
     await userEvent.click(modal.getByRole("button", { name: "Cancel" }));
@@ -267,3 +267,80 @@ export const DeletePendingFeedback: Story = {
     await expect(canvas.getByText("No activity yet. Send a message to get started.")).toBeVisible();
   },
 };
+
+function ThreadExample({ fail = false }: { fail?: boolean }) {
+  const [comments, setComments] = useState<TaskComment[]>([
+    { id: "main", taskId: "task", authorName: "Reviewer", body: "The implementation is ready. What do you think?", createdAt: "2026-11-20T10:00:00Z" },
+    { id: "nested", taskId: "task", parentCommentId: "main", authorName: "Human", body: "Looks good. Please keep the **keyboard navigation** accessible.", createdAt: "2026-11-20T10:01:00Z" },
+  ]);
+  return <TaskComments comments={comments} onDeleteComment={async (id) => setComments((items) => items.filter((item) => item.id !== id && item.parentCommentId !== id))}
+    onPostComment={async (body, artifacts, parentCommentId) => {
+      if (fail) throw new Error("Connection lost. Try again.");
+      setComments((items) => [...items, { id: crypto.randomUUID(), taskId: "task", body, artifacts, parentCommentId, authorName: "Human", createdAt: new Date().toISOString() }]);
+    }} />;
+}
+export const ReplyThread: Story = {
+  render: () => <ThreadExample />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "Reply" }));
+    await expect(canvas.getByRole("button", { name: "Send reply" })).toBeDisabled();
+    await userEvent.type(canvas.getByLabelText("Your reply"), "Ready to ship.");
+    await userEvent.click(canvas.getByRole("button", { name: "Send reply" }));
+    await expect(within(canvas.getByLabelText("Reply thread")).getByText("Ready to ship.")).toBeVisible();
+    await expect(canvas.queryByLabelText("Your reply")).not.toBeInTheDocument();
+  },
+};
+export const ReplyError: Story = {
+  render: () => <ThreadExample fail />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "Reply" }));
+    await userEvent.type(canvas.getByLabelText("Your reply"), "Keep this draft.");
+    await userEvent.click(canvas.getByRole("button", { name: "Send reply" }));
+    await expect(canvas.getByRole("alert")).toHaveTextContent("Connection lost");
+    await expect(canvas.getByLabelText("Your reply")).toHaveValue("Keep this draft.");
+  },
+};
+
+
+export const CollapsibleReplyThread: Story = {
+  render: () => <ThreadExample />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "Reply" }));
+    await userEvent.type(canvas.getByLabelText("Your reply"), "Keep this draft while collapsed.");
+    await userEvent.click(canvas.getByRole("button", { name: "Collapse 1 reply" }));
+    await expect(canvas.getByLabelText("Your reply")).not.toBeVisible();
+    const expand = canvas.getByRole("button", { name: "Expand 1 reply" });
+    await expect(expand).toHaveAttribute("aria-expanded", "false");
+    expand.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(canvas.getByLabelText("Your reply")).toBeVisible();
+    await expect(canvas.getByLabelText("Your reply")).toHaveValue("Keep this draft while collapsed.");
+    await userEvent.click(canvas.getByRole("button", { name: "Collapse 1 reply" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Reply" }));
+    await expect(canvas.getByLabelText("Your reply")).toBeVisible();
+  },
+};
+export const NarrowReplyThread: Story = {
+  render: () => <ThreadExample />,
+  decorators: [(Story) => <div className="max-w-80"><Story /></div>],
+};
+export const DarkReplyThread: Story = {
+  render: () => <ThreadExample />,
+  decorators: [(Story) => <div className="dark bg-background text-foreground p-4"><Story /></div>],
+};
+
+export const ConnectedAvatars: Story = {
+  args: {
+    comments: [
+      { id: "parent", taskId: "task", authorName: "Reviewer", body: "The implementation is ready for review.", createdAt: "2026-11-20T10:00:00Z" },
+      { id: "reply-one", taskId: "task", parentCommentId: "parent", authorName: "Human", body: "Please preserve keyboard navigation.", createdAt: "2026-11-20T10:01:00Z" },
+      { id: "reply-two", taskId: "task", parentCommentId: "parent", authorName: "Accessibility and interaction reviewer", body: "Confirmed. **Keyboard focus** stays visible and replies remain readable on narrow screens.", createdAt: "2026-11-20T10:02:00Z" },
+    ],
+    onDeleteComment: async () => {},
+  },
+};
+export const NarrowConnectedAvatars: Story = { ...ConnectedAvatars, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
+export const DarkConnectedAvatars: Story = { ...ConnectedAvatars, decorators: [(Story) => <div className="dark bg-background text-foreground p-4"><Story /></div>] };

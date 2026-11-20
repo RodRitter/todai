@@ -29,6 +29,7 @@ export type Task = {
 };
 
 export type TaskComment = {
+  parentCommentId?: string | null;
   artifacts?: ArtifactReference[];
   id: string;
   taskId: string;

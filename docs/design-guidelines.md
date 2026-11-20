@@ -9,6 +9,8 @@
 
 ## Component choices
 
+For agent comments, feedback, and execution output, follow the [agent output presentation contract](agent-output-formatting.md#presentation-contract).
+
 | Need | Existing API |
 | --- | --- |
 | Primary, secondary, quiet, or destructive action | `Button` variants `default`, `secondary`, `outline`, `ghost`, `ghost-muted`, `destructive`, `ghost-destructive`, `link` |

@@ -36,19 +36,24 @@ export const LongTitle: Story = {
     },
   },
 };
-export const Running: Story = {
+export const Running: Story = { args: { task: exampleTasks[2] } };
+export const Paused: Story = { args: { task: exampleTasks[1] } };
+export const Review: Story = { args: { task: exampleTasks[3] } };
+export const LongContent: Story = {
   args: {
     task: {
-      ...exampleTasks[2],
-      description: "Create a simple layout for managing tasks.",
+      ...exampleTasks[0],
+      title: "Coordinate the design review and resolve every outstanding accessibility and layout issue before the upcoming release",
+      description: "Review the board with the team, capture the remaining questions, and document the decisions. Include keyboard navigation, narrow screens, and all execution states in the final review.",
     },
   },
 };
-export const Paused: Story = { args: { task: exampleTasks[1] } };
-export const Review: Story = { args: { task: exampleTasks[3] } };
-export const LongDescription: Story = { args: { task: exampleTasks[2] } };
-export const NoDescription: Story = {
-  args: { task: { ...exampleTasks[0], description: "" } },
+export const NarrowLongContent: Story = {
+  ...LongContent,
+  decorators: [(Story) => <div className="w-52"><Story /></div>],
+};
+export const UnbrokenTitle: Story = {
+  args: { task: { ...exampleTasks[0], title: "InvestigateVeryLongUnbrokenTaskIdentifiersAndEnsureTheyNeverOverflowTheColumnBoundary" } },
 };
 export const Dragging: Story = { args: { isDragging: true } };
 export const WithComments: Story = {

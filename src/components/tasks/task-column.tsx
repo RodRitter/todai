@@ -28,7 +28,7 @@ export function TaskColumn({
 }: TaskColumnProps) {
   return (
     <section
-      className={`group/column flex min-h-64 min-w-0 flex-col gap-4 rounded-lg p-3 outline-1 outline-dashed outline-offset-0 transition-[background-color,outline-color] duration-150 motion-reduce:transition-none ${isDropTarget ? "bg-muted/50 outline-border" : "outline-transparent"}`}
+      className={`group/column flex min-h-64 min-w-0 flex-col gap-3 rounded-lg px-1 py-3 outline-1 outline-dashed outline-offset-0 transition-[background-color,outline-color] duration-150 motion-reduce:transition-none ${isDropTarget ? "bg-muted/50 outline-border" : "outline-transparent"}`}
       aria-label={status}
       onDragOver={(event) => {
         if (!canDrop) return;

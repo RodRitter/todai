@@ -215,3 +215,31 @@ test("deleting pending feedback stops the agent without moving the task or resum
     finally { reopened.close(); }
   } finally { f.cleanup(); }
 });
+
+
+test("replies persist, normalize to one thread, reject missing parents, and delete with their parent", () => {
+  const f = fixture(async () => "Unused");
+  try {
+    const parent = f.store.postComment("task", "Main message").comments![0];
+    const reply = f.store.postComment("task", "Reply", [], parent.id).comments!.at(-1)!;
+    assert.equal(reply.parentCommentId, parent.id);
+    const followup = f.store.postComment("task", "Follow-up", [], reply.id).comments!.at(-1)!;
+    assert.equal(followup.parentCommentId, parent.id);
+    assert.throws(() => f.store.postComment("task", "Invalid", [], "missing"), /no longer exists/);
+    assert.throws(() => f.store.postComment("task", "Invalid", [], 42), /no longer exists/);
+    const reopened = new TaskStore(join(f.directory, "tasks.sqlite"));
+    try { assert.equal(reopened.list()[0].comments!.find((item) => item.id === reply.id)!.parentCommentId, parent.id); }
+    finally { reopened.close(); }
+    assert.equal(f.store.deleteComment("task", parent.id).comments!.length, 0);
+  } finally { f.cleanup(); }
+});
+
+test("tagged agents respond inside the explicit reply thread", async () => {
+  const f = fixture(async ({ run }) => run.kind === "intent" ? '["reviewer"]' : "Reviewed.");
+  try {
+    const parent = f.store.postComment("task", "Main message").comments![0];
+    f.store.postComment("task", "@Reviewer please review", [], parent.id);
+    await f.service.drain();
+    assert.equal(f.store.list()[0].comments!.at(-1)!.parentCommentId, parent.id);
+  } finally { f.cleanup(); }
+});

@@ -4,12 +4,10 @@ import { useRef } from "react";
 import { MessageCircle } from "lucide-react";
 import {
   Card,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Markdown } from "@/components/ui/markdown";
 import { AgentStatus } from "./agent-status";
 import type { Task } from "@/domain/task";
 
@@ -65,12 +63,7 @@ export function TaskCard({
       onDragEnd={onDragEnd}
     >
       <CardHeader>
-        <CardTitle>{task.title}</CardTitle>
-        {task.description && (
-          <CardDescription className="line-clamp-2 max-h-12">
-            <Markdown compact>{task.description}</Markdown>
-          </CardDescription>
-        )}
+        <CardTitle title={task.title}>{task.title}</CardTitle>
       </CardHeader>
       <CardFooter className="text-xs">
         <AgentStatus

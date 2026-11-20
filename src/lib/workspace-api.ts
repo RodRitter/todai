@@ -39,8 +39,8 @@ export const taskApi = {
     request<Task>("/api/tasks/run", { method: "POST", body: { taskId } }),
   deleteComment: (taskId: string, commentId: string) =>
     request<Task>("/api/tasks/comments", { method: "DELETE", body: { taskId, commentId } }),
-  postComment: (taskId: string, body: string, artifacts?: ArtifactReference[]) =>
-    request<Task>("/api/tasks/comments", { method: "POST", body: { taskId, body, artifacts } }),
+  postComment: (taskId: string, body: string, artifacts?: ArtifactReference[], parentCommentId?: string) =>
+    request<Task>("/api/tasks/comments", { method: "POST", body: { taskId, body, artifacts, parentCommentId } }),
   answerFeedback: (taskId: string, commentId: string, body: string) =>
     request<Task>("/api/tasks/feedback", { method: "POST", body: { taskId, commentId, body } }),
   list: () => request<BoardSnapshot>("/api/tasks?workspace=true"),

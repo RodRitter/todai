@@ -50,7 +50,9 @@ export function DescriptionField({
           aria-disabled={disabled}
           className="min-h-40 text-muted-foreground"
           onClick={(event) => {
-            if (!(event.target as HTMLElement).closest("a")) startEditing();
+            const target = event.target as Element;
+            // Citations own their clicks; portal events can also bubble through this surface.
+            if (event.currentTarget.contains(target) && !target.closest("a, button")) startEditing();
           }}
           onKeyDown={(event) => {
             if (

@@ -5,6 +5,7 @@ function Card({
   className,
   variant = "default",
   elevation = "default",
+  tone = "default",
   interactive = false,
   dragging = false,
   attention = false,
@@ -12,6 +13,7 @@ function Card({
 }: React.ComponentProps<"div"> & {
   variant?: "default" | "compact" | "task" | "flush";
   elevation?: "default" | "flat";
+  tone?: "default" | "muted";
   interactive?: boolean;
   dragging?: boolean;
   attention?: boolean;
@@ -27,10 +29,11 @@ function Card({
         dragging && "opacity-40",
         attention && "relative before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-destructive",
         elevation === "flat" && "shadow-none",
+        tone === "muted" && "bg-muted/50 text-foreground",
         variant === "flush" ? "gap-0 overflow-hidden py-0" : variant === "compact"
           ? "gap-3 py-3 [&>[data-slot=card-header]]:px-3 [&>[data-slot=card-footer]]:px-3"
           : variant === "task"
-            ? "gap-5 py-5"
+            ? "gap-3 py-4 [&>[data-slot=card-header]]:gap-1.5 [&>[data-slot=card-header]]:px-4 [&>[data-slot=card-footer]]:justify-between [&>[data-slot=card-footer]]:px-4 [&_[data-slot=card-title]]:line-clamp-3 [&_[data-slot=card-title]]:text-sm [&_[data-slot=card-title]]:leading-5 [&_[data-slot=card-title]]:font-semibold [&_[data-slot=card-description]]:line-clamp-2 [&_[data-slot=card-description]]:max-h-10 [&_[data-slot=card-description]]:leading-5"
             : "gap-6 py-6",
         className,
       )}

@@ -15,8 +15,9 @@ type Story = StoryObj<typeof meta>;
 
 export const Idle: Story = {
   args: { agentStatus: "Complete" },
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args }) => {
     await expect(within(canvasElement).queryByRole("img")).not.toBeInTheDocument();
+    await expect(within(canvasElement).getByRole("tab", { name: "Activity" })).toHaveTextContent(`Activity${args.comments?.length ?? 0}`);
   },
 };
 export const Running: Story = {
@@ -24,6 +25,7 @@ export const Running: Story = {
   play: async ({ canvasElement }) => {
     const tab = within(canvasElement).getByRole("tab", { name: "Activity" });
     await expect(within(tab).getByRole("img", { name: "Agent running" })).toBeVisible();
+    await expect(tab).toHaveTextContent(/^Activity$/);
   },
 };
 export const FeedbackRequired: Story = {
@@ -32,6 +34,7 @@ export const FeedbackRequired: Story = {
     const tab = within(canvasElement).getByRole("tab", { name: "Activity" });
     await expect(within(tab).getByRole("img", { name: "Feedback required" })).toBeVisible();
     await expect(within(tab).queryByRole("img", { name: "Agent running" })).not.toBeInTheDocument();
+    await expect(tab).toHaveTextContent(/^Activity$/);
   },
 };
 export const FeedbackWhileRunning: Story = {
@@ -41,4 +44,21 @@ export const FeedbackWhileRunning: Story = {
 export const AnsweredFeedback: Story = {
   args: { agentStatus: "Complete", comments: FeedbackRequired.args!.comments!.map((comment) => ({ ...comment, feedbackStatus: "answered" })) },
   play: Idle.play,
+};
+
+export const CommentsAndReplies: Story = {
+  args: {
+    agentStatus: "Complete",
+    comments: [
+      { id: "question", taskId: "task", runId: "run", body: "Review the proposal.", feedbackStatus: "answered", createdAt: "2026-11-20T10:00:00Z" },
+      { id: "reply", taskId: "task", runId: "run", authorName: "Human", body: "Approved.", createdAt: "2026-11-20T10:01:00Z" },
+      { id: "update", taskId: "task", body: "Completed the work.", createdAt: "2026-11-20T10:02:00Z" },
+    ],
+  },
+  play: Idle.play,
+};
+
+export const RunningWithComments: Story = {
+  args: { ...CommentsAndReplies.args, agentStatus: "Running" },
+  play: Running.play,
 };

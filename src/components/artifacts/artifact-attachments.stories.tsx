@@ -3,6 +3,7 @@ import { expect, userEvent, waitFor, within } from "storybook/test";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import type { Artifact, TaskArtifact } from "@/domain/artifact";
 import type { TaskComment } from "@/domain/task";
+import { TaskEditor } from "@/components/tasks/task-editor";
 import { TaskComments } from "@/components/tasks/task-comments";
 import { ArtifactPicker, TaskArtifacts } from "./artifact-attachments";
 
@@ -48,7 +49,29 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const LatestAndPinned: Story = {};
-export const TaskTabs: Story = { render: () => <TaskComments taskId="task" comments={[{ id: "comment", taskId: "task", body: "See the original evidence.", authorName: "Human", createdAt: first.createdAt }]} /> };
+export const TaskTabs: Story = {
+  render: () => <TaskEditor open onOpenChange={() => {}} onSave={() => {}} task={{
+    id: "task", title: "Review evidence", description: "Review the linked artifacts.", status: "To do", agentStatus: "Not started",
+    comments: [{ id: "comment", taskId: "task", body: "See the original evidence.", authorName: "Human", createdAt: first.createdAt }],
+  }} />,
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    const dialog = within(await page.findByRole("dialog"));
+    await expect(dialog.getAllByRole("tablist")).toHaveLength(1);
+    await expect(dialog.getAllByRole("tab")).toHaveLength(3);
+    await userEvent.click(dialog.getByRole("tab", { name: "Activity" }));
+    await expect(dialog.getByText("See the original evidence.")).toBeVisible();
+    await expect(dialog.queryByRole("tab", { name: "Comments" })).not.toBeInTheDocument();
+    const artifactsTab = dialog.getByRole("tab", { name: "Artifacts" });
+    await waitFor(() => expect(artifactsTab).toHaveTextContent("Artifacts1"));
+    await userEvent.click(artifactsTab);
+    await expect(dialog.getByText(latest.title)).toBeVisible();
+    await userEvent.click(dialog.getByRole("button", { name: `View 1 comment reference for ${latest.title}` }));
+    await userEvent.click(await page.findByRole("link", { name: `Comment 1 · ${first.title}` }));
+    await expect(dialog.getByRole("tab", { name: "Activity" })).toHaveAttribute("aria-selected", "true");
+    await expect(dialog.getByText("See the original evidence.")).toBeVisible();
+  },
+};
 export const CompactRows: Story = { parameters: { compactRows: true } };
 export const NarrowRows: Story = { parameters: { compactRows: true }, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
 export const Empty: Story = { parameters: { empty: true } };

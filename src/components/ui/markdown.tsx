@@ -12,7 +12,7 @@ export function Markdown({
   compact?: boolean;
 }) {
   return (
-    <div className={richTextClassName}>
+    <div className={compact ? "min-w-0 text-sm leading-5 wrap-anywhere" : richTextClassName}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         skipHtml

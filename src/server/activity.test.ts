@@ -20,3 +20,12 @@ test("multiple feedback cycles keep answers attached to the correct run", () => 
   const next = { ...question, id: "next", runId: "next-run", feedbackStatus: "pending" as const, createdAt: "2026-11-19T10:03:00Z" };
   assert.deepEqual(groupActivity([question, answer, next]), [{ message: next, replies: [] }, { message: question, replies: [answer] }]);
 });
+
+
+test("explicit replies stay beneath their parent in chronological order, and orphan replies stay visible", () => {
+  const parent = { ...question, feedbackStatus: undefined, runId: undefined };
+  const first = { ...answer, runId: undefined, parentCommentId: parent.id };
+  const second = { ...first, id: "second", createdAt: "2026-11-19T10:03:00Z" };
+  assert.deepEqual(groupActivity([second, parent, first]), [{ message: parent, replies: [first, second] }]);
+  assert.deepEqual(groupActivity([first]), [{ message: first, replies: [] }]);
+});

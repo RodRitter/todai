@@ -42,6 +42,43 @@ export const DescriptionPreview: Story = {
     return <DescriptionField value={value} disabled={false} onChange={setValue} />;
   },
 };
+export const DescriptionArtifactPreview: Story = {
+  render: () => <DescriptionField value="See [Notes](#artifact/quick/r1) for context." disabled={false} onChange={fn()} />,
+  beforeEach: () => {
+    const original = globalThis.fetch;
+    globalThis.fetch = async (input, options) => {
+      const url = String(input);
+      if (url.startsWith("/api/artifacts/download")) return new Response("# Saved notes");
+      if (url.startsWith("/api/artifacts?")) return Response.json({
+        ...artifact, workspaceId: "workspace", archived: false, description: "",
+        createdAt: "2026-11-17T10:00:00Z", updatedAt: "2026-11-17T10:00:00Z",
+        filename: "notes.md", mediaType: "text/markdown", byteSize: 13, url: null,
+      });
+      return original(input, options);
+    };
+    return () => { globalThis.fetch = original; };
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const citation = canvas.getByRole("button", { name: "Notes" });
+    // Include clicks on the icon nested inside the citation control.
+    await userEvent.click(citation.querySelector("svg")!);
+    await expect(canvas.queryByRole("textbox", { name: "Description" })).not.toBeInTheDocument();
+    const dialog = await page.findByRole("dialog", { name: "Notes" });
+    await userEvent.click(await within(dialog).findByText("Saved notes"));
+    await expect(dialog).toBeVisible();
+    await expect(canvas.queryByRole("textbox", { name: "Description" })).not.toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    await expect(canvas.getByRole("button", { name: "Edit description" })).toBeVisible();
+    citation.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(await page.findByRole("dialog", { name: "Notes" })).toBeVisible();
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(canvas.getByText(/for context/));
+    await expect(await canvas.findByRole("textbox", { name: "Description" })).toBeVisible();
+  },
+};
 export const SurfaceFocus: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

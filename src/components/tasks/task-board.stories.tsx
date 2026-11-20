@@ -14,6 +14,15 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
+export const LongContent: Story = {
+  args: {
+    initialTasks: exampleTasks.map((task) => ({
+      ...task,
+      title: `${task.title} and coordinate the remaining design, accessibility, and release preparation work with the team`,
+      description: "Review the full implementation, collect feedback from everyone involved, and document the remaining decisions before the next release. Check the layout on narrow and wide screens.",
+    })),
+  },
+};
 export const Empty: Story = { args: { initialTasks: [] } };
 export const AllColumns: Story = {
   args: {

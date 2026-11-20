@@ -42,7 +42,7 @@ export function TaskBoard({
     run?: (taskId: string) => Promise<Task>;
     stop?: (taskId: string) => Promise<Task>;
     deleteComment?: (taskId: string, commentId: string) => Promise<Task>;
-    postComment?: (taskId: string, body: string, artifacts?: ArtifactReference[]) => Promise<Task>;
+    postComment?: (taskId: string, body: string, artifacts?: ArtifactReference[], parentCommentId?: string) => Promise<Task>;
     answerFeedback?: (taskId: string, commentId: string, body: string) => Promise<Task>;
   };
 }) {
@@ -248,8 +248,8 @@ export function TaskBoard({
             const saved = await persistence.deleteComment!(editing!.id, commentId);
             updateTasks((current) => current.map((task) => task.id === saved.id ? saved : task));
           }) : undefined}
-          onPostComment={persistence?.postComment ? (body, artifacts) => mutate(async () => {
-            const saved = await persistence.postComment!(editing!.id, body, artifacts);
+          onPostComment={persistence?.postComment ? (body, artifacts, parentCommentId) => mutate(async () => {
+            const saved = await persistence.postComment!(editing!.id, body, artifacts, parentCommentId);
             updateTasks((current) => current.map((task) => task.id === saved.id ? saved : task));
           }) : undefined}
           onAnswerFeedback={persistence?.answerFeedback ? (commentId, body) => mutate(async () => {

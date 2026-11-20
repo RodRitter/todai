@@ -776,6 +776,9 @@ export class TaskStore {
           id: commentId,
           taskId: run.taskId,
           runId,
+          parentCommentId: run.kind === "reply" && status !== "Waiting"
+            ? this.list().find((task) => task.id === run.taskId)?.comments?.find((comment) => comment.id === run.commentId)?.parentCommentId
+            : undefined,
           body: summary,
           createdAt: finishedAt,
           authorName: run.profile.name,
@@ -860,7 +863,7 @@ export class TaskStore {
     });
   }
 
-  postComment(taskId: unknown, body: unknown, attachments: unknown = []): Task {
+  postComment(taskId: unknown, body: unknown, attachments: unknown = [], parentCommentId?: unknown): Task {
     this.assertWorkspaceActive();
     if (typeof taskId !== "string" || typeof body !== "string" || !body.trim())
       throw new CommentValidationError("Enter a comment.");
@@ -868,6 +871,10 @@ export class TaskStore {
     return this.transaction(() => {
       const task = this.list().find((item) => item.id === taskId);
       if (!task) throw new CommentValidationError("This task no longer exists.");
+      const parent = parentCommentId === undefined ? undefined : task.comments?.find((item) => item.id === parentCommentId);
+      if (parentCommentId !== undefined && (!parent || typeof parentCommentId !== "string"))
+        throw new CommentValidationError("This message no longer exists. Reload the task.");
+      const threadId = parent && groupActivity(task.comments ?? []).find(({ message, replies }) => message.id === parent.id || replies.some((reply) => reply.id === parent.id))?.message.id;
       const agents = this.listAgents();
       const ids = mentionedAgentIds(body, agents);
       const profiles = ids.map((id) => {
@@ -876,7 +883,7 @@ export class TaskStore {
         return agent;
       });
       const commentId = randomUUID();
-      this.addComment({ id: commentId, taskId, body: body.trim(), createdAt: new Date().toISOString(), authorName: "Human" });
+      this.addComment({ id: commentId, taskId, body: body.trim(), createdAt: new Date().toISOString(), authorName: "Human", parentCommentId: threadId });
       this.attachCommentArtifacts(commentId, attachments);
       if (profiles.length) {
         this.queueCommentRun(taskId, task.status, intentProfile(this.getDefaultExecutor()), "intent", commentId, profiles);
@@ -941,7 +948,7 @@ export class TaskStore {
       catch { throw new CommentValidationError("Choose a valid artifact revision reference."); }
       this.db
         .prepare(
-          "INSERT INTO comments (workspaceId, id, taskId, body, createdAt, authorName, recommendation, feedbackStatus, runId) VALUES (workspace_id(), ?, ?, ?, ?, ?, ?, ?, ?)",
+          "INSERT INTO comments (workspaceId, id, taskId, body, createdAt, authorName, recommendation, feedbackStatus, runId, parentCommentId) VALUES (workspace_id(), ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .run(
           comment.id,
@@ -952,6 +959,7 @@ export class TaskStore {
           comment.recommendation ?? null,
           comment.feedbackStatus ?? null,
           comment.runId ?? null,
+          comment.parentCommentId ?? null,
         );
       this.attachCommentArtifacts(comment.id, references);
       this.db.exec("RELEASE publish_comment");

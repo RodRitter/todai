@@ -1,6 +1,6 @@
 import type { ComponentProps } from "react";
 import type { AgentStatus as Status, TaskComment } from "@/domain/task";
-import { TabsTrigger } from "@/components/ui/tabs";
+import { TabsCount, TabsTrigger } from "@/components/ui/tabs";
 import { AgentStatus } from "./agent-status";
 
 export function ActivityTabTrigger({ agentStatus, comments = [], children = "Activity", ...props }: ComponentProps<typeof TabsTrigger> & {
@@ -12,9 +12,9 @@ export function ActivityTabTrigger({ agentStatus, comments = [], children = "Act
     : agentStatus === "Running" ? "Running" : null;
 
   return (
-    <TabsTrigger aria-label={typeof children === "string" ? children : undefined} {...props}>
+    <TabsTrigger aria-label={typeof children === "string" ? children : undefined} aria-description={status ? undefined : `${comments.length} comments and replies`} {...props}>
       {children}
-      {status && <AgentStatus status={status} variant="icon" />}
+      {status ? <AgentStatus status={status} variant="icon" /> : <TabsCount count={comments.length} />}
     </TabsTrigger>
   );
 }

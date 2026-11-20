@@ -1,9 +1,10 @@
 "use client";
 
+import { TaskArtifacts } from "@/components/artifacts/artifact-attachments";
 import type { ArtifactReference } from "@/domain/artifact";
 import { useRef, useState, type FormEvent } from "react";
 import { Bot, Maximize2, Minimize2, LayoutGrid, CircleDot, CirclePlay, CircleStop, Workflow, Zap } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsCount, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ActivityTabTrigger } from "./activity-tab-trigger";
 import { TaskComments } from "./task-comments";
 import { AgentStatus } from "./agent-status";
@@ -37,7 +38,7 @@ export type TaskEditorProps = {
   onStop?: () => Promise<void>;
   agents?: AgentProfile[];
   onDeleteComment?: (commentId: string) => Promise<void>;
-  onPostComment?: (body: string, artifacts?: ArtifactReference[]) => Promise<void>;
+  onPostComment?: (body: string, artifacts?: ArtifactReference[], parentCommentId?: string) => Promise<void>;
   open: boolean;
   task?: Task | null;
   defaultStatus?: Status;
@@ -81,6 +82,7 @@ function TaskEditorSession({
     editing?.agentStatus === "Queued" || editing?.agentStatus === "Running";
   const [expanded, setExpanded] = useState(false);
   const [tab, setTab] = useState("detail");
+  const [artifactCount, setArtifactCount] = useState(0);
   const draftId = useRef<string | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(!editing);
   const [titleError, setTitleError] = useState(false);
@@ -270,9 +272,10 @@ function TaskEditorSession({
               <TabsList layout="wrap" aria-label="Task sections">
                 <TabsTrigger value="detail" disabled={busy}>Detail</TabsTrigger>
                 <ActivityTabTrigger value="activity" disabled={busy} agentStatus={editing.agentStatus} comments={editing.comments} />
+                <TabsTrigger value="artifacts" disabled={busy} aria-label="Artifacts" aria-description={`${artifactCount} artifacts`}>Artifacts<TabsCount count={artifactCount} /></TabsTrigger>
               </TabsList>
             </div>}
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-1 pb-6">
               <TabsContent value="detail" forceMount className="space-y-7">
               <div className="space-y-2">
                 <input type="hidden" name="title" value={title} />
@@ -437,7 +440,18 @@ function TaskEditorSession({
               </div>
               </TabsContent>
               {editing && <TabsContent value="activity" forceMount>
-                <TaskComments embedded taskId={editing.id} comments={editing.comments} agentStatus={editing.agentStatus} onAnswerFeedback={onAnswerFeedback} agents={agents} onPostComment={onPostComment} onDeleteComment={onDeleteComment} />
+                <TaskComments embedded comments={editing.comments} agentStatus={editing.agentStatus} onAnswerFeedback={onAnswerFeedback} agents={agents} onPostComment={onPostComment} onDeleteComment={onDeleteComment} />
+              </TabsContent>}
+              {editing && <TabsContent value="artifacts" forceMount>
+                <TaskArtifacts
+                  taskId={editing.id}
+                  commentsKey={JSON.stringify((editing.comments ?? []).map((comment) => comment.id))}
+                  onCountChange={setArtifactCount}
+                  onNavigateComment={(commentId) => {
+                    setTab("activity");
+                    requestAnimationFrame(() => document.getElementById(`comment-${commentId}`)?.scrollIntoView({ block: "nearest" }));
+                  }}
+                />
               </TabsContent>}
             </div>
             <DialogFooter variant="workspace">

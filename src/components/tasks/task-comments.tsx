@@ -1,112 +1,140 @@
 "use client";
 
-import { ArtifactPicker, TaskArtifacts } from "@/components/artifacts/artifact-attachments";
+import { ArtifactPicker } from "@/components/artifacts/artifact-attachments";
 import type { Artifact, ArtifactReference } from "@/domain/artifact";
 import { useRef, useState } from "react";
 import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowUp, Copy, LoaderCircle, Trash2 } from "lucide-react";
+import { ArrowUp, Copy, LoaderCircle, Reply, Trash2 } from "lucide-react";
 import { Markdown } from "@/components/ui/markdown";
-import { Message, MessageContent, MessageHeader, MessageFooter, MessageReplies, MessageReply } from "@/components/ui/message";
+import { Message, MessageContent, MessageHeader, MessageAvatar, MessageAuthor, MessageThread, MessageReply } from "@/components/ui/message";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Confirmation, ConfirmationActions } from "@/components/ui/confirmation";
 import { PromptSend } from "@/components/ui/prompt-send";
 import { toast } from "@/components/ui/toast";
 import { DescriptionEditor } from "./description-editor";
 import type { AgentProfile } from "@/domain/column-agent";
-import { ActivityTabTrigger } from "./activity-tab-trigger";
 import { groupActivity } from "@/domain/activity";
 import type { AgentStatus, TaskComment } from "@/domain/task";
 
-export function TaskComments({ embedded = false, taskId, comments = [], onAnswerFeedback, onPostComment, onDeleteComment, agents = [], agentStatus }: {
+export function TaskComments({ embedded = false, comments = [], onAnswerFeedback, onPostComment, onDeleteComment, agents = [], agentStatus }: {
   embedded?: boolean;
-  taskId?: string;
   comments?: TaskComment[];
   agentStatus?: AgentStatus;
   agents?: AgentProfile[];
   onDeleteComment?: (commentId: string) => Promise<void>;
-  onPostComment?: (body: string, artifacts?: ArtifactReference[]) => Promise<void>;
+  onPostComment?: (body: string, artifacts?: ArtifactReference[], parentCommentId?: string) => Promise<void>;
   onAnswerFeedback?: (commentId: string, body: string) => Promise<void>;
 }) {
-  const [tab, setTab] = useState("activity");
-  const [artifactCount, setArtifactCount] = useState(0);
   return (
-    <Tabs value={tab} onValueChange={setTab} asChild>
     <section aria-label="Task activity" className={embedded ? "space-y-6" : "mt-8 space-y-6"}>
-      <TabsList aria-label="Task activity">
-        <ActivityTabTrigger value="activity" agentStatus={agentStatus} comments={comments}>{embedded ? "Comments" : "Activity"}</ActivityTabTrigger>
-        <TabsTrigger value="artifacts">Artifacts ({artifactCount})</TabsTrigger>
-      </TabsList>
-      <TabsContent value="activity" forceMount className="space-y-6">
-        {onPostComment && <CommentInput agents={agents} onPost={onPostComment} agentStatus={agentStatus} />}
-        {agentStatus === "Running" && (
-          <Message role="status"><MessageContent>
-            <MessageHeader><LoaderCircle aria-hidden="true" className="mr-2 size-4 animate-spin motion-reduce:animate-none" />The agent is working…</MessageHeader>
-          </MessageContent></Message>
-        )}
-        {comments.length ? (
-          <ol aria-label="Activity, newest first" className="space-y-8">
-            {groupActivity(comments).map(({ message: comment, replies }) => (
-              <li key={comment.id} id={`comment-${comment.id}`} className="group">
-                <ActivityMessage comment={comment} replies={replies} agentStatus={agentStatus} onDeleteComment={onDeleteComment} onAnswerFeedback={onAnswerFeedback} />
-              </li>
-            ))}
-          </ol>
-        ) : agentStatus !== "Running" && <Message><MessageContent><MessageHeader>No activity yet. Send a message to get started.</MessageHeader></MessageContent></Message>}
-      </TabsContent>
-      <TabsContent value="artifacts" forceMount>
-        {taskId ? <TaskArtifacts onCountChange={setArtifactCount} taskId={taskId} commentsKey={JSON.stringify(comments.map((comment) => comment.id))} onNavigateComment={(commentId) => {
-          setTab("activity");
-          requestAnimationFrame(() => document.getElementById(`comment-${commentId}`)?.scrollIntoView({ block: "nearest" }));
-        }} /> : <p className="text-sm text-muted-foreground">No linked artifacts yet.</p>}
-      </TabsContent>
+      {onPostComment && <CommentInput agents={agents} onPost={onPostComment} agentStatus={agentStatus} />}
+      {agentStatus === "Running" && (
+        <Message role="status"><MessageContent>
+          <MessageHeader><LoaderCircle aria-hidden="true" className="mr-2 size-4 animate-spin motion-reduce:animate-none" />The agent is working…</MessageHeader>
+        </MessageContent></Message>
+      )}
+      {comments.length ? (
+        <ol aria-label="Activity, newest first" className="space-y-8">
+          {groupActivity(comments).map(({ message: comment, replies }) => (
+            <li key={comment.id} id={`comment-${comment.id}`} className="group">
+              <ActivityMessage comment={comment} replies={replies} agentStatus={agentStatus} onDeleteComment={onDeleteComment} onAnswerFeedback={onAnswerFeedback} onPostComment={onPostComment} />
+            </li>
+          ))}
+        </ol>
+      ) : agentStatus !== "Running" && <Message><MessageContent><MessageHeader>No activity yet. Send a message to get started.</MessageHeader></MessageContent></Message>}
     </section>
-    </Tabs>
   );
 }
 
-function ActivityMessage({ comment, replies = [], agentStatus, onDeleteComment, onAnswerFeedback }: {
+function ActivityMessage({ comment, replies = [], agentStatus, onDeleteComment, onAnswerFeedback, onPostComment }: {
   comment: TaskComment;
   replies?: TaskComment[];
   agentStatus?: AgentStatus;
+  onPostComment?: (body: string, artifacts?: ArtifactReference[], parentCommentId?: string) => Promise<void>;
   onDeleteComment?: (id: string) => Promise<void>;
   onAnswerFeedback?: (id: string, body: string) => Promise<void>;
 }) {
+  const [replying, setReplying] = useState(false);
+  const [threadOpen, setThreadOpen] = useState(true);
+  const replyButton = useRef<HTMLButtonElement>(null);
+  const disabled = agentStatus === "Running" || agentStatus === "Queued";
   return (
-    <Message align={comment.authorName === "Human" ? "end" : "start"}>
-      <MessageContent>
-        <MessageHeader>{comment.authorName || "Agent"}</MessageHeader>
+    <Message>
+      <MessageAvatar name={comment.authorName || "Agent"} />
+      <MessageContent connected={replies.length > 0 || replying}>
+        <MessageHeader><MessageAuthor>{comment.authorName || "Agent"}</MessageAuthor>
+          <time dateTime={comment.createdAt} title={new Date(comment.createdAt).toLocaleString()}>
+            {new Date(comment.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+          </time>
+          <CopyComment body={comment.body} />
+          {onPostComment && <Button ref={replyButton} type="button" size="xs" variant="ghost-muted" disabled={disabled}
+            aria-expanded={replying} aria-controls={`thread-${comment.id}`} onClick={() => { setThreadOpen(true); setReplying(true); }}><Reply aria-hidden="true" />Reply</Button>}
+          {onDeleteComment && <DeleteComment commentId={comment.id} replyCount={replies.length} onDelete={onDeleteComment} disabled={agentStatus === "Running" || agentStatus === "Queued"} />}
+        </MessageHeader>
         {comment.feedbackStatus ? (
           <Confirmation state={comment.feedbackStatus} question={<Markdown>{comment.body}</Markdown>}
             recommendation={comment.recommendation && <Markdown>{comment.recommendation}</Markdown>}>
             {comment.feedbackStatus === "pending" && <FeedbackInput commentId={comment.id} onAnswer={onAnswerFeedback} />}
-            {!!replies.length && <MessageReplies variant="compact" aria-label="Feedback responses">
-              {replies.map((reply) => <MessageReply key={reply.id} id={`comment-${reply.id}`} label="Your answer"
-                actions={onDeleteComment && <DeleteComment commentId={reply.id} onDelete={onDeleteComment} disabled={agentStatus === "Running" || agentStatus === "Queued"} />}>
-                <Markdown>{reply.body}</Markdown>
-              </MessageReply>)}
-            </MessageReplies>}
+
           </Confirmation>
         ) : (
-          <Bubble align={comment.authorName === "Human" ? "end" : "start"} variant={comment.authorName === "Human" ? "muted" : "ghost"}>
+          <Bubble variant="ghost">
             <BubbleContent><Markdown>{comment.body}</Markdown></BubbleContent>
           </Bubble>
         )}
-        <MessageFooter className="gap-2">
-          <time dateTime={comment.createdAt} title={new Date(comment.createdAt).toLocaleString()}>
-            {new Date(comment.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-          </time>
-          <Button type="button" size="icon-xs" variant="ghost" aria-label="Copy message" title="Copy message" onClick={async () => {
-            try { await navigator.clipboard.writeText(comment.body); toast.success("Message copied."); }
-            catch { toast.error("Could not copy message."); }
-          }}><Copy aria-hidden="true" /></Button>
-          {onDeleteComment && <DeleteComment commentId={comment.id} replyCount={replies.length} onDelete={onDeleteComment} disabled={agentStatus === "Running" || agentStatus === "Queued"} />}
-        </MessageFooter>
+        {(replies.length > 0 || replying) && <MessageThread id={`thread-${comment.id}`} aria-label="Reply thread" count={replies.length} open={threadOpen} onOpenChange={setThreadOpen}>
+          {replies.map((reply) => <MessageReply key={reply.id} id={`comment-${reply.id}`} avatarName={reply.authorName || "Agent"} label={comment.feedbackStatus && reply.runId === comment.runId && reply.authorName === "Human" ? "Your answer" : reply.authorName || "Agent"}
+            actions={<><time dateTime={reply.createdAt}>{new Date(reply.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time>
+              <CopyComment body={reply.body} />
+              {onDeleteComment && <DeleteComment commentId={reply.id} onDelete={onDeleteComment} disabled={disabled} />}</>}>
+            <Markdown>{reply.body}</Markdown>
+          </MessageReply>)}
+          {replying && onPostComment && <ReplyInput commentId={comment.id} disabled={disabled}
+            onPost={(body) => onPostComment(body, [], comment.id)}
+            onClose={() => { setReplying(false); replyButton.current?.focus(); }} />}
+        </MessageThread>}
       </MessageContent>
     </Message>
   );
+}
+
+function CopyComment({ body }: { body: string }) {
+  return <Button type="button" size="icon-xs" variant="ghost" aria-label="Copy message" title="Copy message" onClick={async () => {
+    try { await navigator.clipboard.writeText(body); toast.success("Message copied."); }
+    catch { toast.error("Could not copy message."); }
+  }}><Copy aria-hidden="true" /></Button>;
+}
+
+function ReplyInput({ commentId, disabled, onPost, onClose }: {
+  commentId: string; disabled: boolean; onPost: (body: string) => Promise<void>; onClose: () => void;
+}) {
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submitting = useRef(false);
+  const [error, setError] = useState("");
+  async function submit() {
+    if (!body.trim() || disabled || submitting.current) return;
+    submitting.current = true;
+    setBusy(true);
+    setError("");
+    try { await onPost(body.trim()); onClose(); }
+    catch (error) { setError(error instanceof Error ? error.message : "Could not send reply."); }
+    finally { submitting.current = false; setBusy(false); }
+  }
+  return <div className="space-y-2">
+    <Label htmlFor={`reply-${commentId}`} variant="metadata">Your reply</Label>
+    <Textarea id={`reply-${commentId}`} autoFocus placeholder="Write a reply…" value={body}
+      disabled={busy || disabled} onChange={(event) => setBody(event.target.value)}
+      aria-invalid={!!error} aria-describedby={error ? `reply-error-${commentId}` : undefined} />
+    {error && <p id={`reply-error-${commentId}`} role="alert" className="text-sm text-destructive">{error}</p>}
+    <div className="flex flex-wrap items-center gap-2">
+      <Button type="button" size="sm" disabled={busy || disabled || !body.trim()} onClick={() => void submit()}>{busy ? "Sending…" : "Send reply"}</Button>
+      <Button type="button" size="sm" variant="ghost-muted" disabled={busy} onClick={onClose}>Cancel</Button>
+    </div>
+  </div>;
 }
 
 function DeleteComment({ commentId, replyCount = 0, onDelete, disabled }: {
@@ -176,7 +204,7 @@ function FeedbackInput({ commentId, onAnswer }: {
   );
 }
 
-function CommentInput({ agents, onPost, agentStatus }: { agents: AgentProfile[]; onPost: (body: string, artifacts?: ArtifactReference[]) => Promise<void>; agentStatus?: AgentStatus }) {
+function CommentInput({ agents, onPost, agentStatus }: { agents: AgentProfile[]; onPost: (body: string, artifacts?: ArtifactReference[], parentCommentId?: string) => Promise<void>; agentStatus?: AgentStatus }) {
   const [attachments, setAttachments] = useState<Artifact[]>([]);
   const pendingRun = agentStatus === "Running" || agentStatus === "Queued";
   const [body, setBody] = useState("");
