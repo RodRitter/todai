@@ -7,11 +7,16 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 
+export function isReplyInputActive(document: Document) {
+  return !!document.activeElement?.closest('[data-slot="message-reply-composer"]');
+}
+
 function useMessageAttention(attention: boolean) {
   const ref = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     if (!attention) return;
     const frame = requestAnimationFrame(() => {
+      if (ref.current && isReplyInputActive(ref.current.ownerDocument)) return;
       ref.current?.scrollIntoView({
         behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
         block: "center",
@@ -145,7 +150,7 @@ export function MessageReply({ attention = false, label, avatarName = label, cre
 
 export function MessageReplyComposer({ className, ...props }: React.ComponentProps<"div">) {
   return <div data-slot="message-reply-composer" className={cn(
-    "relative min-w-0 pb-5 pl-10 last:pb-0 before:absolute before:left-4 before:top-0 before:bottom-1 before:border-l before:border-border last:before:hidden",
+    "relative min-w-0 pb-5 pl-10 last:pb-0 before:absolute before:left-4 before:top-0 before:bottom-0 before:border-l before:border-border",
     className,
   )} {...props} />;
 }
@@ -179,7 +184,7 @@ export function MessageThread({ count, open, onOpenChange, children, className, 
     </CollapsibleTrigger>
   </div>;
   return <Collapsible open={open} onOpenChange={onOpenChange} asChild>
-    <div data-slot="message-replies" data-position={position} className={cn("relative min-w-0 self-stretch", position === "above" && "ml-10", className)} {...props}>
+    <div data-slot="message-replies" data-position={position} className={cn("relative ml-10 min-w-0 self-stretch", className)} {...props}>
       {position === "below" && trigger}
       <CollapsibleContent forceMount hidden={!open} className={cn(
         "relative before:pointer-events-none before:absolute before:-left-6 before:w-6 before:border-l before:border-border",

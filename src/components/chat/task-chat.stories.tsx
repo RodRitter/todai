@@ -12,6 +12,7 @@ const session: ChatSession = {
   ],
 };
 const meta = { title: "Chat/Conversation", component: ChatConversation, parameters: { layout: "padded" },
+  decorators: [(Story) => <div className="flex h-[600px] min-h-0 flex-col"><Story /></div>],
   args: { session, busy: false, onSend: async () => {}, onDelete: async () => {}, onClear: async () => {}, body: "", onBodyChange: () => {} },
   render: function Example(args) {
     const [body, setBody] = useState(args.body);
@@ -24,20 +25,20 @@ const meta = { title: "Chat/Conversation", component: ChatConversation, paramete
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Conversation: Story = { play: async ({ canvasElement }) => {
-  const messages = within(canvasElement).getByRole("list", { name: "Chat messages, newest first" });
+  const messages = within(canvasElement).getByRole("list", { name: "Chat messages, oldest first" });
   await expect(messages.children).toHaveLength(2);
   await expect(messages.querySelector("time")).toBeNull();
-  await expect(messages.children[1].querySelector('[data-slot="message"]')).toHaveAttribute("data-align", "end");
-  await expect(messages.children[1].querySelector('[data-slot="bubble"]')).toHaveAttribute("data-variant", "muted");
-  await expect(messages.children[0].querySelector('[data-slot="bubble"]')).toBeNull();
-  const personalRow = messages.children[1].querySelector('[data-slot="message-bubble-row"]');
+  await expect(messages.children[0].querySelector('[data-slot="message"]')).toHaveAttribute("data-align", "end");
+  await expect(messages.children[0].querySelector('[data-slot="bubble"]')).toHaveAttribute("data-variant", "muted");
+  await expect(messages.children[1].querySelector('[data-slot="bubble"]')).toBeNull();
+  const personalRow = messages.children[0].querySelector('[data-slot="message-bubble-row"]');
   await expect(personalRow?.firstElementChild).toHaveAttribute("aria-label", "Delete chat message");
   await expect(personalRow?.lastElementChild).toHaveAttribute("data-slot", "bubble");
   await expect(within(messages).queryByText("Human", { exact: true })).not.toBeInTheDocument();
   await userEvent.hover(within(messages).getByText("Reviewer", { exact: true }));
   await expect(await within(canvasElement.ownerDocument.body).findByRole("tooltip")).toHaveTextContent(new Date(session.messages[1].createdAt).toLocaleString());
   await userEvent.unhover(within(messages).getByText("Reviewer", { exact: true }));
-  await expect(messages.children[0]).toHaveTextContent("Check that a chat message does not enter the task context.");
+  await expect(messages.children[1]).toHaveTextContent("Check that a chat message does not enter the task context.");
 } };
 export const Empty: Story = {
   args: { session: { ...session, messages: [] } },
@@ -95,7 +96,7 @@ export const DeleteMessage: Story = {
     confirmation = within(await body.findByRole("dialog", { name: /^(Delete|Clear|Archive)/ }));
     await userEvent.click(confirmation.getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(canvas.getAllByRole("button", { name: "Delete chat message" })).toHaveLength(1));
-    await expect(canvas.getByRole("list")).toHaveTextContent("@Reviewer which check do you mean?");
+    await expect(canvas.getByRole("list")).toHaveTextContent("Check that a chat message does not enter the task context.");
   },
 };
 export const ClearChat: Story = {
@@ -162,7 +163,7 @@ export const Sending: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole("button", { name: "Send chat message" }));
-    await expect(canvas.getByRole("list", { name: "Chat messages, newest first" })).toHaveTextContent("Show this message immediately");
+    await expect(canvas.getByRole("list", { name: "Chat messages, oldest first" })).toHaveTextContent("Show this message immediately");
     await expect(canvas.getByRole("textbox", { name: "Your chat message" })).not.toHaveTextContent("Show this message immediately");
     await expect(canvas.getByRole("status")).toHaveTextContent("The agent is queued to start.");
     await expect(canvas.getByRole("button", { name: "Send chat message" })).toBeDisabled();
@@ -170,3 +171,49 @@ export const Sending: Story = {
 };
 
 export const LongHumanMessage: Story = { args: { session: { ...session, messages: [{ ...session.messages[0], body: "Long message: " + "content".repeat(120) }] } }, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
+
+export const FixedComposer: Story = {
+  args: { session: { ...session, messages: Array.from({ length: 20 }, (_, index) => ({ ...session.messages[index % 2], id: `message-${index}` })) } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const editor = canvas.getByRole("textbox", { name: "Your chat message" });
+    const viewport = canvasElement.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')!;
+    await waitFor(() => expect(viewport.scrollHeight).toBeGreaterThan(viewport.clientHeight));
+    const top = editor.getBoundingClientRect().top;
+    viewport.scrollTop = 0;
+    viewport.dispatchEvent(new Event("scroll", { bubbles: true }));
+    await expect(editor).toBeVisible();
+    await expect(editor.getBoundingClientRect().top).toBe(top);
+    await expect(editor.getBoundingClientRect().top).toBeGreaterThanOrEqual(viewport.getBoundingClientRect().bottom);
+  },
+};
+
+export const ScrollOnArrivalAndTab: Story = {
+  render: function Example(args) {
+    const [active, setActive] = useState(true);
+    const [current, setCurrent] = useState({ ...session, messages: Array.from({ length: 20 }, (_, index) => ({ ...session.messages[index % 2], id: `message-${index}` })) });
+    return <>
+      <button onClick={() => setActive((value) => !value)}>Switch chat tab</button>
+      <button onClick={() => setCurrent((value) => ({ ...value, messages: [...value.messages, { ...session.messages[1], id: crypto.randomUUID() }] }))}>Add chat response</button>
+      <button onClick={() => setCurrent((value) => ({ ...value, messages: [...value.messages] }))}>Refresh chat</button>
+      <div className={active ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+        <ChatConversation {...args} session={current} active={active} />
+      </div>
+    </>;
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewport = canvasElement.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')!;
+    const atBottom = () => expect(viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop).toBeLessThan(2);
+    await waitFor(atBottom);
+    viewport.scrollTop = 0;
+    await userEvent.click(canvas.getByRole("button", { name: "Refresh chat" }));
+    await expect(viewport.scrollTop).toBe(0);
+    await userEvent.click(canvas.getByRole("button", { name: "Add chat response" }));
+    await waitFor(atBottom);
+    viewport.scrollTop = 0;
+    await userEvent.click(canvas.getByRole("button", { name: "Switch chat tab" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Switch chat tab" }));
+    await waitFor(atBottom);
+  },
+};

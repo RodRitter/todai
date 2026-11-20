@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
-import { expect, fn, spyOn, userEvent, within } from "storybook/test";
+import { expect, fn, spyOn, userEvent, waitFor, within } from "storybook/test";
 import type { TaskComment } from "@/domain/task";
 import { Button } from "@/components/ui/button";
 import { TaskComments } from "./task-comments";
@@ -49,7 +49,7 @@ export const SubmitFeedback: Story = {
     await expect(canvas.getByText("Feedback received")).toBeVisible();
     await expect(canvas.getByText("Yes, use the filter.")).toBeVisible();
     await expect(canvas.getByText(request.body)).toBeVisible();
-    const feed = canvas.getByRole("list", { name: "Activity, newest first" });
+    const feed = canvas.getByRole("list", { name: "Activity, oldest first" });
     await expect(feed.children).toHaveLength(1);
     await expect(within(feed.children[0] as HTMLElement).getByText("Yes, use the filter.")).toBeVisible();
     await expect(canvas.queryByRole("textbox")).not.toBeInTheDocument();
@@ -143,9 +143,9 @@ export const Chat: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.queryByRole("tablist")).not.toBeInTheDocument();
-    const messages = canvas.getByRole("list", { name: "Activity, newest first" });
-    await expect(messages.children[0]).toHaveTextContent("Builder");
-    await expect(messages.children[1]).toHaveTextContent("Human");
+    const messages = canvas.getByRole("list", { name: "Activity, oldest first" });
+    await expect(messages.children[0]).toHaveTextContent("Human");
+    await expect(messages.children[1]).toHaveTextContent("Builder");
     await expect(canvas.queryByRole("button", { name: "Run history" })).not.toBeInTheDocument();
   },
 };
@@ -158,7 +158,7 @@ export const KeyboardSend: Story = {
     const canvas = within(canvasElement);
     await userEvent.type(await canvas.findByRole("textbox", { name: "Your message" }), "First line{shift>}{enter}{/shift}Second line{enter}");
     await expect(await canvas.findByText("Human")).toBeVisible();
-    await expect(canvas.getByRole("list", { name: "Activity, newest first" })).toHaveTextContent("Second line");
+    await expect(canvas.getByRole("list", { name: "Activity, oldest first" })).toHaveTextContent("Second line");
     await expect(canvas.getByRole("textbox", { name: "Your message" })).toHaveTextContent("");
   },
 };
@@ -175,7 +175,7 @@ export const AnsweredFeedback: Story = {
     await expect(canvas.getByText("Your answer")).toBeVisible();
     await expect(canvas.getByText("Yes, hide them by default.")).toBeVisible();
     await expect(canvas.getAllByRole("button", { name: "Message actions" })).toHaveLength(2);
-    await expect(canvas.getByRole("list", { name: "Activity, newest first" }).children).toHaveLength(1);
+    await expect(canvas.getByRole("list", { name: "Activity, oldest first" }).children).toHaveLength(1);
   },
 };
 export const NarrowAnsweredFeedback: Story = { ...AnsweredFeedback, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
@@ -290,6 +290,8 @@ export const ReplyThread: Story = {
   render: () => <ThreadExample />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    await expect(canvas.queryByRole("button", { name: "Send reply" })).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByLabelText("Your reply"));
     await expect(canvas.getByRole("button", { name: "Send reply" })).toBeDisabled();
     await userEvent.type(canvas.getByLabelText("Your reply"), "Ready to ship.");
     await userEvent.click(canvas.getByRole("button", { name: "Send reply" }));
@@ -324,7 +326,7 @@ export const ReplyError: Story = {
     await userEvent.type(canvas.getByLabelText("Your reply"), "Keep this draft.");
     await userEvent.click(canvas.getByRole("button", { name: "Send reply" }));
     await expect(canvas.getByRole("alert")).toHaveTextContent("Connection lost");
-    await expect(canvas.getByLabelText("Your reply")).toHaveValue("Keep this draft.");
+    await expect(canvas.getByLabelText("Your reply")).toHaveTextContent("Keep this draft.");
   },
 };
 
@@ -342,7 +344,7 @@ export const CollapsibleReplyThread: Story = {
     expand.focus();
     await userEvent.keyboard("{Enter}");
     await expect(canvas.getByLabelText("Your reply")).toBeVisible();
-    await expect(canvas.getByLabelText("Your reply")).toHaveValue("Keep this draft while collapsed.");
+    await expect(canvas.getByLabelText("Your reply")).toHaveTextContent("Keep this draft while collapsed.");
     await userEvent.click(canvas.getByRole("button", { name: "Collapse 1 reply" }));
     await userEvent.click(canvas.getByRole("button", { name: "Reply" }));
     await expect(canvas.getByLabelText("Your reply")).toBeVisible();
@@ -371,8 +373,8 @@ export const ConnectedAvatars: Story = {
     const parent = canvas.getByText("The implementation is ready for review.");
     const older = canvas.getByText("Please preserve keyboard navigation.");
     const newer = canvas.getByText(/Confirmed\./);
-    await expect(newer.getBoundingClientRect().top).toBeLessThan(older.getBoundingClientRect().top);
-    await expect(older.getBoundingClientRect().top).toBeLessThan(parent.getBoundingClientRect().top);
+    await expect(newer.getBoundingClientRect().top).toBeGreaterThan(older.getBoundingClientRect().top);
+    await expect(older.getBoundingClientRect().top).toBeGreaterThan(parent.getBoundingClientRect().top);
     await userEvent.click(canvas.getByRole("button", { name: "Collapse 2 replies" }));
     await expect(older).not.toBeVisible();
     await expect(parent).toBeVisible();
@@ -474,7 +476,7 @@ function ResponseArrivalExample() {
       <Button onClick={() => add("Human")}>Add human comment</Button>
       <Button onClick={() => setActive((value) => !value)}>{active ? "Leave activity" : "Return to activity"}</Button>
     </div>
-    <div hidden={!active}><TaskComments taskId="task" active={active} comments={comments} /></div>
+    <div hidden={!active}><TaskComments taskId="task" active={active} comments={comments} onPostComment={async () => {}} /></div>
   </>;
 }
 
@@ -505,3 +507,79 @@ export const ResponseArrival: Story = {
 };
 export const NarrowResponseArrival: Story = { ...ResponseArrival, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
 export const DarkResponseArrival: Story = { ...ResponseArrival, globals: { theme: "dark" } };
+
+export const ReplyTypingPreventsScroll: Story = {
+  render: () => <ResponseArrivalExample />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const scroll = spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => {});
+    try {
+      const editor = canvas.getByRole("textbox", { name: "Your reply" });
+      await userEvent.type(editor, "Keep this draft.");
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      scroll.mockClear();
+      // Programmatic arrival keeps focus in the reply editor.
+      canvas.getByRole("button", { name: "Finish response" }).click();
+      await canvas.findByText("Reviewer response 2");
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      await expect(editor).toHaveFocus();
+      await expect(scroll).not.toHaveBeenCalled();
+      await expect(editor).toHaveTextContent("Keep this draft.");
+      await userEvent.click(canvas.getByRole("button", { name: "Finish response" }));
+      await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
+    } finally { scroll.mockRestore(); }
+  },
+};
+
+export const FixedMainInput: Story = {
+  args: {
+    embedded: true,
+    onPostComment: async () => {},
+    comments: Array.from({ length: 20 }, (_, index) => ({
+      id: `fixed-${index}`, taskId: "task", authorName: "Reviewer", body: `Activity message ${index}`,
+      createdAt: new Date(Date.UTC(2026, 10, 20, 10, index)).toISOString(),
+    })),
+  },
+  decorators: [(Story) => <div className="flex h-[600px] min-h-0 flex-col"><Story /></div>],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const input = canvas.getByRole("textbox", { name: "Your message" });
+    const viewport = canvasElement.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')!;
+    await waitFor(() => expect(viewport.scrollHeight).toBeGreaterThan(viewport.clientHeight));
+    const top = input.getBoundingClientRect().top;
+    viewport.scrollTop = viewport.scrollHeight;
+    viewport.dispatchEvent(new Event("scroll", { bubbles: true }));
+    await expect(input).toBeVisible();
+    await expect(input.getBoundingClientRect().top).toBe(top);
+    await expect(input.getBoundingClientRect().top).toBeGreaterThanOrEqual(viewport.getBoundingClientRect().bottom);
+    await expect(input.closest('[data-slot="conversation-composer"]')).toHaveAttribute("data-variant", "fixed");
+  },
+};
+export const FixedMainInputNarrow: Story = { ...FixedMainInput, decorators: [(Story) => <div className="flex h-[600px] max-w-80 min-h-0 flex-col"><Story /></div>] };
+export const FixedMainInputDark: Story = { ...FixedMainInput, globals: { theme: "dark" } };
+
+export const ReplyInputScrollsIntoView: Story = {
+  ...FixedMainInput,
+  args: {
+    ...FixedMainInput.args,
+    comments: [...FixedMainInput.args!.comments!, {
+      id: "fixed-reply", parentCommentId: "fixed-19", taskId: "task", authorName: "Human",
+      body: "Please check this comment.", createdAt: "2026-11-20T11:00:00Z",
+    }],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewport = canvasElement.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')!;
+    viewport.scrollTop = viewport.scrollHeight;
+    const input = canvas.getByRole("textbox", { name: "Your reply" });
+    const surface = input.closest('[data-slot="input-group"]')!;
+    await userEvent.click(input);
+    await expect(canvas.getByRole("button", { name: "Send reply" })).toBeVisible();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    await waitFor(() => {
+      expect(surface.getBoundingClientRect().bottom).toBeLessThanOrEqual(viewport.getBoundingClientRect().bottom + 1);
+      expect(surface.getBoundingClientRect().top).toBeGreaterThanOrEqual(viewport.getBoundingClientRect().top - 1);
+    });
+    await expect(input).toHaveFocus();
+  },
+};

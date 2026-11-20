@@ -27,10 +27,25 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export function DescriptionEditor({ value, onChange, disabled = false, autoFocus = false, agents, artifacts = false, onArtifactSelect, label = "Description", id = "task-description", actions, footer, toolbarActions, controlsOnFocus = false, compact = false, variant = "default", onSubmit }: {
-  variant?: "default" | "prompt" | "compact"; onSubmit?: () => void;
+  variant?: "default" | "prompt" | "compact" | "reply"; onSubmit?: () => void;
   value: string; onChange: (value: string) => void; disabled?: boolean; autoFocus?: boolean;
   agents?: AgentProfile[]; artifacts?: boolean; onArtifactSelect?: (artifact: Artifact) => void; label?: string; id?: string; actions?: ReactNode; footer?: ReactNode; toolbarActions?: ReactNode; controlsOnFocus?: boolean; compact?: boolean;
 }) {
+  const surface = useRef<HTMLDivElement>(null);
+  const [expanded, setExpanded] = useState(autoFocus || !!value.trim());
+  const collapsed = variant === "reply" && !expanded;
+  const compactVariant = variant === "compact" || variant === "reply";
+  function revealReply() {
+    const node = surface.current;
+    if (variant !== "reply" || !node?.contains(node.ownerDocument.activeElement)) return;
+    const viewport = node.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
+    if (!viewport) { node.scrollIntoView({ block: "nearest", behavior: "instant" }); return; }
+    const bounds = node.getBoundingClientRect();
+    const visible = viewport.getBoundingClientRect();
+    if (bounds.bottom > visible.bottom) viewport.scrollTop += bounds.bottom - visible.bottom;
+    else if (bounds.top < visible.top) viewport.scrollTop -= visible.top - bounds.top;
+  }
+
   const [creating, setCreating] = useState<Match | null>(null);
   const [match, setMatch] = useState<Match | null>(null);
   const [response, setResponse] = useState<{ key: string; items: TaskReference[]; artifacts?: Artifact[] }>({ key: "", items: [] });
@@ -55,7 +70,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
     editorProps: {
       attributes: {
         id, role: "textbox", "aria-label": label, "aria-multiline": "true", "aria-disabled": String(disabled),
-        "data-placeholder": variant !== "default" ? "Send a message… Use @ to mention an agent" : "",
+        "data-placeholder": variant === "reply" ? "Send a reply" : variant !== "default" ? "Send a message… Use @ to mention an agent" : "",
         class: `${variant !== "default" ? "[&:has(>p:only-child>br:only-child)]:before:content-[attr(data-placeholder)] [&:has(>p:only-child>br:only-child)]:before:text-muted-foreground [&:has(>p:only-child>br:only-child)]:before:pointer-events-none [&:has(>p:only-child>br:only-child)]:before:float-left [&:has(>p:only-child>br:only-child)]:before:h-0" : ""} ${richTextClassName} p-3 outline-none [&_.tableWrapper]:my-3 [&_.tableWrapper]:overflow-x-auto [&_.tableWrapper]:rounded-lg [&_.tableWrapper]:border [&_ul[data-type=taskList]]:list-none [&_li[data-type=taskItem]]:flex [&_li[data-type=taskItem]]:gap-2 [&_li[data-type=taskItem]>label]:mt-1 [&_li[data-type=taskItem]>div]:min-w-0 [&_li[data-type=taskItem]>div]:flex-1 [&_li[data-type=taskItem]>div>p]:my-1`,
       },
       handleKeyDown: (_view, event) => keyboard.current(event),
@@ -166,8 +181,21 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
   return (
     <>
     <EditorSurface
+      ref={surface}
       className="group/editor"
       variant={variant}
+      collapsed={collapsed}
+      onFocusCapture={() => {
+        if (disabled) return;
+        setExpanded(true);
+        requestAnimationFrame(revealReply);
+      }}
+      onTransitionEnd={(event) => {
+        if (event.target === event.currentTarget && event.propertyName === "height" && !collapsed) revealReply();
+      }}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setExpanded(false);
+      }}
       disabled={disabled}
       onClick={(event) => {
         if (
@@ -178,8 +206,8 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
       }}
     >
       <label htmlFor={id} className={variant !== "default" ? "sr-only" : editorLabelClassName}>{label}</label>
-      <div className={`min-w-0 flex flex-col [&_.tiptap]:px-0 [&_.tiptap]:pt-0 ${variant === "compact" ? "[&_.tiptap]:min-h-8" : compact ? "[&_.tiptap]:min-h-12" : "[&_.tiptap]:min-h-24"}`}>
-        <div className={`order-last flex-wrap items-center justify-between ${variant === "compact" ? "mt-1 gap-2" : "mt-2 gap-3"} ${variant !== "default" ? "" : "border-t pt-3"} ${controlsOnFocus ? "hidden group-focus-within/editor:flex group-has-[[data-state=open]]/editor:flex" : "flex"}`}>
+      <div className={`min-w-0 flex flex-col [&_.tiptap]:px-0 [&_.tiptap]:pt-0 ${compactVariant ? "[&_.tiptap]:min-h-8" : compact ? "[&_.tiptap]:min-h-12" : "[&_.tiptap]:min-h-24"}`}>
+        <div aria-hidden={collapsed || undefined} inert={collapsed || undefined} className={`order-last flex-wrap items-center justify-between ${compactVariant ? "mt-1 gap-2" : "mt-2 gap-3"} ${variant !== "default" ? "" : "border-t pt-3"} ${collapsed ? "invisible flex" : controlsOnFocus ? "hidden group-focus-within/editor:flex group-has-[[data-state=open]]/editor:flex" : "flex"}`}>
           <TooltipProvider>
             <div role="group" aria-label={`${label} formatting`} className="flex flex-wrap items-center gap-1">
               {variant === "default" && formatGroups.map((group, index) => (
@@ -230,7 +258,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
           </ReferencePopover>
         )}
       </div>
-      {footer && <div className="space-y-2 [&:not(:empty)]:mt-3">{footer}</div>}
+      {footer && <div aria-hidden={collapsed || undefined} inert={collapsed || undefined} className={`space-y-2 [&:not(:empty)]:mt-3 ${collapsed ? "invisible" : ""}`}>{footer}</div>}
     </EditorSurface>
     {creating && <ArtifactCreateDialog title={creating.query} onCancel={() => setCreating(null)} onRestoreFocus={() => { editor?.commands.focus(); setMatch(null); }} onSave={(artifact) => {
       insert({ kind: "artifact", label: artifact.title, path: artifactMentionPath({ artifactId: artifact.id, revisionId: artifact.revisionId }), detail: "" }, creating);

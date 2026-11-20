@@ -293,3 +293,46 @@ export const ReferenceBadgesNarrow: Story = {
   ...ReferenceBadges,
   decorators: [(Story) => <div className="max-w-64"><Story /></div>],
 };
+
+export const CompactReply: Story = {
+  args: { variant: "reply", label: "Your reply", actions: <PromptSend aria-label="Send reply"><ArrowUp /></PromptSend>, toolbarActions: <Button size="xs">Attach artifact</Button> },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const editor = await canvas.findByRole("textbox", { name: "Your reply" });
+    await expect(editor).toHaveAttribute("data-placeholder", "Send a reply");
+    await expect(canvas.queryByRole("button", { name: "Send reply" })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("button", { name: "Attach artifact" })).not.toBeInTheDocument();
+    const surface = editor.closest('[data-slot="input-group"]')!;
+    const height = surface.getBoundingClientRect().height;
+    await userEvent.click(editor);
+    await expect(editor).toHaveFocus();
+    await expect(getComputedStyle(surface).getPropertyValue("--tw-ring-inset").trim()).toBe("inset");
+    await expect(canvas.getByRole("button", { name: "Send reply" })).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "Attach artifact" })).toBeVisible();
+    await waitFor(() => expect(surface.getBoundingClientRect().height).toBeGreaterThan(height));
+    await userEvent.type(editor, "Keep this reply.");
+    await expect(editor).toHaveTextContent("Keep this reply.");
+    await userEvent.click(canvas.getByRole("button", { name: "Attach artifact" }));
+    await expect(canvas.getByRole("button", { name: "Send reply" })).toBeVisible();
+    await userEvent.click(canvasElement);
+    await waitFor(() => expect(canvas.queryByRole("button", { name: "Send reply" })).not.toBeInTheDocument());
+    await waitFor(() => expect(surface.getBoundingClientRect().height).toBe(height));
+    await expect(editor).toHaveTextContent("Keep this reply.");
+    await userEvent.click(editor);
+    await expect(canvas.getByRole("button", { name: "Send reply" })).toBeVisible();
+    await expect(editor).toHaveTextContent("Keep this reply.");
+  },
+};
+export const CompactReplyKeyboard: Story = {
+  ...CompactReply,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const editor = await canvas.findByRole("textbox", { name: "Your reply" });
+    editor.focus();
+    await waitFor(() => expect(canvas.getByRole("button", { name: "Send reply" })).toBeVisible());
+    await expect(editor).toHaveFocus();
+  },
+};
+export const CompactReplyDisabled: Story = { args: { ...CompactReply.args, disabled: true } };
+export const CompactReplyNarrow: Story = { ...CompactReply, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
+export const CompactReplyDark: Story = { ...CompactReply, globals: { theme: "dark" } };

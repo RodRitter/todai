@@ -5,11 +5,14 @@ import { cn } from "@/lib/utils";
 // The editor owns its background, padding, and focus ring, including in preview mode.
 export function EditorSurface({
   disabled = false,
+  collapsed = false,
   variant = "default",
   className,
   ...props
-}: ComponentProps<"div"> & { disabled?: boolean; variant?: "default" | "prompt" | "compact" }) {
-  if (variant !== "default") return <InputGroup data-disabled={disabled} className={cn("min-w-0 max-w-full h-auto flex-col items-stretch has-[[contenteditable=true]:focus-visible]:border-ring has-[[contenteditable=true]:focus-visible]:ring-3 has-[[contenteditable=true]:focus-visible]:ring-ring/50", variant === "compact" ? "p-2" : "p-3", className)} {...props} />;
+}: ComponentProps<"div"> & { disabled?: boolean; collapsed?: boolean; variant?: "default" | "prompt" | "compact" | "reply" }) {
+  if (variant !== "default") return <InputGroup data-disabled={disabled} className={cn("min-w-0 max-w-full h-auto flex-col items-stretch has-[[contenteditable=true]:focus-visible]:border-ring has-[[contenteditable=true]:focus-visible]:ring-3 has-[[contenteditable=true]:focus-visible]:ring-ring/50", variant === "compact" || variant === "reply" ? "p-2" : "p-3",
+    variant === "reply" && "has-[[contenteditable=true]:focus-visible]:ring-inset overflow-clip [interpolate-size:allow-keywords] transition-[height,box-shadow] duration-200 ease-out motion-reduce:transition-none [&_.tiptap]:leading-5",
+    collapsed && "h-10", className)} {...props} />;
   return (
     <div
       data-slot="editor-surface"

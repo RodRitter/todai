@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { ConversationComposer } from "@/components/conversation/conversation-composer";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { ConversationEmptyState } from "@/components/ui/conversation-empty-state";
 import { Button } from "@/components/ui/button";
-import { MessageAgentStatus } from "@/components/ui/message";
+import { isReplyInputActive, MessageAgentStatus } from "@/components/ui/message";
 import { ConversationMessage } from "@/components/conversation/conversation-message";
 import { useMessageDeletion } from "@/components/conversation/use-message-deletion";
 import { DescriptionEditor } from "@/components/tasks/description-editor";
@@ -15,11 +17,13 @@ import type { AgentProfile } from "@/domain/column-agent";
 import { CommentReferenceProvider } from "@/components/tasks/comment-reference";
 import { chatRequest } from "./chat-client";
 
-export function ChatConversation({ session, busy, onSend, onDelete, onClear, agents = [], body, onBodyChange, draftVersion = 0 }: {
+export function ChatConversation({ session, busy, onSend, onDelete, onClear, agents = [], body, onBodyChange, draftVersion = 0, active = true }: {
   session: ChatSession; busy: boolean; onSend: (body: string) => Promise<void>; agents?: AgentProfile[];
   onDelete: (messageId: string) => Promise<void>; onClear: () => Promise<void>;
-  body: string; onBodyChange: (body: string) => void; draftVersion?: number;
+  body: string; onBodyChange: (body: string) => void; draftVersion?: number; active?: boolean;
 }) {
+  const viewport = useRef<HTMLDivElement>(null);
+  const previousScroll = useRef<{ active: boolean; ids: Set<string> }>({ active: false, ids: new Set() });
   const region = useRef<HTMLElement>(null);
   const [version, setVersion] = useState(0);
   const [error, setError] = useState("");
@@ -31,6 +35,21 @@ export function ChatConversation({ session, busy, onSend, onDelete, onClear, age
     !pending.previousIds.has(message.id) && message.authorName === "Human" && message.body === pending.message.body);
   const messages = pending && !accepted ? [...session.messages, pending.message] : session.messages;
   const agentStatus = session.running ? "Running" : pending && !accepted ? "Queued" : undefined;
+  useEffect(() => {
+    const ids = new Set(session.messages.map((message) => message.id));
+    if (pending && !accepted) ids.add(pending.message.id);
+    const previous = previousScroll.current;
+    if (!active || (previous.active && ![...ids].some((id) => !previous.ids.has(id)))) {
+      previousScroll.current = { active, ids };
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      previousScroll.current = { active, ids };
+      const node = viewport.current;
+      if (node && !isReplyInputActive(node.ownerDocument)) node.scrollTop = node.scrollHeight;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [session.messages, pending, accepted, active]);
   const deletion = useMessageDeletion<string | null>({
     disabled: busy || session.running || pending !== null,
     onDelete: async (messageId) => {
@@ -56,7 +75,22 @@ export function ChatConversation({ session, busy, onSend, onDelete, onClear, age
     }
     finally { submitting.current = false; setPending(null); }
   }
-  return <section ref={region} aria-label="Task chat" className="space-y-6">
+  return <section ref={region} aria-label="Task chat" className="flex min-h-0 flex-1 flex-col">
+    <ScrollArea className="min-h-0 flex-1" viewportProps={{ ref: viewport }}><div className="space-y-6 pb-4">
+    {messages.length ? <ol aria-label="Chat messages, oldest first" className="space-y-6">
+      {messages.map((message) => {
+        const deleteButton = <Button type="button" variant="ghost-destructive" size="icon-xs" reveal="hover" aria-label="Delete chat message" disabled={locked}
+          onClick={(event) => deletion.request(message.id, event.currentTarget)}><Trash2 aria-hidden="true" /></Button>;
+        return <li key={message.id}>
+          <ConversationMessage message={message} variant="chat" actions={deleteButton} />
+        </li>;
+      })}
+    </ol> : null}
+    {agentStatus && <MessageAgentStatus status={agentStatus} />}
+    {(error || session.error) && <p role="alert">{error || session.error}</p>}
+    {!messages.length && !locked && !error && !session.error && <ConversationEmptyState variant="chat" />}
+    </div></ScrollArea>
+    <ConversationComposer variant="fixed">
     <DescriptionEditor key={`${draftVersion}:${version}`} id="task-chat-message" label="Your chat message" variant="prompt" compact
       autoFocus={draftVersion > 0} agents={agents} artifacts value={body} onChange={onBodyChange} disabled={locked}
       toolbarActions={(session.messages.length > 0 || session.error) ? <Tooltip>
@@ -67,18 +101,7 @@ export function ChatConversation({ session, busy, onSend, onDelete, onClear, age
         <TooltipContent>Clear chat</TooltipContent>
       </Tooltip> : undefined}
       onSubmit={() => void submit()} actions={<PromptSend disabled={locked || !body.trim()} aria-label="Send chat message" onClick={() => void submit()}><ArrowUp /></PromptSend>} />
-    {agentStatus && <MessageAgentStatus status={agentStatus} />}
-    {(error || session.error) && <p role="alert">{error || session.error}</p>}
-    {!messages.length && !locked && !error && !session.error && <ConversationEmptyState variant="chat" />}
-    {messages.length ? <ol aria-label="Chat messages, newest first" className="space-y-6">
-      {[...messages].reverse().map((message) => {
-        const deleteButton = <Button type="button" variant="ghost-destructive" size="icon-xs" reveal="hover" aria-label="Delete chat message" disabled={locked}
-          onClick={(event) => deletion.request(message.id, event.currentTarget)}><Trash2 aria-hidden="true" /></Button>;
-        return <li key={message.id}>
-          <ConversationMessage message={message} variant="chat" actions={deleteButton} />
-        </li>;
-      })}
-    </ol> : null}
+    </ConversationComposer>
     <DeleteConfirmation {...deletion.confirmation} title={deletion.target ? "Delete chat message?" : "Clear chat?"}
       description={deletion.target ? "Delete this message from the chat? This cannot be undone." : "Delete all messages from this task chat? This cannot be undone."}
       confirmLabel={deletion.target ? "Delete" : "Clear chat"} />
@@ -122,6 +145,6 @@ export function TaskChat({ taskId, active, onNavigateComment, ...composer }: {
   }
   return <CommentReferenceProvider taskId={taskId} onNavigate={onNavigateComment}>
     {error && <div role="alert">{error} <Button type="button" variant="outline" onClick={() => setRetry((value) => value + 1)}>Retry chat</Button></div>}
-    {session ? <ChatConversation session={session} busy={busy} onSend={(body) => mutate({ body })} onDelete={(messageId) => mutate({ messageId }, "DELETE")} onClear={() => mutate({ clear: true }, "DELETE")} {...composer} /> : !error && <p role="status">Loading chat…</p>}
+    {session ? <ChatConversation active={active} session={session} busy={busy} onSend={(body) => mutate({ body })} onDelete={(messageId) => mutate({ messageId }, "DELETE")} onClear={() => mutate({ clear: true }, "DELETE")} {...composer} /> : !error && <p role="status">Loading chat…</p>}
   </CommentReferenceProvider>;
 }

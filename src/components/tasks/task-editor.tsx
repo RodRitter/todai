@@ -409,7 +409,7 @@ function TaskEditorSession({
               </div>
               )}
             </div>}
-            <ScrollArea className="min-h-0 flex-1"><div className="px-6 pt-1 pb-6">
+            <ScrollArea className={tab === "chat" || tab === "activity" ? "hidden" : "min-h-0 flex-1"}><div className="px-6 pt-1 pb-6">
               <TabsContent value="detail" forceMount className="space-y-7">
               <div
                 role="group"
@@ -534,14 +534,8 @@ function TaskEditorSession({
                 )}
               </div>
               </TabsContent>
-              {editing && <TabsContent value="activity" forceMount>
-                <TaskComments active={tab === "activity"} onChat={(comment) => {
-                  setChatDraft((draft) => `${draft}${draft.trim() ? "\n\n" : ""}${commentChatDraft(comment, agents ?? [])}`);
-                  setChatDraftVersion((version) => version + 1);
-                  setTab("chat");
-                }} taskId={editing.id} embedded comments={editing.comments} agentStatus={editing.agentStatus} onAnswerFeedback={onAnswerFeedback} agents={agents} onPostComment={onPostComment} onDeleteComment={onDeleteComment} />
-              </TabsContent>}
-              {editing && <TabsContent value="chat" forceMount><TaskChat taskId={editing.id} active={tab === "chat"} agents={agents} body={chatDraft} onBodyChange={setChatDraft} draftVersion={chatDraftVersion} onNavigateComment={navigateComment} /></TabsContent>}
+
+
               {editing && <TabsContent value="artifacts" forceMount>
                 <TaskArtifacts
                   taskId={editing.id}
@@ -551,6 +545,14 @@ function TaskEditorSession({
                 />
               </TabsContent>}
             </div></ScrollArea>
+              {editing && <TabsContent value="activity" forceMount className="flex min-h-0 flex-1 flex-col px-6 pt-1 pb-6">
+                <TaskComments active={tab === "activity"} onChat={(comment) => {
+                  setChatDraft((draft) => `${draft}${draft.trim() ? "\n\n" : ""}${commentChatDraft(comment, agents ?? [])}`);
+                  setChatDraftVersion((version) => version + 1);
+                  setTab("chat");
+                }} taskId={editing.id} embedded comments={editing.comments} agentStatus={editing.agentStatus} onAnswerFeedback={onAnswerFeedback} agents={agents} onPostComment={onPostComment} onDeleteComment={onDeleteComment} />
+              </TabsContent>}
+              {editing && <TabsContent value="chat" forceMount className="flex min-h-0 flex-1 flex-col px-6 pt-1 pb-6"><TaskChat taskId={editing.id} active={tab === "chat"} agents={agents} body={chatDraft} onBodyChange={setChatDraft} draftVersion={chatDraftVersion} onNavigateComment={navigateComment} /></TabsContent>}
             {!editing && <DialogFooter variant="task">
               <div className="flex items-center gap-1.5">
                 <DialogClose asChild>
