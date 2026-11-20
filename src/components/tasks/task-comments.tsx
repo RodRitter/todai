@@ -19,7 +19,8 @@ import type { AgentProfile } from "@/domain/column-agent";
 import { groupActivity } from "@/domain/activity";
 import type { AgentStatus, TaskComment } from "@/domain/task";
 
-export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostComment, onDeleteComment, agents = [], agentStatus }: {
+export function TaskComments({ embedded = false, taskId, comments = [], onAnswerFeedback, onPostComment, onDeleteComment, agents = [], agentStatus }: {
+  embedded?: boolean;
   taskId?: string;
   comments?: TaskComment[];
   agentStatus?: AgentStatus;
@@ -32,9 +33,9 @@ export function TaskComments({ taskId, comments = [], onAnswerFeedback, onPostCo
   const [artifactCount, setArtifactCount] = useState(0);
   return (
     <Tabs value={tab} onValueChange={setTab} asChild>
-    <section aria-label="Task activity" className="mt-8 space-y-6">
+    <section aria-label="Task activity" className={embedded ? "space-y-6" : "mt-8 space-y-6"}>
       <TabsList aria-label="Task activity">
-        <TabsTrigger value="activity">Activity</TabsTrigger>
+        <TabsTrigger value="activity">{embedded ? "Comments" : "Activity"}</TabsTrigger>
         <TabsTrigger value="artifacts">Artifacts ({artifactCount})</TabsTrigger>
       </TabsList>
       <TabsContent value="activity" forceMount className="space-y-6">

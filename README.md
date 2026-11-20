@@ -110,3 +110,5 @@ Shared styling conventions and component usage are documented in Storybook under
 ## Contributing
 
 Keep changes focused, add tests for new behavior, and run lint, type checks, and tests before opening a pull request.
+
+Task dialogs separate **Detail** (ticket fields) from **Activity** (comments and artifacts). New tasks also offer **Import JIRA Ticket**: select an existing agent and paste an HTTPS `/browse/KEY-123` link. The importer uses that agent's executor/model with dedicated instructions to read only the specified ticket and never edit, comment, transition, or otherwise change Jira. Browser/Jira access must already be configured; this prompt is not a Jira permission boundary. Successful imports fill an unsaved draft with a source link, turn off automatic execution, and return to Detail for review. Creating the task is a separate action; failed imports preserve the draft.

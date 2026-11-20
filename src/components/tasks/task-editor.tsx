@@ -3,6 +3,9 @@
 import type { ArtifactReference } from "@/domain/artifact";
 import { useRef, useState, type FormEvent } from "react";
 import { Bot, CircleDot, CirclePlay, CircleStop, Workflow, Zap } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { JiraTicketImport } from "./jira-ticket-import";
+import type { jiraImportApi } from "@/lib/workspace-api";
 import { TaskComments } from "./task-comments";
 import { AgentStatus } from "./agent-status";
 import { DescriptionField } from "./description-field";
@@ -27,6 +30,7 @@ import type { AgentProfile } from "@/domain/column-agent";
 import { statuses, type Status, type Task } from "@/domain/task";
 
 export type TaskEditorProps = {
+  importJiraTicket?: typeof jiraImportApi.import;
   columns?: readonly string[];
   assignedColumns?: readonly string[];
   onRun?: () => Promise<void>;
@@ -53,6 +57,7 @@ export function TaskEditor(props: TaskEditorProps) {
 }
 
 function TaskEditorSession({
+  importJiraTicket,
   columns = statuses,
   assignedColumns = [],
   onRun,
@@ -70,6 +75,8 @@ function TaskEditorSession({
 }: TaskEditorProps) {
   const pendingRun =
     editing?.agentStatus === "Queued" || editing?.agentStatus === "Running";
+  const [tab, setTab] = useState("detail");
+  const [importRevision, setImportRevision] = useState(0);
   const draftId = useRef<string | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(!editing);
   const [titleError, setTitleError] = useState(false);
@@ -234,8 +241,17 @@ function TaskEditorSession({
           key={editing?.id ?? "new"}
           className="-mx-6 min-h-0 min-w-0"
         >
+          <Tabs value={tab} onValueChange={setTab} asChild>
           <fieldset disabled={busy} className="flex h-full min-h-0 min-w-0 flex-col">
-            <div className="min-h-0 flex-1 space-y-7 overflow-y-auto px-6 pb-6">
+            <div className="px-6 pb-4">
+              <TabsList layout="wrap" aria-label="Task sections">
+                <TabsTrigger value="detail" disabled={busy}>Detail</TabsTrigger>
+                <TabsTrigger value="activity" disabled={busy}>Activity</TabsTrigger>
+                {!editing && <TabsTrigger value="jira" disabled={busy}>Import JIRA Ticket</TabsTrigger>}
+              </TabsList>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+              <TabsContent value="detail" forceMount className="space-y-7">
               <div className="space-y-2">
                 <input type="hidden" name="title" value={title} />
                 {isEditingTitle ? <>
@@ -377,6 +393,7 @@ function TaskEditorSession({
                   <>
                     <input type="hidden" name="description" value={description} />
                     <DescriptionEditor
+                      key={importRevision}
                       controlsOnFocus
                       value={description}
                       onChange={setDescription}
@@ -385,7 +402,22 @@ function TaskEditorSession({
                   </>
                 )}
               </div>
-              {editing && <TaskComments taskId={editing.id} comments={editing.comments} agentStatus={editing.agentStatus} onAnswerFeedback={onAnswerFeedback} agents={agents} onPostComment={onPostComment} onDeleteComment={onDeleteComment} />}
+              </TabsContent>
+              <TabsContent value="activity" forceMount>
+              {editing ? <TaskComments embedded taskId={editing.id} comments={editing.comments} agentStatus={editing.agentStatus} onAnswerFeedback={onAnswerFeedback} agents={agents} onPostComment={onPostComment} onDeleteComment={onDeleteComment} /> : <p className="text-sm text-muted-foreground">Create the task to start its activity and comments.</p>}
+              </TabsContent>
+              {!editing && <TabsContent value="jira" forceMount>
+                <JiraTicketImport agents={agents} busy={busy} hasDraft={!!title.trim() || !!description.trim()} importTicket={importJiraTicket} onBusyChange={setBusy} onImported={(draft) => {
+                  setTitle(draft.title);
+                  setDescription(draft.description);
+                  setImportRevision((value) => value + 1);
+                  setTitleError(false);
+                  setIsEditingTitle(false);
+                  setAutoRun(false);
+                  setAutoWorkflow(false);
+                  setTab("detail");
+                }} />
+              </TabsContent>}
             </div>
             <DialogFooter variant="workspace">
               {editing && onDelete && (
@@ -424,6 +456,7 @@ function TaskEditorSession({
               </div>
             </DialogFooter>
           </fieldset>
+          </Tabs>
         </form>
       </DialogContent>
       {editing && onDelete && (

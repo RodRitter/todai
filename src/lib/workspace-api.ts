@@ -123,3 +123,7 @@ export const configurationApi = {
   import: (data: import("@/domain/configuration").Configuration, columnMode: "add" | "replace" = "add", conflictMode: "copy" | "overwrite" = "copy") =>
     request<{ agents: number; columns: number; assignments: number }>(`/api/configuration?columns=${columnMode}&conflicts=${conflictMode}`, { method: "POST", body: data }),
 };
+
+export const jiraImportApi = {
+  import: (url: string, agentId: string) => request<import("@/domain/jira-import").JiraTicketDraft>("/api/jira-import", { method: "POST", body: { url, agentId } }),
+};

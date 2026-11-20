@@ -128,6 +128,7 @@ export const PersistedComments: Story = {
     const dialog = within(
       await within(canvasElement.ownerDocument.body).findByRole("dialog"),
     );
+    await userEvent.click(dialog.getByRole("tab", { name: "Activity" }));
     await waitFor(() =>
       expect(dialog.getByText(/Implemented the task board/)).toBeVisible(),
     );
@@ -280,9 +281,11 @@ export const MarkdownContent: Story = {
     await waitFor(() => expect(
       dialog.getByRole("heading", { name: "Requirements" }),
     ).toBeVisible());
+    await userEvent.click(dialog.getByRole("tab", { name: "Activity" }));
     await expect(
       dialog.getByRole("heading", { name: "Handover" }),
     ).toBeVisible();
+    await userEvent.click(dialog.getByRole("tab", { name: "Detail" }));
     await userEvent.click(
       dialog.getByRole("button", { name: "Edit description" }),
     );
@@ -409,5 +412,48 @@ export const InlineTitle: Story = {
     await expect(dialog.getByRole("button", { name: "Edit title" })).toHaveTextContent("Updated title");
     await userEvent.click(dialog.getByRole("button", { name: "Save changes" }));
     await expect(args.onSave).toHaveBeenCalledWith(expect.objectContaining({ title: "Updated title" }));
+  },
+};
+
+const importAgent = { id: "reader", name: "Reader", tool: "codex" as const, model: "gpt-6.1-sol", effort: "low" as const, permissions: "read-only" as const, instructions: "" };
+export const ImportJiraTicket: Story = {
+  args: { open: true, agents: [importAgent], importJiraTicket: fn(async () => ({ title: "PROJ-123: Ticket title", description: "Imported acceptance criteria" })) },
+  play: async ({ canvasElement, args }) => {
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await userEvent.click(dialog.getByRole("tab", { name: "Import JIRA Ticket" }));
+    await userEvent.type(dialog.getByLabelText("Jira ticket URL"), "https://team.atlassian.net/browse/PROJ-123");
+    await userEvent.click(dialog.getByRole("button", { name: "Import ticket details" }));
+    await waitFor(() => expect(dialog.getByRole("tab", { name: "Detail" })).toHaveAttribute("data-state", "active"));
+    await expect(dialog.getByRole("button", { name: "Edit title" })).toHaveTextContent("PROJ-123");
+    await expect(dialog.getByLabelText("Description")).toHaveTextContent("Imported acceptance criteria");
+    await expect(args.onSave).not.toHaveBeenCalled();
+    await userEvent.click(dialog.getByRole("tab", { name: "Activity" }));
+    await expect(dialog.getByText("Create the task to start its activity and comments.")).toBeVisible();
+    await userEvent.click(dialog.getByRole("button", { name: "Create task" }));
+    await expect(args.onSave).toHaveBeenCalledWith(expect.objectContaining({ title: "PROJ-123: Ticket title", description: "Imported acceptance criteria", autoRun: false, autoWorkflow: false }));
+  },
+};
+export const JiraImportFailure: Story = {
+  args: { open: true, agents: [importAgent], importJiraTicket: fn(async () => { throw new Error("Browser connection unavailable"); }) },
+  play: async ({ canvasElement }) => {
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await userEvent.type(dialog.getByLabelText("Title"), "Keep my draft");
+    await userEvent.click(dialog.getByRole("tab", { name: "Import JIRA Ticket" }));
+    await userEvent.type(dialog.getByLabelText("Jira ticket URL"), "https://team.atlassian.net/browse/PROJ-123");
+    await userEvent.click(dialog.getByRole("button", { name: "Import ticket details" }));
+    await expect(await dialog.findByRole("alert")).toHaveTextContent("Browser connection unavailable");
+    await userEvent.click(dialog.getByRole("tab", { name: "Detail" }));
+    await expect(dialog.getByRole("button", { name: "Edit title" })).toHaveTextContent("Keep my draft");
+  },
+};
+export const JiraImportPending: Story = {
+  args: { open: true, agents: [importAgent], importJiraTicket: () => new Promise(() => {}) },
+  play: async ({ canvasElement }) => {
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await userEvent.click(dialog.getByRole("tab", { name: "Import JIRA Ticket" }));
+    await userEvent.type(dialog.getByLabelText("Jira ticket URL"), "https://team.atlassian.net/browse/PROJ-123");
+    await userEvent.click(dialog.getByRole("button", { name: "Import ticket details" }));
+    await expect(dialog.getByRole("button", { name: "Importing…" })).toBeDisabled();
+    await expect(dialog.getByRole("button", { name: "Close" })).toBeDisabled();
   },
 };

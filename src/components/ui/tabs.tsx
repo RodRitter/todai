@@ -6,10 +6,10 @@ import { cn } from "@/lib/utils";
 
 const Tabs = TabsPrimitive.Root;
 
-function TabsList({ className, ...props }: ComponentProps<typeof TabsPrimitive.List>) {
+function TabsList({ className, layout = "default", ...props }: ComponentProps<typeof TabsPrimitive.List> & { layout?: "default" | "wrap" }) {
   return (
     <TabsPrimitive.List
-      className={cn("inline-flex h-10 items-center gap-1 rounded-lg bg-muted p-1 text-muted-foreground", className)}
+      className={cn("inline-flex h-10 items-center gap-1 rounded-lg bg-muted p-1 text-muted-foreground", layout === "wrap" && "h-auto flex-wrap", className)}
       {...props}
     />
   );
