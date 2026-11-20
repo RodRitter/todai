@@ -1,4 +1,4 @@
-import { LoaderCircle } from "lucide-react";
+import { LoaderCircle, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type AgentStatus as Status } from "@/domain/task";
 
@@ -37,10 +37,13 @@ export function AgentStatus({
 }: {
   status: Status;
   className?: string;
-  variant?: "default" | "badge";
+  variant?: "default" | "badge" | "icon";
 }) {
   return (
     <span
+      role={variant === "icon" ? "img" : undefined}
+      aria-label={variant === "icon" ? (status === "Waiting" ? "Feedback required" : `Agent ${status.toLowerCase()}`) : undefined}
+      title={variant === "icon" ? (status === "Waiting" ? "Feedback required" : `Agent ${status.toLowerCase()}`) : undefined}
       className={cn(
         "flex items-center gap-1.5 text-xs",
         agentStatusColors[status],
@@ -53,13 +56,15 @@ export function AgentStatus({
           className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none"
           aria-hidden="true"
         />
+      ) : status === "Waiting" && variant === "icon" ? (
+        <TriangleAlert className="size-3.5 shrink-0" aria-hidden="true" />
       ) : (
         <span
           className="size-2 shrink-0 rounded-full bg-current"
           aria-hidden="true"
         />
       )}
-      {status}
+      {variant !== "icon" && status}
     </span>
   );
 }

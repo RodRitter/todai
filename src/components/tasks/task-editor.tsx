@@ -4,6 +4,7 @@ import type { ArtifactReference } from "@/domain/artifact";
 import { useRef, useState, type FormEvent } from "react";
 import { Bot, Maximize2, Minimize2, LayoutGrid, CircleDot, CirclePlay, CircleStop, Workflow, Zap } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ActivityTabTrigger } from "./activity-tab-trigger";
 import { TaskComments } from "./task-comments";
 import { AgentStatus } from "./agent-status";
 import { DescriptionField } from "./description-field";
@@ -268,7 +269,7 @@ function TaskEditorSession({
             {editing && <div className="px-6 pb-4">
               <TabsList layout="wrap" aria-label="Task sections">
                 <TabsTrigger value="detail" disabled={busy}>Detail</TabsTrigger>
-                <TabsTrigger value="activity" disabled={busy}>Activity</TabsTrigger>
+                <ActivityTabTrigger value="activity" disabled={busy} agentStatus={editing.agentStatus} comments={editing.comments} />
               </TabsList>
             </div>}
             <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">

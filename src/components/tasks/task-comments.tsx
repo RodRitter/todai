@@ -16,6 +16,7 @@ import { PromptSend } from "@/components/ui/prompt-send";
 import { toast } from "@/components/ui/toast";
 import { DescriptionEditor } from "./description-editor";
 import type { AgentProfile } from "@/domain/column-agent";
+import { ActivityTabTrigger } from "./activity-tab-trigger";
 import { groupActivity } from "@/domain/activity";
 import type { AgentStatus, TaskComment } from "@/domain/task";
 
@@ -35,7 +36,7 @@ export function TaskComments({ embedded = false, taskId, comments = [], onAnswer
     <Tabs value={tab} onValueChange={setTab} asChild>
     <section aria-label="Task activity" className={embedded ? "space-y-6" : "mt-8 space-y-6"}>
       <TabsList aria-label="Task activity">
-        <TabsTrigger value="activity">{embedded ? "Comments" : "Activity"}</TabsTrigger>
+        <ActivityTabTrigger value="activity" agentStatus={agentStatus} comments={comments}>{embedded ? "Comments" : "Activity"}</ActivityTabTrigger>
         <TabsTrigger value="artifacts">Artifacts ({artifactCount})</TabsTrigger>
       </TabsList>
       <TabsContent value="activity" forceMount className="space-y-6">
