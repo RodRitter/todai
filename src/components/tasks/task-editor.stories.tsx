@@ -484,6 +484,8 @@ export const ExpandTaskPanel: Story = {
     await waitFor(() => {
       const width = panel.getBoundingClientRect().width;
       expect(width).toBeGreaterThanOrEqual(originalWidth);
+      expect(width).toBeLessThanOrEqual(1024);
+      expect(width).toBeLessThanOrEqual(canvasElement.ownerDocument.documentElement.clientWidth - 32);
       if (canvasElement.ownerDocument.documentElement.clientWidth > 800) expect(width).toBeGreaterThan(originalWidth);
       expect(panel.querySelector("form")!.getBoundingClientRect().width).toBeLessThanOrEqual(1024);
     });

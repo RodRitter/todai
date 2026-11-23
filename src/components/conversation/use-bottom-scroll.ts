@@ -16,7 +16,7 @@ export function useBottomScroll(active: boolean) {
       if (frame !== undefined) cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         frame = undefined;
-        if (!isReplyInputActive(node.ownerDocument)) node.scrollTop = node.scrollHeight;
+        if (!node.dataset.scrollPreserving && !isReplyInputActive(node.ownerDocument)) node.scrollTop = node.scrollHeight;
       });
     };
     const resize = new ResizeObserver(follow);

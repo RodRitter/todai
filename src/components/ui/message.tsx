@@ -27,11 +27,11 @@ function useMessageAttention(attention: boolean) {
   return ref;
 }
 
-function MessageGroup({ className, ...props }: React.ComponentProps<"div">) {
+function MessageGroup({ className, variant = "default", ...props }: React.ComponentProps<"div"> & { variant?: "default" | "reply" }) {
   return (
     <div
       data-slot="message-group"
-      className={cn("flex min-w-0 flex-col gap-2", className)}
+      className={cn("flex min-w-0 flex-col gap-2", variant === "reply" && "relative pb-5 last:pb-0 before:pointer-events-none before:absolute before:left-4 before:top-10 before:bottom-0 before:border-l before:border-border last:before:hidden", className)}
       {...props}
     />
   )
@@ -137,11 +137,11 @@ export function MessageReplies({ className, variant = "default", ...props }: Rea
   )} {...props} />;
 }
 
-export function MessageReply({ attention = false, label, avatarName = label, createdAt, actions, children, className, ...props }: React.ComponentProps<"div"> & { attention?: boolean; label: string; avatarName?: string; createdAt?: string; actions?: React.ReactNode }) {
+export function MessageReply({ attention = false, label, avatarName = label, createdAt, actions, children, className, connected = false, ...props }: React.ComponentProps<"div"> & { attention?: boolean; connected?: boolean; label: string; avatarName?: string; createdAt?: string; actions?: React.ReactNode }) {
   const attentionRef = useMessageAttention(attention);
   return <div ref={attentionRef} data-attention={attention || undefined} data-slot="message-reply" className={cn("group/reply relative flex min-w-0 gap-2 pb-5 last:pb-0 before:absolute before:left-4 before:top-10 before:bottom-1 before:border-l before:border-border last:before:hidden", className)} {...props}>
     <MessageAvatar name={avatarName} />
-    <MessageContent>
+    <MessageContent connected={connected}>
       <MessageHeader><MessageAuthor createdAt={createdAt}>{label}</MessageAuthor>{actions}</MessageHeader>
       {children}
     </MessageContent>
@@ -186,7 +186,7 @@ export function MessageThread({ count, open, onOpenChange, children, className, 
   return <Collapsible open={open} onOpenChange={onOpenChange} asChild>
     <div data-slot="message-replies" data-position={position} className={cn("relative ml-10 min-w-0 self-stretch", className)} {...props}>
       {position === "below" && trigger}
-      <CollapsibleContent forceMount hidden={!open} className={cn(
+      <CollapsibleContent forceMount className={cn(
         "relative before:pointer-events-none before:absolute before:-left-6 before:w-6 before:border-l before:border-border",
         position === "above"
           ? "before:top-4 before:bottom-0 before:rounded-tl-xl before:border-t"

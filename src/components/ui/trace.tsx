@@ -24,7 +24,7 @@ export function TraceCollapsibleTrigger({ children, className, ...props }: React
 }
 
 export function TraceCollapsibleContent({ className, keepMounted = false, ...props }: React.ComponentProps<typeof CollapsibleContent> & { keepMounted?: boolean }) {
-  return <CollapsibleContent forceMount={keepMounted ? true : undefined} className={cn("min-w-0 space-y-3 pl-5 data-[state=closed]:hidden", className)} {...props} />;
+  return <CollapsibleContent forceMount={keepMounted ? true : undefined} className={cn("min-w-0 space-y-3 pl-5", className)} {...props} />;
 }
 
 const traceLineVariants = cva("relative flex min-w-0 flex-wrap items-start gap-2 text-sm", {

@@ -1,5 +1,7 @@
 "use client";
 
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { CreateWorkspace } from "./create-workspace";
@@ -17,10 +19,10 @@ export function GetStarted() {
         </div>
         <CreateWorkspace firstRun onBusyChange={setBusy} />
         <fieldset disabled={busy}>
-          <details className="text-sm">
-            <summary className="cursor-pointer text-muted-foreground">Restore an archived workspace</summary>
-            <div className="pt-4"><WorkspaceArchive allowArchive={false} /></div>
-          </details>
+          <Collapsible>
+            <CollapsibleTrigger asChild><Button type="button" variant="ghost-muted" size="sm">Restore an archived workspace</Button></CollapsibleTrigger>
+            <CollapsibleContent className="pt-4"><WorkspaceArchive allowArchive={false} /></CollapsibleContent>
+          </Collapsible>
         </fieldset>
       </DialogContent>
     </Dialog>

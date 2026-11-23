@@ -777,8 +777,9 @@ export class TaskStore {
           id: commentId,
           taskId: run.taskId,
           runId,
-          parentCommentId: run.kind === "reply" && status !== "Waiting"
-            ? this.list().find((task) => task.id === run.taskId)?.comments?.find((comment) => comment.id === run.commentId)?.parentCommentId
+          parentCommentId: run.kind === "reply"
+            ? status === "Waiting" ? run.commentId
+              : this.list().find((task) => task.id === run.taskId)?.comments?.find((comment) => comment.id === run.commentId)?.parentCommentId
             : undefined,
           body: summary,
           createdAt: finishedAt,
@@ -823,7 +824,7 @@ export class TaskStore {
       if (!task || task.agentStatus !== "Waiting" || !request || !run)
         throw new FeedbackValidationError("This feedback request is no longer pending. Reload the task.");
       this.db.prepare("UPDATE comments SET feedbackStatus = 'answered' WHERE comments.workspaceId = workspace_id() AND id = ?").run(commentId);
-      this.addComment({ id: randomUUID(), taskId, body: body.trim(), createdAt: new Date().toISOString(), authorName: "Human", runId: run.id });
+      this.addComment({ id: randomUUID(), taskId, body: body.trim(), createdAt: new Date().toISOString(), authorName: "Human", runId: run.id, parentCommentId: request.id });
       this.db.prepare("INSERT INTO runs (workspaceId, workspacePath, id, taskId, column, profile, status, createdAt, kind, commentId, replyPlan) VALUES (workspace_id(), (SELECT path FROM workspaces WHERE id = workspace_id()), ?, ?, ?, ?, 'Queued', ?, ?, ?, ?)")
         .run(randomUUID(), taskId, task.status, JSON.stringify(run.profile), run.createdAt, run.kind ?? null, run.commentId ?? null, run.replyPlan ? JSON.stringify(run.replyPlan) : null);
       this.db.prepare("UPDATE tasks SET agentStatus = 'Queued' WHERE tasks.workspaceId = workspace_id() AND id = ?").run(taskId);

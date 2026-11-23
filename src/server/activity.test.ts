@@ -29,3 +29,11 @@ test("explicit replies stay beneath their parent in chronological order, and orp
   assert.deepEqual(groupActivity([second, parent, first]), [{ message: parent, replies: [first, second] }]);
   assert.deepEqual(groupActivity([first]), [{ message: first, replies: [] }]);
 });
+
+
+test("nested feedback and its answer remain in the original thread", () => {
+  const root = { ...question, id: "root", runId: undefined, feedbackStatus: undefined };
+  const nested = { ...question, parentCommentId: root.id };
+  assert.deepEqual(groupActivity([root, nested, answer]), [{ message: root, replies: [nested, answer] }]);
+  assert.deepEqual(groupActivity([nested, answer]), [{ message: nested, replies: [answer] }]);
+});

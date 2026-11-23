@@ -592,3 +592,144 @@ export const ReplyInputScrollsIntoView: Story = {
     await expect(input).toHaveFocus();
   },
 };
+
+
+const threadRoot: TaskComment = { id: "thread-root", taskId: "task", authorName: "Reviewer", body: "Review this change.", createdAt: "2026-11-20T10:00:00Z" };
+function NestedFeedbackExample() {
+  const [comments, setComments] = useState<TaskComment[]>([threadRoot,
+    { ...threadRoot, id: "triggering-reply", parentCommentId: threadRoot.id, authorName: "Human", body: "Please make the change." },
+    { ...request, parentCommentId: "triggering-reply" }]);
+  return <TaskComments comments={comments} onAnswerFeedback={async (id, body) => {
+    setComments((items) => [...items.map((item) => item.id === id ? { ...item, feedbackStatus: "answered" as const } : item),
+      { id: "nested-answer", taskId: "task", parentCommentId: id, runId: "run", authorName: "Human", body, createdAt: "2026-11-20T11:00:00Z" }]);
+  }} />;
+}
+export const NestedFeedback: Story = {
+  render: () => <NestedFeedbackExample />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const list = canvas.getByRole("list", { name: "Activity, oldest first" });
+    await expect(list.children).toHaveLength(1);
+    const requestNode = canvas.getByRole("group", { name: "Feedback request" });
+    await expect(requestNode.closest('[data-slot="message-reply"]')).not.toBeNull();
+    await expect(requestNode.closest('[data-slot="message-replies"]')).toHaveAttribute("id", "thread-triggering-reply");
+    await expect(getComputedStyle(requestNode).borderTopColor).toBe("rgba(0, 0, 0, 0)");
+    const mainContent = list.querySelector('[data-slot="message-content"]')!;
+    await expect(getComputedStyle(mainContent, "::before").borderLeftWidth).toBe("1px");
+    await userEvent.type(canvas.getByLabelText("Your feedback"), "Approved.");
+    await userEvent.click(canvas.getByRole("button", { name: "Submit feedback" }));
+    await expect(canvas.getByText("Your answer")).toBeVisible();
+    await expect(canvas.getByText("Approved.")).toBeVisible();
+    await expect(list.children).toHaveLength(1);
+    await expect(canvas.getAllByLabelText("Reply thread")).toHaveLength(3);
+  },
+};
+export const NarrowNestedFeedback: Story = { ...NestedFeedback, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
+export const DarkNestedFeedback: Story = { ...NestedFeedback, globals: { theme: "dark" } };
+export const LongReplyPreview: Story = {
+  args: { comments: [threadRoot,
+    { ...threadRoot, id: "short-reply", parentCommentId: threadRoot.id, body: Array.from({ length: 10 }, (_, i) => `Short line ${i + 1}`).join("  \n") },
+    { ...threadRoot, id: "long-reply", parentCommentId: threadRoot.id, body: Array.from({ length: 15 }, (_, i) => `Long line ${i + 1}`).join("  \n") },
+  ] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggle = await canvas.findByRole("button", { name: "Show full reply" });
+    await expect(canvas.getAllByRole("button", { name: "Show full reply" })).toHaveLength(1);
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    const preview = canvasElement.ownerDocument.getElementById(toggle.getAttribute("aria-controls")!)!;
+    const limit = parseFloat(getComputedStyle(preview).lineHeight) * 10;
+    await expect(getComputedStyle(preview).maskImage).not.toBe("none");
+    await expect(preview.getBoundingClientRect().height).toBeLessThanOrEqual(limit + 1);
+    await userEvent.click(toggle);
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(getComputedStyle(preview).maskImage).toBe("none");
+    await expect(preview.getBoundingClientRect().height).toBeGreaterThan(limit);
+    await userEvent.click(canvas.getByRole("button", { name: "Collapse 2 replies" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Expand 2 replies" }));
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await userEvent.click(toggle);
+    await waitFor(() => expect(preview.getBoundingClientRect().height).toBeLessThanOrEqual(limit + 1));
+    await expect(canvas.getByRole("button", { name: "Show full reply" })).toHaveAttribute("aria-expanded", "false");
+  },
+};
+
+
+export const LongRootPreview: Story = {
+  args: { comments: [{ ...threadRoot, body: Array.from({ length: 15 }, (_, i) => `Root line ${i + 1}`).join("  \n") }] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggle = await canvas.findByRole("button", { name: "Show full message" });
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    const preview = canvasElement.ownerDocument.getElementById(toggle.getAttribute("aria-controls")!)!;
+    const limit = parseFloat(getComputedStyle(preview).lineHeight) * 10;
+    await expect(getComputedStyle(preview).maskImage).not.toBe("none");
+    await expect(preview.getBoundingClientRect().height).toBeLessThanOrEqual(limit + 1);
+    await userEvent.click(toggle);
+    await waitFor(() => expect(preview.getBoundingClientRect().height).toBeGreaterThan(limit));
+    await expect(getComputedStyle(preview).maskImage).toBe("none");
+    await userEvent.click(canvas.getByRole("button", { name: "Show less" }));
+    await waitFor(() => expect(preview.getBoundingClientRect().height).toBeLessThanOrEqual(limit + 1));
+  },
+};
+export const LongRootFeedbackPreview: Story = {
+  ...LongRootPreview,
+  args: { comments: [{ ...request, body: LongRootPreview.args!.comments![0].body }], onAnswerFeedback: fn() },
+  play: async (context) => {
+    await LongRootPreview.play!(context);
+    const canvas = within(context.canvasElement);
+    await expect(canvas.getByLabelText("Your feedback")).toBeVisible();
+    await userEvent.type(canvas.getByLabelText("Your feedback"), "Proceed.");
+    await expect(canvas.getByRole("button", { name: "Submit feedback" })).toBeEnabled();
+  },
+};
+
+
+export const StableReplyScroll: Story = {
+  args: { embedded: true, comments: [
+    ...Array.from({ length: 20 }, (_, index) => ({ ...threadRoot, id: `scroll-${index}`, body: index === 7 ? Array.from({ length: 20 }, (_, i) => `Root line ${i}`).join("  \n") : `Message ${index}`, createdAt: `2026-11-20T10:${String(index).padStart(2, "0")}:00Z` })),
+    { ...threadRoot, id: "scroll-reply", parentCommentId: "scroll-8", body: Array.from({ length: 20 }, (_, i) => `Reply line ${i}`).join("  \n"), createdAt: "2026-11-20T10:08:01Z" },
+  ] },
+  play: async ({ canvasElement }) => {
+    const viewport = canvasElement.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')!;
+    await waitFor(() => expect(viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop).toBeLessThan(2));
+    const target = canvasElement.querySelector<HTMLElement>("#comment-scroll-8")!;
+    viewport.scrollTop += target.getBoundingClientRect().top - viewport.getBoundingClientRect().top - 40;
+    const thread = within(canvasElement.querySelector<HTMLElement>("#thread-scroll-8")!);
+    for (const name of ["Collapse 1 reply", "Expand 1 reply", "Show full reply", "Show less"]) {
+      const top = viewport.scrollTop;
+      await userEvent.click(thread.getByRole("button", { name }));
+      await waitFor(() => {
+        const running = viewport.getAnimations({ subtree: true }).filter((animation) =>
+          animation instanceof CSSTransition ? animation.transitionProperty === "height" :
+          animation instanceof CSSAnimation && animation.animationName.startsWith("collapse-"));
+        expect(running.some((animation) => animation.playState === "running")).toBe(false);
+      });
+      await expect(Math.abs(viewport.scrollTop - top)).toBeLessThan(2);
+    }
+  },
+  decorators: [(Story) => <div className="flex h-[600px] flex-col"><Story /></div>],
+};
+
+
+export const ReplyClosesWithoutFlicker: Story = {
+  render: () => <ThreadExample />,
+  play: async ({ canvasElement }) => {
+    const trigger = within(canvasElement).getByRole("button", { name: "Collapse 1 reply" });
+    const content = canvasElement.ownerDocument.getElementById(trigger.getAttribute("aria-controls")!)!;
+    const heights: number[] = [];
+    const started = performance.now();
+    trigger.click();
+    await new Promise<void>((resolve) => {
+      function sample() {
+        heights.push(content.getBoundingClientRect().height);
+        if (performance.now() - started < 400) requestAnimationFrame(sample);
+        else resolve();
+      }
+      requestAnimationFrame(sample);
+    });
+    for (let index = 1; index < heights.length; index++) {
+      await expect(heights[index]).toBeLessThanOrEqual(heights[index - 1] + 1);
+    }
+    await expect(heights.at(-1)).toBe(0);
+  },
+};

@@ -75,7 +75,9 @@ export function TaskComments({ taskId, active = true, onChat, embedded = false, 
   );
 }
 
-function ActivityMessage({ agents, attentionId, onChat, comment, replies = [], agentStatus, onDeleteComment, onAnswerFeedback, onPostComment }: {
+function ActivityMessage({ agents, attentionId, onChat, comment, replies = [], agentStatus, onDeleteComment, onAnswerFeedback, onPostComment, nested = false, label }: {
+  nested?: boolean;
+  label?: string;
   agents: AgentProfile[];
   onChat?: (comment: TaskComment) => void;
   attentionId?: string;
@@ -96,23 +98,26 @@ function ActivityMessage({ agents, attentionId, onChat, comment, replies = [], a
   const replyButton = useRef<HTMLButtonElement>(null);
   const replyInput = useRef<HTMLDivElement>(null);
   const disabled = agentStatus === "Running" || agentStatus === "Queued";
-  const renderReply = (reply: TaskComment) => <MessageReply attention={attentionId === reply.id} key={reply.id} id={`comment-${reply.id}`} avatarName={reply.authorName || "Agent"} label={comment.feedbackStatus && reply.runId === comment.runId && reply.authorName === "Human" ? "Your answer" : reply.authorName || "Agent"}
-          createdAt={reply.createdAt}
-          actions={<CommentActions comment={reply} onDelete={onDeleteComment} disabled={disabled} />}>
-          <ConversationMessageBody message={reply} />
-        </MessageReply>;
+  const hasThread = replies.length > 0 || replying;
+  const feedback = comment.feedbackStatus === "pending" ? <FeedbackInput commentId={comment.id} onAnswer={onAnswerFeedback} /> : undefined;
+  const actions = <>
+    {onPostComment && <Button ref={replyButton} type="button" size="xs" variant="ghost-muted" disabled={disabled}
+      aria-expanded={threadOpen && hasThread} aria-controls={`thread-${comment.id}`} onClick={() => { setThreadOpen(true); setReplying(true); requestAnimationFrame(() => replyInput.current?.querySelector<HTMLElement>('[role="textbox"]')?.focus()); }}><Reply aria-hidden="true" />Reply</Button>}
+    {onChat && <Button type="button" size="xs" variant="ghost-muted" onClick={() => onChat(comment)}><MessageCircle aria-hidden="true" />Chat</Button>}
+    <CommentActions comment={comment} replyCount={replies.length} onDelete={onDeleteComment} disabled={disabled} />
+  </>;
   return (
-    <MessageGroup>
-      <ConversationMessage message={comment} variant="comment" attention={attentionId === comment.id}
-        actions={<>
-            {onPostComment && <Button ref={replyButton} type="button" size="xs" variant="ghost-muted" disabled={disabled}
-              aria-expanded={threadOpen && (replies.length > 0 || replying)} aria-controls={`thread-${comment.id}`} onClick={() => { setThreadOpen(true); setReplying(true); requestAnimationFrame(() => replyInput.current?.querySelector<HTMLElement>('[role="textbox"]')?.focus()); }}><Reply aria-hidden="true" />Reply</Button>}
-            {onChat && <Button type="button" size="xs" variant="ghost-muted" onClick={() => onChat(comment)}><MessageCircle aria-hidden="true" />Chat</Button>}
-            <CommentActions comment={comment} replyCount={replies.length} onDelete={onDeleteComment} disabled={disabled} />
-        </>}
-        feedback={comment.feedbackStatus === "pending" ? <FeedbackInput commentId={comment.id} onAnswer={onAnswerFeedback} /> : undefined} />
+    <MessageGroup variant={nested ? "reply" : "default"}>
+      {nested ? <MessageReply attention={attentionId === comment.id} id={`comment-${comment.id}`} avatarName={comment.authorName || "Agent"}
+        label={label || comment.authorName || "Agent"} createdAt={comment.createdAt} actions={actions} connected={hasThread}>
+        <ConversationMessageBody message={comment} feedback={feedback} preview="reply" />
+      </MessageReply> : <ConversationMessage message={comment} variant="comment" attention={attentionId === comment.id}
+        connected={hasThread} actions={actions} feedback={feedback} />}
       {(replies.length > 0 || replying) && <MessageThread position="below" id={`thread-${comment.id}`} aria-label="Reply thread" count={replies.length} open={threadOpen} onOpenChange={setThreadOpen}>
-        {replies.map(renderReply)}
+        {groupActivity(replies).toReversed().map(({ message, replies: children }) => <ActivityMessage key={message.id} nested
+          agents={agents} attentionId={attentionId} onChat={onChat} comment={message} replies={children} agentStatus={agentStatus}
+          label={comment.feedbackStatus && message.runId === comment.runId && message.authorName === "Human" ? "Your answer" : undefined}
+          onDeleteComment={onDeleteComment} onAnswerFeedback={onAnswerFeedback} />)}
         {onPostComment && <MessageReplyComposer ref={replyInput}>
           <CommentInput variant="reply" id={`reply-${comment.id}`} agents={agents} agentStatus={agentStatus} autoFocus={replying}
             onPost={(body, artifacts) => onPostComment(body, artifacts, comment.id)}

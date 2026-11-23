@@ -1,6 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { TaskComment } from "../domain/task.ts";
-import { groupActivity } from "../domain/activity.ts";
 
 type MessageScope = { workspaceId: string; taskId: string } & (
   { kind: "comments" } | { kind: "chat"; sessionId: string }
@@ -8,9 +7,21 @@ type MessageScope = { workspaceId: string; taskId: string } & (
 
 export function conversationDeletion(messages: TaskComment[], messageId?: string) {
   if (messageId === undefined) return messages;
-  const selected = messages.filter((message) => message.id === messageId);
-  const replies = groupActivity(messages).find(({ message }) => message.id === messageId)?.replies ?? [];
-  return [...selected, ...replies];
+  const ids = new Set([messageId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const feedbackRuns = new Set(messages.filter((message) => ids.has(message.id) && message.feedbackStatus && message.runId).map((message) => message.runId));
+    for (const message of messages) {
+      if (ids.has(message.id)) continue;
+      if ((message.parentCommentId && ids.has(message.parentCommentId)) ||
+          (!message.parentCommentId && message.authorName === "Human" && !message.feedbackStatus && message.runId && feedbackRuns.has(message.runId))) {
+        ids.add(message.id);
+        changed = true;
+      }
+    }
+  }
+  return messages.filter((message) => ids.has(message.id));
 }
 
 // Call inside the owner's transaction, after its execution and ownership checks.

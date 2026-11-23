@@ -88,7 +88,7 @@ function DialogContent({
           "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-200 motion-reduce:animate-none",
           size === "wide" && "sm:max-w-2xl",
           size === "large" && "sm:max-w-3xl",
-          size === "expanded" && "sm:max-w-[calc(100%-2rem)]",
+          size === "expanded" && "sm:max-w-[min(64rem,calc(100%-2rem))]",
           layout === "workspace" && "grid h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 px-4 [&>[data-slot=dialog-header]]:mt-0",
           layout === "preview" && "px-4 [&>[data-slot=dialog-header]]:mt-0 [&>[data-slot=dialog-header]]:shrink-0",
           layout === "prompt" && "rounded-xl",

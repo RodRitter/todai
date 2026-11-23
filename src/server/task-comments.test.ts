@@ -306,3 +306,27 @@ test("replies to human comments do not invoke the agent from a feedback run", as
     assert.equal(f.store.history().length, count);
   } finally { f.cleanup(); }
 });
+
+
+test("feedback requested from a reply stays nested and resumes after its answer", async () => {
+  let calls = 0;
+  const f = fixture(async () => ++calls === 1
+    ? '{"type":"feedback_request","question":"Approve the change?","recommendation":"Proceed."}'
+    : "Change complete.");
+  try {
+    f.store.addComment({ id: "root", taskId: "task", authorName: "Reviewer", body: "Review result", createdAt: "2026-11-20T10:00:00Z" });
+    const posted = f.store.postComment("task", "Please make the change", [], "root");
+    const triggeringReply = posted.comments!.find((comment) => comment.body === "Please make the change")!;
+    await f.service.drain();
+    const feedback = f.store.list()[0].comments!.find((comment) => comment.feedbackStatus === "pending")!;
+    assert.equal(feedback.parentCommentId, triggeringReply.id);
+    f.store.answerFeedback("task", feedback.id, "Approved");
+    const answer = f.store.list()[0].comments!.find((comment) => comment.body === "Approved")!;
+    assert.equal(answer.parentCommentId, feedback.id);
+    await f.service.drain();
+    assert.equal(f.store.list()[0].agentStatus, "Complete");
+    f.store.deleteComment("task", feedback.id);
+    assert.ok(!f.store.list()[0].comments!.some((comment) => comment.id === answer.id));
+    assert.ok(f.store.list()[0].comments!.some((comment) => comment.id === "root"));
+  } finally { f.cleanup(); }
+});
