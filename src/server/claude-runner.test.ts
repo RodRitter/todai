@@ -216,6 +216,13 @@ process.stdin.on('end', () => {
     assert.equal(args[args.indexOf("--tools") + 1], "");
     assert.ok(args.includes("--strict-mcp-config"));
     assert.ok(args.includes('{"mcpServers":{}}'));
+
+    await createClaudeRunner(executable)({ ...input, privateChat: { messages: [], toolsEnabled: true }, artifacts: { url: "http://127.0.0.1:12345/mcp", token: "chat-token", context: [] } });
+    const enabled = JSON.parse(readFileSync(join(directory, "received.json"), "utf8"));
+    assert.match(enabled.prompt, /standard agent tools/);
+    assert.ok(!enabled.args.includes("--tools"));
+    assert.ok(!enabled.args.includes("--strict-mcp-config"));
+    assert.ok(enabled.args.includes("mcp__todai_artifacts"));
     assert.match(prompt, /saved only in this chat/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });

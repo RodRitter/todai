@@ -1,3 +1,7 @@
+import { DatabaseSync } from "node:sqlite";
+import { ChatStore } from "./chat-store.ts";
+import { sendChat } from "./chat-service.ts";
+import { agentPrompt } from "./agent-prompt.ts";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -214,4 +218,42 @@ test("stopping during artifact server startup prevents the executor from launchi
     assert.equal(f.store.history()[0].status, "Stopped");
     assert.deepEqual(f.store.list()[0].comments, []);
   } finally { f.close(); }
+});
+
+test("generic chat can publish, read, revise and link artifacts without task comments", async () => {
+  const f = fixture();
+  const chats = new ChatStore(f.store);
+  try {
+    let endpoint!: { url: string; token: string };
+    const before = f.store.list()[0].comments;
+    const result = await sendChat(f.store, chats, "task", "Create a report artifact", async (request) => {
+      assert.equal(request.privateChat?.toolsEnabled, true);
+      assert.equal(request.run.profile.instructions, "");
+      assert.ok(request.artifacts);
+      endpoint = request.artifacts;
+      assert.match(agentPrompt(request), /todai_artifacts/);
+      assert.doesNotMatch(agentPrompt(request), /Do not edit files|Do not.*publish artifacts|discussion only/);
+      const created = await rpc(endpoint, "publish_artifact", { title: "Chat report", type: "markdown", content: "Report content" });
+      assert.equal(created.taskId, "task");
+      assert.equal(created.creator, "Agent");
+      assert.equal((await rpc(endpoint, "read_artifact", { artifactId: created.id })).content, "Report content");
+      assert.ok((await rpc(endpoint, "search_artifacts")).some((item: { id: string }) => item.id === created.id));
+      const revised = await rpc(endpoint, "publish_artifact", { artifactId: created.id, title: "Chat report", type: "markdown", content: "Revised report" });
+      await rpc(endpoint, "nominate_artifact", { artifactId: created.id, revisionId: revised.revisionId });
+      assert.equal(f.library.forTask("task").length, 1);
+      return `Saved [Chat report](#artifact/${created.id}/${revised.revisionId}).`;
+    });
+    assert.equal(result.error, null);
+    assert.equal(result.messages.length, 2);
+    assert.deepEqual(f.store.list()[0].comments, before);
+    await assert.rejects(fetch(endpoint.url));
+    await sendChat(f.store, chats, "task", "Read the report", async ({ artifacts }) => {
+      assert.equal(artifacts?.context.length, 1);
+      const db = new DatabaseSync(f.path);
+      db.prepare("UPDATE chat_sessions SET lease = NULL WHERE id = ?").run(result.id);
+      db.close();
+      await assert.rejects(rpc(artifacts!, "read_artifact", { artifactId: f.library.list()[0].id }), /expired/);
+      return "Expired";
+    });
+  } finally { chats.close(); f.close(); }
 });

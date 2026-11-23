@@ -19,7 +19,7 @@ const meta = {
       if (context.parameters.loading) return new Promise((_, reject) => options?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError"))));
       if (context.parameters.failure) return Response.json({ error: "Stored content is unavailable." }, { status: 400 });
       if (context.parameters.image) return new Response(Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jZ1kAAAAASUVORK5CYII="), (char) => char.charCodeAt(0)), { headers: { "Content-Type": "image/png" } });
-      return new Response(context.parameters.document ? "# A quieter workspace\n\nA proposal for making shared knowledge easier to find, read, and reuse.\n\n## The goal\n\nGive every artifact a clear place in the workspace. The library should be easy to scan, while opening a document should feel like settling into a focused reading space.\n\n> Good presentation gives the content room to speak.\n\n## What changes\n\n1. Keep the library compact and searchable.\n2. Present written work as a document.\n3. Keep revisions and downloads within reach.\n\n### Delivery checklist\n\n- [x] Compact artifact table\n- [x] Dedicated document preview\n- [ ] Share with the team\n\n| Area | Approach |\n| --- | --- |\n| Library | Essential information only |\n| Preview | Content first, details on demand |\n\n---\n\nUse `artifact.revisionId` to preserve an exact reference.\n\n```ts\nconst reference = {\n  artifactId: artifact.id,\n  revisionId: artifact.revisionId,\n};\n```" : context.parameters.empty ? "" : context.parameters.long ? "A long line of evidence. ".repeat(800) : "# Original evidence\n\nThis is revision one.\n\n<script>alert('unsafe')</script>\n\n[Unsafe link](javascript:alert(1))");
+      return new Response(context.parameters.scrollContent ?? (context.parameters.document ? "# A quieter workspace\n\nA proposal for making shared knowledge easier to find, read, and reuse.\n\n## The goal\n\nGive every artifact a clear place in the workspace. The library should be easy to scan, while opening a document should feel like settling into a focused reading space.\n\n> Good presentation gives the content room to speak.\n\n## What changes\n\n1. Keep the library compact and searchable.\n2. Present written work as a document.\n3. Keep revisions and downloads within reach.\n\n### Delivery checklist\n\n- [x] Compact artifact table\n- [x] Dedicated document preview\n- [ ] Share with the team\n\n| Area | Approach |\n| --- | --- |\n| Library | Essential information only |\n| Preview | Content first, details on demand |\n\n---\n\nUse `artifact.revisionId` to preserve an exact reference.\n\n```ts\nconst reference = {\n  artifactId: artifact.id,\n  revisionId: artifact.revisionId,\n};\n```" : context.parameters.empty ? "" : context.parameters.long ? "A long line of evidence. ".repeat(800) : "# Original evidence\n\nThis is revision one.\n\n<script>alert('unsafe')</script>\n\n[Unsafe link](javascript:alert(1))"));
     };
     return () => { globalThis.fetch = original; };
   },
@@ -92,4 +92,26 @@ export const SubtleDocumentHeader: Story = {
     await expect(within(header).queryByRole("textbox")).not.toBeInTheDocument();
     await expect(await within(dialog).findByRole("heading", { name: "A quieter workspace", level: 1 })).toBeVisible();
   },
+};
+
+const checkNestedScroll: Story["play"] = async ({ canvasElement }) => {
+  await userEvent.click(within(canvasElement).getByRole("button"));
+  const dialog = await within(document.body).findByRole("dialog");
+  await waitFor(() => expect(dialog.querySelectorAll('[data-slot="scroll-area-viewport"]')).toHaveLength(2));
+  const [outer, inner] = dialog.querySelectorAll<HTMLElement>('[data-slot="scroll-area-viewport"]');
+  await expect(outer.scrollHeight).toBeGreaterThan(outer.clientHeight);
+  await expect(getComputedStyle(inner).overscrollBehaviorY).toBe("auto");
+};
+const scrollTail = "\n\nMore document content.\n\n".repeat(30);
+export const ScrollTable: Story = {
+  play: checkNestedScroll,
+  parameters: { scrollContent: "| Check | Result |\n| --- | --- |\n| " + "Wide_column_".repeat(30) + " | Passed |" + scrollTail },
+};
+export const ScrollShortCode: Story = {
+  play: checkNestedScroll,
+  parameters: { scrollContent: "```ts\nconst ready = true;\n```" + scrollTail },
+};
+export const ScrollLongCode: Story = {
+  play: checkNestedScroll,
+  parameters: { scrollContent: "```text\n" + Array.from({ length: 50 }, (_, i) => `Line ${i}: ${"Output ".repeat(40)}`).join("\n") + "\n```" + scrollTail },
 };

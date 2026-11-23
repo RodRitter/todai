@@ -2,7 +2,7 @@ import { artifactPublicationPolicy } from "./artifact-policy.ts";
 import { randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { ArtifactStore } from "./artifact-store.ts";
+import { ArtifactStore, type ChatArtifactScope } from "./artifact-store.ts";
 import type { AgentRun, TaskStore } from "./task-store.ts";
 import { MAX_ARTIFACT_BYTES, type ArtifactInput, type ArtifactReference, type TaskArtifact } from "../domain/artifact.ts";
 
@@ -18,14 +18,14 @@ const tools: { name: string; description: string; properties: Record<string, { t
 ];
 
 // A short-lived, stateless Streamable HTTP MCP server. No caller controls ownership.
-export async function openRunArtifacts(store: TaskStore, run: AgentRun, signal: AbortSignal) {
-  const library = new ArtifactStore(store.databasePath, run.workspaceId, run.id);
+export async function openRunArtifacts(store: TaskStore, run: AgentRun, signal: AbortSignal, chat?: ChatArtifactScope) {
+  const library = new ArtifactStore(store.databasePath, run.workspaceId, chat ? undefined : run.id, chat);
   const pending: ArtifactReference[] = [];
   const token = randomBytes(32).toString("hex");
   let closed = false;
   function assertActive() {
     const current = store.history(run.taskId).find((item) => item.id === run.id);
-    if (closed || signal.aborted || current?.status !== "Running" || current.stopRequested || current.interruptionColumn)
+    if (closed || signal.aborted || (!chat && (current?.status !== "Running" || current.stopRequested || current.interruptionColumn)))
       throw new Error("Artifact access has expired.");
   }
   function call(name: string, args: Record<string, unknown>) {
@@ -58,6 +58,7 @@ export async function openRunArtifacts(store: TaskStore, run: AgentRun, signal: 
       case "unlink_artifact": library.unlinkTask(run.taskId, artifactId); return { linked: false };
       case "nominate_artifact": {
         library.read(artifactId, revisionId);
+        if (chat) { library.linkTask(run.taskId, artifactId); return { nominated: true, linked: true }; }
         if (!pending.some((ref) => ref.artifactId === artifactId && ref.revisionId === revisionId)) pending.push({ artifactId, revisionId: revisionId! });
         return { nominated: true };
       }

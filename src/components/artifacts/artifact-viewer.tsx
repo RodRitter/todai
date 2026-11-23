@@ -93,7 +93,7 @@ export function ArtifactViewer({ artifact, onClose }: { artifact: Artifact; onCl
             a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>,
             img: ({ alt }) => <span>[Image: {alt || "external image"}]</span>,
             pre: ({ children }) => <ScrollArea orientation="both" className="max-h-96" variant="code"><pre>{children}</pre></ScrollArea>,
-            table: ({ children }) => <ScrollArea orientation="horizontal" className="my-6"><table>{children}</table></ScrollArea>,
+            table: ({ children }) => <ScrollArea orientation="horizontal" variant="table" className="my-6"><table>{children}</table></ScrollArea>,
           }}>{content.text || "This revision is empty."}</ReactMarkdown></article>}
           {/* Uploaded images use an inert image context, never an embedded document. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}

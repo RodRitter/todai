@@ -96,6 +96,7 @@ function TaskEditorSession({
   const [tab, setTab] = useState<string>(initialTab);
   const [chatDraft, setChatDraft] = useState("");
   const [chatDraftVersion, setChatDraftVersion] = useState(0);
+  const [chatCount, setChatCount] = useState(0);
   const [artifactCount, setArtifactCount] = useState(0);
   const draftId = useRef<string | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(!editing);
@@ -345,7 +346,7 @@ function TaskEditorSession({
                 <TabsTrigger value="detail" disabled={busy}>Detail</TabsTrigger>
                 <ActivityTabTrigger value="activity" disabled={busy} agentStatus={editing.agentStatus} comments={editing.comments} />
                 <TabsTrigger value="artifacts" disabled={busy} aria-label="Artifacts" aria-description={`${artifactCount} artifacts`}>Artifacts<TabsCount count={artifactCount} /></TabsTrigger>
-                <TabsTrigger value="chat" disabled={busy}>Chat</TabsTrigger>
+                <TabsTrigger value="chat" disabled={busy} aria-label="Chat" aria-description={`${chatCount} messages`}>Chat<TabsCount count={chatCount} /></TabsTrigger>
               </TabsList>
               {editing && ((onRun && !pendingRun) || (pendingRun && onStop)) && (
               <div className="ml-auto flex min-w-0 max-w-full items-center gap-2">
@@ -552,7 +553,7 @@ function TaskEditorSession({
                   setTab("chat");
                 }} taskId={editing.id} embedded comments={editing.comments} agentStatus={editing.agentStatus} onAnswerFeedback={onAnswerFeedback} agents={agents} onPostComment={onPostComment} onDeleteComment={onDeleteComment} />
               </TabsContent>}
-              {editing && <TabsContent value="chat" forceMount className="flex min-h-0 flex-1 flex-col px-6 pt-1 pb-6"><TaskChat taskId={editing.id} active={tab === "chat"} agents={agents} body={chatDraft} onBodyChange={setChatDraft} draftVersion={chatDraftVersion} onNavigateComment={navigateComment} /></TabsContent>}
+              {editing && <TabsContent value="chat" forceMount className="flex min-h-0 flex-1 flex-col px-6 pt-1 pb-6"><TaskChat key={editing.id} taskId={editing.id} onCountChange={setChatCount} active={tab === "chat"} agents={agents} body={chatDraft} onBodyChange={setChatDraft} draftVersion={chatDraftVersion} onNavigateComment={navigateComment} /></TabsContent>}
             {!editing && <DialogFooter variant="task">
               <div className="flex items-center gap-1.5">
                 <DialogClose asChild>

@@ -61,7 +61,7 @@ export function ChatConversation({ session, busy, onSend, onDelete, onClear, age
     finally { submitting.current = false; setPending(null); }
   }
   return <section ref={region} aria-label="Task chat" className="flex min-h-0 flex-1 flex-col">
-    <ScrollArea fade="vertical" className="min-h-0 flex-1" viewportProps={{ ref: viewport }}><div ref={content} className="space-y-6 pb-4">
+    <ScrollArea fade="vertical" className="min-h-0 flex-1" viewportProps={{ ref: viewport }}><div ref={content} className="space-y-6 pr-4 pb-4">
     {messages.length ? <ol aria-label="Chat messages, oldest first" className="space-y-6">
       {messages.map((message) => {
         const deleteButton = <Button type="button" variant="ghost-destructive" size="icon-xs" reveal="hover" aria-label="Delete chat message" disabled={locked}
@@ -93,8 +93,8 @@ export function ChatConversation({ session, busy, onSend, onDelete, onClear, age
   </section>;
 }
 
-export function TaskChat({ taskId, active, onNavigateComment, ...composer }: {
-  taskId: string; active: boolean; onNavigateComment: (commentId: string) => void;
+export function TaskChat({ taskId, active, onNavigateComment, onCountChange, ...composer }: {
+  taskId: string; active: boolean; onNavigateComment: (commentId: string) => void; onCountChange?: (count: number) => void;
   agents?: AgentProfile[]; body: string; onBodyChange: (body: string) => void; draftVersion: number;
 }) {
   const [session, setSession] = useState<ChatSession | null>(null);
@@ -105,7 +105,7 @@ export function TaskChat({ taskId, active, onNavigateComment, ...composer }: {
   const generation = useRef(0);
   const [retry, setRetry] = useState(0);
   useEffect(() => {
-    if (!active) return;
+    if (!active && !onCountChange) return;
     const controller = new AbortController();
     let loading = false;
     async function load() {
@@ -121,7 +121,10 @@ export function TaskChat({ taskId, active, onNavigateComment, ...composer }: {
     void load();
     const timer = setInterval(() => void load(), 3000);
     return () => { controller.abort(); clearInterval(timer); };
-  }, [taskId, active, retry]);
+  }, [taskId, active, retry, onCountChange]);
+  useEffect(() => {
+    onCountChange?.(session?.taskId === taskId ? session.messages.length : 0);
+  }, [session, taskId, onCountChange]);
   async function mutate(input: { body: string } | { messageId: string } | { clear: true }, method: "POST" | "DELETE" = "POST") {
     if (sending.current) throw new Error("The chat is already processing a request.");
     sending.current = true; deleting.current = method === "DELETE"; generation.current++; setBusy(true);

@@ -3,6 +3,8 @@ import { DatabaseSync } from "node:sqlite";
 import { TaskStore, WorkspaceOwnershipError } from "./task-store.ts";
 import { MAX_ARTIFACT_BYTES, type Artifact, type ArtifactInput, type ArtifactFilters, type TaskArtifact } from "../domain/artifact.ts";
 
+export type ChatArtifactScope = { sessionId: string; lease: string; taskId: string; creator: string };
+
 export class ArtifactError extends Error {}
 export class ArtifactTooLargeError extends ArtifactError {}
 
@@ -13,9 +15,11 @@ export class ArtifactStore {
   private workspaceId: string;
 
   private runId?: string;
+  private chat?: ChatArtifactScope;
 
-  constructor(path: string, workspaceId: string, runId?: string) {
+  constructor(path: string, workspaceId: string, runId?: string, chat?: ChatArtifactScope) {
     this.runId = runId;
+    this.chat = chat;
     if (!workspaceId) throw new WorkspaceOwnershipError("A workspace ID is required.");
     const tasks = new TaskStore(path, workspaceId);
     tasks.close();
@@ -25,6 +29,9 @@ export class ArtifactStore {
   }
 
   private assertActive() {
+    if (this.chat && !this.db.prepare("SELECT id FROM chat_sessions WHERE id = ? AND workspaceId = ? AND taskId = ? AND lease = ? AND lease > ?")
+      .get(this.chat.sessionId, this.workspaceId, this.chat.taskId, this.chat.lease, new Date().toISOString()))
+      throw new ArtifactError("Artifact access has expired.");
     if (!this.db.prepare("SELECT id FROM workspaces WHERE id = ? AND archived = 0").get(this.workspaceId))
       throw new WorkspaceOwnershipError("This workspace is unavailable. Restore it first.");
   }
@@ -74,6 +81,8 @@ export class ArtifactStore {
     } else { throw new ArtifactError("Choose a supported artifact type."); }
     if (bytes && bytes.length > MAX_ARTIFACT_BYTES) throw new ArtifactTooLargeError("Artifacts must be 20 MiB or smaller.");
     return this.transaction(() => {
+      this.assertActive();
+      if (this.chat && creator !== this.chat.creator) throw new ArtifactError("Creator must match the chat agent.");
       const run = this.runId ? this.db.prepare("SELECT taskId, profile FROM runs WHERE id = ? AND workspaceId = ? AND status = 'Running' AND stopRequested IS NULL AND interruptionColumn IS NULL").get(this.runId, this.workspaceId) : undefined;
       if (this.runId && !run) throw new ArtifactError("Artifact access has expired.");
       if (run && JSON.parse(run.profile as string).name !== creator) throw new ArtifactError("Creator must match the running agent.");
@@ -95,6 +104,7 @@ export class ArtifactStore {
       this.db.prepare(`INSERT INTO artifact_revisions (${fields}, content, revisionId, revisionNumber)
         SELECT ${fields}, content, ?, ? FROM artifacts WHERE id = ?`).run(artifact.revisionId, artifact.revisionNumber, artifact.id);
       if (run) this.db.prepare("UPDATE artifact_revisions SET runId = ?, taskId = ? WHERE revisionId = ?").run(this.runId!, run.taskId, artifact.revisionId);
+      if (this.chat) this.db.prepare("UPDATE artifact_revisions SET taskId = ? WHERE revisionId = ?").run(this.chat.taskId, artifact.revisionId);
       return this.read(artifact.id, artifact.revisionId);
     });
   }

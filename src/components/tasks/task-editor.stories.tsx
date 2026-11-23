@@ -621,3 +621,45 @@ export const AutosaveControls: Story = {
     await expect(dialog.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
   },
 };
+
+export const ChatCount: Story = {
+  args: { open: true, task: exampleTasks[2] },
+  beforeEach: () => {
+    const original = globalThis.fetch;
+    const session = { id: "chat-count", taskId: exampleTasks[2].id, running: false, error: null,
+      messages: [
+        { id: "human", authorName: "Human", body: "Explain the task.", createdAt: "2026-11-20T10:00:00Z" },
+        { id: "agent", authorName: "Agent", body: "This is the task context.", createdAt: "2026-11-20T10:01:00Z" },
+      ],
+    };
+    globalThis.fetch = async (input, options) => {
+      if (String(input).startsWith("/api/chats")) {
+        const data = options?.body ? JSON.parse(String(options.body)) : {};
+        if (options?.method === "POST") session.messages.push({ id: "sent", authorName: "Human", body: data.body, createdAt: "2026-11-20T10:02:00Z" });
+        if (options?.method === "DELETE") session.messages = data.clear ? [] : session.messages.filter((message) => message.id !== data.messageId);
+        return Response.json(session);
+      }
+      return String(input).startsWith("/api/artifacts") ? Response.json([]) : original(input, options);
+    };
+    return () => { globalThis.fetch = original; };
+  },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    const dialog = within(await page.findByRole("dialog"));
+    const chat = dialog.getByRole("tab", { name: "Chat" });
+    await waitFor(() => expect(chat).toHaveTextContent("Chat2"));
+    await expect(chat).toHaveAttribute("aria-description", "2 messages");
+    await expect(dialog.getByRole("tab", { name: "Detail" })).toHaveAttribute("aria-selected", "true");
+    await userEvent.click(chat);
+    await userEvent.type(await dialog.findByRole("textbox", { name: "Your chat message" }), "More detail, please.");
+    await userEvent.click(dialog.getByRole("button", { name: "Send chat message" }));
+    await waitFor(() => expect(chat).toHaveTextContent("Chat3"));
+    await userEvent.click(dialog.getAllByRole("button", { name: "Delete chat message" })[0]);
+    await userEvent.click(within(await page.findByRole("dialog", { name: "Delete chat message?" })).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(chat).toHaveTextContent("Chat2"));
+    await userEvent.click(dialog.getByRole("button", { name: "Clear chat" }));
+    await userEvent.click(within(await page.findByRole("dialog", { name: "Clear chat?" })).getByRole("button", { name: "Clear chat" }));
+    await waitFor(() => expect(chat).toHaveTextContent("Chat0"));
+  },
+};
+export const ChatCountDark: Story = { ...ChatCount, globals: { theme: "dark" } };

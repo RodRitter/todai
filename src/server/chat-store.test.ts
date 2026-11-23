@@ -38,10 +38,9 @@ test("one task stream survives reload and keeps chat out of task context", async
       return request.privateChat?.candidates ? '["author"]' : "Private answer";
     });
     await sendChat(f.tasks, f.chats, "task", "Why?", async (request) => {
-      if (request.privateChat?.candidates) {
-        assert.deepEqual(request.privateChat.candidates.map((agent) => agent.id), ["author"]);
-        return '["author"]';
-      }
+      assert.equal(request.privateChat?.candidates, undefined);
+      assert.equal(request.run.profile.id, "task-chat-generic");
+      assert.equal(request.run.profile.instructions, "");
       assert.equal(request.privateChat?.messages.length, 3);
       return "Second answer";
     });
@@ -53,32 +52,58 @@ test("one task stream survives reload and keeps chat out of task context", async
   } finally { f.cleanup(); }
 });
 
-test("notes remain unanswered, even with tags or comment references", async () => {
+test("untagged messages get a generic response without configured agents", async () => {
+  for (const tool of ["codex", "claude"] as const) {
+    const f = fixture();
+    try {
+      for (const agent of f.tasks.listAgents()) f.tasks.deleteAgent(agent.id);
+      f.tasks.setDefaultExecutor(tool);
+      let calls = 0;
+      const result = await sendChat(f.tasks, f.chats, "task", "What is this task about?", async (request) => {
+        calls++;
+        assert.equal(request.privateChat?.candidates, undefined);
+        assert.equal(request.run.profile.name, "Agent");
+        assert.equal(request.run.profile.instructions, "");
+        assert.equal(request.run.profile.tool, tool);
+        assert.equal(request.run.profile.permissions, tool === "codex" ? "workspace-write" : "dontAsk");
+        assert.match(agentPrompt(request), /Full task context/);
+        assert.match(agentPrompt(request), /standard agent tools/);
+        assert.ok(request.artifacts);
+        return "A generic answer";
+      });
+      assert.equal(calls, 1);
+      assert.equal(result.error, null);
+      assert.equal(result.messages.at(-1)?.body, "A generic answer");
+      assert.equal(result.messages.at(-1)?.authorName, "Agent");
+    } finally { f.cleanup(); }
+  }
+});
+
+test("tagged notes and comment references remain unanswered", async () => {
   const f = fixture();
   try {
     let calls = 0;
     const runner = async () => { calls++; return "[]"; };
-    await sendChat(f.tasks, f.chats, "task", "A note for later.", runner);
-    assert.equal(calls, 0);
     await sendChat(f.tasks, f.chats, "task", "I agree with @Author.", runner);
     const source = f.tasks.list()[0].comments![0];
     const result = await sendChat(f.tasks, f.chats, "task", commentChatDraft(source, f.tasks.listAgents()), runner);
     assert.equal(calls, 2);
-    assert.equal(result.messages.length, 3);
+    assert.equal(result.messages.length, 2);
     assert.equal(result.running, false);
     assert.equal(result.error, null);
   } finally { f.cleanup(); }
 });
 
-test("untagged comment references select their author; selected agents reply in intent order", async () => {
+test("untagged comment references use a generic agent; tagged agents reply in intent order", async () => {
   const f = fixture();
   try {
     const source = f.tasks.list()[0].comments![0];
     await sendChat(f.tasks, f.chats, "task", `${commentReference(source)} Please explain.`, async (request) => {
-      if (request.privateChat?.candidates) {
-        assert.deepEqual(request.privateChat.candidates.map((agent) => agent.id), ["author"]);
-        return '["author"]';
-      }
+      assert.equal(request.privateChat?.candidates, undefined);
+      assert.equal(request.run.profile.id, "task-chat-generic");
+      assert.equal(request.run.profile.instructions, "");
+      assert.match(agentPrompt(request), /Source comment/);
+      assert.doesNotMatch(agentPrompt(request), /Explain the task\.|Review the task\./);
       return "An explanation";
     });
     const result = await sendChat(f.tasks, f.chats, "task", "@Author @Reviewer please discuss this", async (request) => {

@@ -13,7 +13,7 @@ export function createCodexRunner(executable = "codex"): Runner {
     try {
       await runCli({ executable, label: "Codex CLI", cwd: workspace, onStart, signal, input: agentPrompt(request), timeout: run.kind === "intent" ? 60000 : 0, args: [
             "exec",
-            ...(request.privateChat ? [
+            ...(request.privateChat && !request.privateChat.toolsEnabled ? [
               "--disable", "shell_tool", "--disable", "apps", "--disable", "plugins",
               "--disable", "browser_use", "--disable", "computer_use",
               "--config", "mcp_servers={}",

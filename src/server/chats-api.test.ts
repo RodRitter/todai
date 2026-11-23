@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -9,6 +9,14 @@ import { GET, POST, DELETE } from "../app/api/chats/route.ts";
 test("chat HTTP requests require task scope and reject sessions from another task", async () => {
   const directory = mkdtempSync(join(tmpdir(), "todai-chats-api-"));
   const previous = process.env.TODAI_DB_PATH;
+  const previousPath = process.env.PATH;
+  writeFileSync(join(directory, "codex"), `#!${process.execPath}
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+process.stdin.resume();
+process.stdin.on('end', () => fs.writeFileSync(args[args.indexOf('--output-last-message') + 1], 'Generic answer'));
+`, { mode: 0o755 });
+  process.env.PATH = `${directory}:${previousPath ?? ""}`;
   process.env.TODAI_DB_PATH = join(directory, "tasks.sqlite");
   const store = new TaskStore(process.env.TODAI_DB_PATH);
   const request = (query = "", input?: unknown, method = "POST") => new Request(`http://localhost/api/chats${query}`, {
@@ -17,6 +25,7 @@ test("chat HTTP requests require task scope and reject sessions from another tas
     ...(input === undefined ? {} : { body: JSON.stringify(input) }),
   });
   try {
+    store.setWorkspacePath(directory);
     store.saveAgent({ id: "author", name: "Author", tool: "codex", model: "test", effort: "medium", permissions: "read-only", instructions: "Explain." });
     store.save({ id: "task", title: "Task", description: "Details", status: "To do" });
     store.addComment({ id: "comment", taskId: "task", authorName: "Author", body: "Context", createdAt: new Date().toISOString() });
@@ -34,12 +43,13 @@ test("chat HTTP requests require task scope and reject sessions from another tas
     const sent = await POST(request("", { taskId: "task", body: "A note for later." }));
     assert.equal(sent.status, 200);
     const messages = (await sent.json()).messages;
-    assert.equal(messages.length, 1);
+    assert.equal(messages.length, 2);
+    assert.equal(messages[1].body, "Generic answer");
     assert.equal((await DELETE(request("", { taskId: "task" }, "DELETE"))).status, 400);
     assert.equal((await DELETE(request("", { taskId: "other", messageId: messages[0].id }, "DELETE"))).status, 400);
     const deleted = await DELETE(request("", { taskId: "task", messageId: messages[0].id }, "DELETE"));
     assert.equal(deleted.status, 200);
-    assert.deepEqual((await deleted.json()).messages, []);
+    assert.deepEqual((await deleted.json()).messages, [messages[1]]);
     await POST(request("", { taskId: "task", body: "Another note." }));
     assert.equal((await DELETE(request("", { taskId: "task", clear: true, messageId: "ambiguous" }, "DELETE"))).status, 400);
     const cleared = await DELETE(request("", { taskId: "task", clear: true }, "DELETE"));
@@ -48,6 +58,7 @@ test("chat HTTP requests require task scope and reject sessions from another tas
     assert.equal(store.list()[0].comments?.length, 1);
   } finally {
     store.close();
+    if (previousPath === undefined) delete process.env.PATH; else process.env.PATH = previousPath;
     if (previous === undefined) delete process.env.TODAI_DB_PATH;
     else process.env.TODAI_DB_PATH = previous;
     rmSync(directory, { recursive: true, force: true });

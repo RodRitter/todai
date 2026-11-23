@@ -221,6 +221,13 @@ process.stdin.on('end', () => {
     assert.ok(args.includes("apps"));
     assert.ok(args.includes("plugins"));
     assert.ok(args.includes("read-only"));
+
+    await createCodexRunner(executable)({ ...input, privateChat: { messages: [], toolsEnabled: true }, artifacts: { url: "http://127.0.0.1:12345/mcp", token: "chat-token", context: [] } });
+    const enabled = JSON.parse(readFileSync(join(directory, "received.json"), "utf8"));
+    assert.match(enabled.prompt, /standard agent tools/);
+    assert.ok(!enabled.args.includes("shell_tool"));
+    assert.ok(!enabled.args.includes("mcp_servers={}"));
+    assert.ok(enabled.args.includes('mcp_servers.todai_artifacts.required=true'));
     assert.match(prompt, /saved only in this chat/);
     assert.doesNotMatch(prompt, /automatically posted as a comment/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
