@@ -25,11 +25,11 @@ export function CreditSettings() {
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let active = true;
-    void Promise.all([generalSettingsApi.get(), workspaceFetch("/api/usage", { cache: "no-store" }).then(async response => {
+    void workspaceFetch("/api/usage", { cache: "no-store" }).then(async response => {
       if (!response.ok) throw new Error("Could not load credits.");
       return response.json();
-    })]).then(([settings, usage]) => {
-      if (active) { setSavedLimit(settings.creditLimit ?? 0); setSavedCredits(usage.trackedCredits ?? usage.credits); setTaskCredits(usage.credits); setLimit(String(settings.creditLimit ?? 0)); setCredits(String(usage.trackedCredits ?? usage.credits)); setReady(true); }
+    }).then(usage => {
+      if (active) { setSavedLimit(usage.creditLimit ?? 0); setSavedCredits(usage.trackedCredits ?? usage.credits); setTaskCredits(usage.credits); setLimit(String(usage.creditLimit ?? 0)); setCredits(String(usage.trackedCredits ?? usage.credits)); setReady(true); }
     }).catch(() => { if (active) { setError("Could not load credit settings."); toast.error("Could not load credit settings."); } });
     return () => { active = false; };
   }, [attempt]);
@@ -62,7 +62,7 @@ export function CreditSettings() {
         <InputActionRow actions={<Button aria-label="Save credit limit" disabled={!ready || busy || !limit.trim() || Number(limit) === savedLimit}>Save</Button>}>
         <Input id={`${id}-limit`} type="number" min="0" step="any" required value={limit} onChange={event => setLimit(event.target.value)} disabled={!ready || busy} aria-describedby={`${id}-limit-hint`} />
         </InputActionRow>
-        <Label asChild variant="metadata"><p id={`${id}-limit-hint`}>This limit applies across all workspaces. Each header compares its workspace total with this limit. Zero disables alerts. Usage above 80% shows red.</p></Label>
+        <Label asChild variant="metadata"><p id={`${id}-limit-hint`}>This limit applies only to this workspace. The header compares its workspace total with this limit. Zero disables alerts. Usage above 80% shows red.</p></Label>
       </div>
     </form>
     <form className="space-y-4" onSubmit={event => { event.preventDefault(); void save("credits"); }}>

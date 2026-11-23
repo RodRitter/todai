@@ -186,7 +186,7 @@ test("header credits total all boards in the workspace and exclude other workspa
   } finally { f.close(); }
 });
 
-test("credit limits are global; manual tracking is persistent and isolated from task history", async () => {
+test("credit limits and manual tracking are persistent and isolated by workspace", async () => {
   const f = fixture();
   try {
     assert.equal(f.store.getCreditLimit(), 0);
@@ -200,7 +200,7 @@ test("credit limits are global; manual tracking is persistent and isolated from 
     assert.equal(f.store.usage().setTrackedCredits(50).trackedCredits, 50);
     assert.equal(f.store.usage().read("task").totals.credits, 3.7);
     const reopened = new TaskStore(f.path, f.store.workspaceId);
-    try { assert.equal(reopened.usage().trackedCredits().trackedCredits, 50); }
+    try { assert.equal(reopened.getCreditLimit(), 100); assert.equal(reopened.usage().trackedCredits().trackedCredits, 50); }
     finally { reopened.close(); }
     await runWithUsage(f.store, runner, { ...f.request, run: { ...f.request.run, id: "next" } });
     assert.ok(Math.abs(f.store.usage().trackedCredits().trackedCredits - 53.7) < 1e-10);
@@ -210,10 +210,58 @@ test("credit limits are global; manual tracking is persistent and isolated from 
     assert.ok(Math.abs(f.store.usage().trackedCredits().trackedCredits - 3.7) < 1e-10);
     const other = new TaskStore(f.path, f.store.createWorkspace("Other", f.directory).id);
     try {
-      assert.equal(other.getCreditLimit(), 100);
+      assert.equal(other.getCreditLimit(), 0);
       assert.equal(other.usage().trackedCredits().trackedCredits, 0);
-      other.setCreditLimit(0);
-      assert.equal(f.store.getCreditLimit(), 0);
+      other.setCreditLimit(200);
+      assert.equal(other.getCreditLimit(), 200);
+      assert.equal(f.store.getCreditLimit(), 100);
     } finally { other.close(); }
   } finally { f.close(); }
+});
+
+test("legacy credit limits migrate once to existing workspaces", () => {
+  const f = fixture();
+  try {
+    const second = f.store.createWorkspace("Second", f.directory);
+    const db = new DatabaseSync(f.path);
+    db.prepare("INSERT INTO general_settings (key, value) VALUES ('creditLimit', '100')").run();
+    db.close();
+    const migrated = new TaskStore(f.path, second.id);
+    try {
+      assert.equal(migrated.getCreditLimit(), 100);
+      assert.equal(f.store.getCreditLimit(), 100);
+      migrated.setCreditLimit(200);
+      const reopened = new TaskStore(f.path, second.id);
+      try { assert.equal(reopened.getCreditLimit(), 200); }
+      finally { reopened.close(); }
+      const fresh = new TaskStore(f.path, f.store.createWorkspace("New", f.directory).id);
+      try { assert.equal(fresh.getCreditLimit(), 0); }
+      finally { fresh.close(); }
+    } finally { migrated.close(); }
+  } finally { f.close(); }
+});
+
+test("credit limit API requires a workspace and isolates saves and header totals", async () => {
+  const f = fixture();
+  const previous = process.env.TODAI_DB_PATH;
+  process.env.TODAI_DB_PATH = f.path;
+  try {
+    const { PUT } = await import("../app/api/credit-limit/route.ts");
+    const { GET: usage } = await import("../app/api/usage/route.ts");
+    const second = f.store.createWorkspace("Second", f.directory);
+    const request = (id?: string, limit = 200) => new Request("http://localhost/api/credit-limit", {
+      method: "PUT", headers: id ? { "X-Todai-Workspace": id } : {}, body: JSON.stringify({ creditLimit: limit }),
+    });
+    f.store.setCreditLimit(100);
+    assert.equal((await PUT(request())).status, 400);
+    assert.equal((await PUT(request("missing"))).status, 400);
+    assert.equal((await PUT(request(second.id, -1))).status, 400);
+    assert.deepEqual(await (await PUT(request(second.id))).json(), { creditLimit: 200 });
+    assert.equal((await usage(request(second.id)).json()).creditLimit, 200);
+    assert.equal((await usage(request(f.store.workspaceId)).json()).creditLimit, 100);
+  } finally {
+    if (previous === undefined) delete process.env.TODAI_DB_PATH;
+    else process.env.TODAI_DB_PATH = previous;
+    f.close();
+  }
 });

@@ -139,6 +139,12 @@ export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
     initializeChatSchema(db);
     initializeUsageSchema(db);
     db.exec("CREATE TABLE IF NOT EXISTS general_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+    db.exec(`
+      INSERT OR IGNORE INTO settings (workspaceId, key, value)
+      SELECT workspaces.id, general_settings.key, general_settings.value
+      FROM workspaces CROSS JOIN general_settings WHERE general_settings.key = 'creditLimit';
+      DELETE FROM general_settings WHERE key = 'creditLimit';
+    `);
     for (const table of ["comments", "chat_messages"]) {
       if (!db.prepare(`PRAGMA table_info(${table})`).all().some((field) => field.name === "authorRole")) {
         db.exec(`ALTER TABLE ${table} ADD COLUMN authorRole TEXT`);

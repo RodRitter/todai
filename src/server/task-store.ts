@@ -143,12 +143,12 @@ export class TaskStore {
   }
 
   getCreditLimit(): number {
-    return Number(this.db.prepare("SELECT value FROM general_settings WHERE key = 'creditLimit'").get()?.value ?? 0);
+    return Number(this.db.prepare("SELECT value FROM settings WHERE key = 'creditLimit' AND workspaceId = workspace_id()").get()?.value ?? 0);
   }
 
   setCreditLimit(value: unknown): number {
     const limit = parseCredits(value);
-    this.db.prepare("INSERT INTO general_settings (key, value) VALUES ('creditLimit', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(limit));
+    this.db.prepare("INSERT INTO settings (key, value, workspaceId) VALUES ('creditLimit', ?, workspace_id()) ON CONFLICT(workspaceId, key) DO UPDATE SET value = excluded.value").run(String(limit));
     return limit;
   }
 

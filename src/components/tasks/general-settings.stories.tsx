@@ -8,8 +8,9 @@ const meta = {
   beforeEach: () => {
     const original = globalThis.fetch;
     globalThis.fetch = async (input, options) => {
-      if (String(input) === "/api/general-settings") return Response.json({ creditLimit: options?.method === "PUT" ? JSON.parse(String(options.body)).creditLimit ?? 100 : 100, userName: options?.method === "PUT" ? (JSON.parse(String(options.body)).userName ?? "Roderick").trim() : "Roderick" });
-      if (String(input) === "/api/usage") return Response.json({ credits: 25, trackedCredits: options?.method === "PUT" ? JSON.parse(String(options.body)).credits : 25 });
+      if (String(input) === "/api/general-settings") return Response.json({ userName: options?.method === "PUT" ? (JSON.parse(String(options.body)).userName ?? "Roderick").trim() : "Roderick" });
+      if (String(input) === "/api/credit-limit") return Response.json({ creditLimit: JSON.parse(String(options?.body)).creditLimit });
+      if (String(input) === "/api/usage") return Response.json({ creditLimit: 100, credits: 25, trackedCredits: options?.method === "PUT" ? JSON.parse(String(options.body)).credits : 25 });
       return original(input, options);
     };
     return () => { globalThis.fetch = original; };
