@@ -69,7 +69,7 @@ export function TaskComments({ taskId, active = true, onChat, embedded = false, 
     </div>;
   return (
     <section aria-label="Task activity" className={embedded ? "flex min-h-0 flex-1 flex-col" : "mt-8 space-y-6"}>
-      {embedded ? <ScrollArea fade="vertical" className="min-h-0 flex-1" viewportProps={{ ref: viewport }}>{activity}</ScrollArea> : activity}
+      {embedded ? <ScrollArea fade="vertical" fadeSize="sm" className="min-h-0 flex-1" viewportProps={{ ref: viewport }}>{activity}</ScrollArea> : activity}
       {onPostComment && <ConversationComposer variant={embedded ? "fixed" : "inline"}>
         <CommentInput agents={agents} onPost={onPostComment} agentStatus={agentStatus} />
       </ConversationComposer>}

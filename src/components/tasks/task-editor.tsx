@@ -6,7 +6,7 @@ import { commentChatDraft } from "@/domain/comment-reference";
 import { TaskArtifacts } from "@/components/artifacts/artifact-attachments";
 import type { ArtifactReference } from "@/domain/artifact";
 import { useId, useRef, useState, type ComponentProps, type FormEvent } from "react";
-import { Bot, Ellipsis, Trash2, Maximize2, Minimize2, LayoutGrid, CircleDot, CirclePlay, CircleStop, Workflow, Zap } from "lucide-react";
+import { Bot, Ellipsis, LayoutGrid, CircleDot, CirclePlay, CircleStop, Workflow, Zap } from "lucide-react";
 import { Tabs, TabsContent, TabsCount, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TaskUsage } from "./task-usage";
 import { ActivityTabTrigger } from "./activity-tab-trigger";
@@ -54,6 +54,7 @@ export type TaskEditorProps = {
   onSave: (task: Task) => void | Promise<void>;
   onAnswerFeedback?: (commentId: string, body: string) => Promise<void>;
   onDelete?: (id: string) => void | Promise<void>;
+  onReset?: (id: string) => Promise<void>;
 };
 
 export function TaskEditor(props: TaskEditorProps) {
@@ -80,6 +81,7 @@ function TaskEditorSession({
   onOpenChange,
   onSave,
   onDelete,
+  onReset,
   onAnswerFeedback,
   onPostComment,
   onDeleteComment,
@@ -111,6 +113,7 @@ function TaskEditorSession({
       : (movedBoard ? columns[0] : editing?.status ?? defaultStatus);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [busy, setBusy] = useState(false);
   const [autoWorkflow, setAutoWorkflow] = useState(
     editing?.autoWorkflow ?? false,
@@ -206,6 +209,25 @@ function TaskEditorSession({
       if (deleting) onOpenChange(false);
     } catch {
       /* Keep the draft open; notifyOperation reports the failure. */
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resetTask() {
+    if (!editing || !onReset || busy || pendingRun || saving) return;
+    setBusy(true);
+    try {
+      await saveQueue.current;
+      await notifyOperation(() => onReset(editing.id), {
+        loading: "Resetting task…",
+        success: "Task reset.",
+        error: (error) => error instanceof Error ? error.message : "Could not reset the task. Try again.",
+      });
+      setConfirmReset(false);
+      onOpenChange(false);
+    } catch {
+      // Keep the confirmation open so the user can retry.
     } finally {
       setBusy(false);
     }
@@ -319,16 +341,23 @@ function TaskEditorSession({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onSelect={() => setExpanded((value) => !value)}>
-                  {expanded ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
                   {expanded ? "Collapse task panel" : "Expand task panel"}
                 </DropdownMenuItem>
+                {editing && onReset && (
+                  <DropdownMenuItem
+                    variant="destructive"
+                    disabled={busy || pendingRun || saving}
+                    onSelect={() => setConfirmReset(true)}
+                  >
+                    Reset task
+                  </DropdownMenuItem>
+                )}
                 {editing && onDelete && (
                   <DropdownMenuItem
                     variant="destructive"
                     disabled={busy || pendingRun || saving}
                     onSelect={() => setConfirmDelete(true)}
                   >
-                    <Trash2 aria-hidden="true" />
                     Delete task
                   </DropdownMenuItem>
                 )}
@@ -585,6 +614,19 @@ function TaskEditorSession({
           </Tabs>
         </form>
       </DialogContent>
+      {editing && onReset && (
+        <DeleteConfirmation
+          open={confirmReset}
+          onOpenChange={setConfirmReset}
+          title="Reset task?"
+          description={`Reset “${editing.title}”? This deletes all comments, replies, chats, artifact references, run history, and usage records. The task returns to its board’s first column with automation off. The saved title, description, task ID, and artifact files remain. Unsaved edits are discarded. This cannot be undone.`}
+          busy={busy}
+          disabled={pendingRun || saving}
+          confirmLabel="Reset task"
+          busyLabel="Resetting…"
+          onConfirm={() => { void resetTask(); }}
+        />
+      )}
       {editing && onDelete && (
         <DeleteConfirmation
           open={confirmDelete}

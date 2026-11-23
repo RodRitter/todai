@@ -969,6 +969,30 @@ export class TaskStore {
       .run(randomUUID(), taskId, column, JSON.stringify(profile), createdAt, kind, commentId, JSON.stringify(replyPlan));
   }
 
+  reset(taskId: unknown): Task {
+    this.assertWorkspaceActive();
+    if (typeof taskId !== "string" || !taskId)
+      throw new RunValidationError("Choose a task to reset.");
+    this.assertOwnership("tasks", taskId);
+    return this.transaction(() => {
+      const task = this.list().find((item) => item.id === taskId);
+      if (!task) throw new RunValidationError("This task no longer exists.");
+      this.assertIdle(taskId, "resetting the task");
+      if (this.db.prepare("SELECT id FROM chat_sessions WHERE workspaceId = workspace_id() AND taskId = ? AND lease > ?")
+        .get(taskId, new Date().toISOString()))
+        throw new PendingRunError("Wait for the chat response to finish before resetting the task.");
+      const status = this.listColumns(task.boardId)[0];
+      if (!status) throw new ColumnValidationError("Add a board column before resetting the task.");
+      this.db.prepare("DELETE FROM task_artifacts WHERE taskId = ?").run(taskId);
+      this.db.prepare("UPDATE artifact_revisions SET taskId = NULL, runId = NULL WHERE workspaceId = workspace_id() AND taskId = ?").run(taskId);
+      for (const table of ["comments", "chat_sessions", "runs", "task_usage"])
+        this.db.prepare(`DELETE FROM ${table} WHERE workspaceId = workspace_id() AND taskId = ?`).run(taskId);
+      this.db.prepare("UPDATE tasks SET status = ?, agentStatus = 'Not started', autoRun = 0, autoWorkflow = 0 WHERE workspaceId = workspace_id() AND id = ?")
+        .run(status, taskId);
+      return this.list().find((item) => item.id === taskId)!;
+    });
+  }
+
   delete(id: string) {
     this.assertOwnership("tasks", id);
     this.transaction(() => {

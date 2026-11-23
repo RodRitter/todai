@@ -8,11 +8,12 @@ type ScrollAreaProps = Omit<React.ComponentProps<typeof ScrollAreaPrimitive.Root
   className?: string;
   orientation?: "vertical" | "horizontal" | "both";
   fade?: "none" | "bottom" | "vertical";
+  fadeSize?: "sm" | "default";
   variant?: "default" | "table" | "code" | "modal";
   viewportProps?: Omit<React.ComponentProps<typeof ScrollAreaPrimitive.Viewport>, "className" | "children">;
 };
 
-function ScrollArea({ className, children, orientation = "vertical", fade = "none", variant = "default", viewportProps, ...props }: ScrollAreaProps) {
+function ScrollArea({ className, children, orientation = "vertical", fade = "none", fadeSize = "default", variant = "default", viewportProps, ...props }: ScrollAreaProps) {
   return (
     <ScrollAreaPrimitive.Root data-slot="scroll-area" className={cn(
       "relative flex min-h-0 min-w-0 flex-col overflow-hidden",
@@ -24,8 +25,9 @@ function ScrollArea({ className, children, orientation = "vertical", fade = "non
         "min-h-0 w-full flex-1 rounded-[inherit] outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/50",
         // Embedded content must pass scrolling to its parent at its boundaries.
         variant === "table" || variant === "code" ? "overscroll-auto" : "overscroll-contain",
-        fade === "bottom" && "scroll-fade-b scroll-fade-12",
-        fade === "vertical" && "scroll-fade-y scroll-fade-12",
+        fade === "bottom" && "scroll-fade-b",
+        fade === "vertical" && "scroll-fade-y",
+        fade !== "none" && (fadeSize === "sm" ? "scroll-fade-4" : "scroll-fade-12"),
         orientation === "vertical" && "overflow-x-hidden!",
         orientation === "horizontal" && "overflow-y-hidden!",
       )} {...viewportProps}>

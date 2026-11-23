@@ -667,3 +667,59 @@ export const ChatCount: Story = {
   },
 };
 export const ChatCountDark: Story = { ...ChatCount, globals: { theme: "dark" } };
+
+export const ResetTask: Story = {
+  args: { open: true, task: exampleTasks[3], onReset: fn().mockResolvedValue(undefined) },
+  play: async ({ canvasElement, args }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(body.getByRole("button", { name: "Task actions" }));
+    await userEvent.click(body.getByRole("menuitem", { name: "Reset task" }));
+    const prompt = within(await body.findByRole("dialog", { name: "Reset task?" }));
+    await expect(prompt.getByRole("button", { name: "Cancel" })).toHaveFocus();
+    await expect(args.onReset).not.toHaveBeenCalled();
+    await userEvent.click(prompt.getByRole("button", { name: "Cancel" }));
+    await expect(args.onReset).not.toHaveBeenCalled();
+    await userEvent.click(body.getByRole("button", { name: "Task actions" }));
+    await userEvent.click(body.getByRole("menuitem", { name: "Reset task" }));
+    await userEvent.click(within(await body.findByRole("dialog", { name: "Reset task?" })).getByRole("button", { name: "Reset task" }));
+    await waitFor(() => expect(args.onReset).toHaveBeenCalledWith(args.task!.id));
+    await waitFor(() => expect(body.queryByRole("dialog", { name: "Reset task?" })).not.toBeInTheDocument());
+  },
+};
+
+export const ResetPending: Story = {
+  args: { open: true, task: exampleTasks[3], onReset: () => new Promise<void>(() => {}) },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(body.getByRole("button", { name: "Task actions" }));
+    await userEvent.click(body.getByRole("menuitem", { name: "Reset task" }));
+    const prompt = within(await body.findByRole("dialog", { name: "Reset task?" }));
+    await userEvent.click(prompt.getByRole("button", { name: "Reset task" }));
+    await expect(await prompt.findByRole("button", { name: "Resetting…" })).toBeDisabled();
+    await expect(prompt.getByRole("button", { name: "Cancel" })).toBeDisabled();
+  },
+};
+
+export const ResetFailure: Story = {
+  args: { open: true, task: exampleTasks[3], onReset: fn().mockRejectedValue(new Error("Wait for the chat response to finish before resetting the task.")) },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(body.getByRole("button", { name: "Task actions" }));
+    await userEvent.click(body.getByRole("menuitem", { name: "Reset task" }));
+    const prompt = within(await body.findByRole("dialog", { name: "Reset task?" }));
+    await userEvent.click(prompt.getByRole("button", { name: "Reset task" }));
+    await waitFor(() => expect(prompt.getByRole("button", { name: "Reset task" })).toBeEnabled());
+    await expect(prompt.getByRole("button", { name: "Cancel" })).toBeEnabled();
+  },
+};
+
+export const ResetWhileRunning: Story = {
+  args: { open: true, task: exampleTasks[2], onReset: fn() },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(body.getByRole("button", { name: "Task actions" }));
+    await expect(body.getByRole("menuitem", { name: "Reset task" })).toHaveAttribute("aria-disabled", "true");
+  },
+};
+
+export const ResetPendingDark: Story = { ...ResetPending, globals: { theme: "dark" } };

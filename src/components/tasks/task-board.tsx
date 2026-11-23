@@ -44,6 +44,7 @@ export function TaskBoard({
     list?: () => Promise<Task[] | BoardSnapshot>;
     save: (task: Task) => Promise<Task>;
     delete: (id: string) => Promise<void>;
+    reset?: (taskId: string) => Promise<Task>;
     run?: (taskId: string) => Promise<Task>;
     stop?: (taskId: string) => Promise<Task>;
     deleteComment?: (taskId: string, commentId: string) => Promise<Task>;
@@ -305,6 +306,11 @@ export function TaskBoard({
             setEditing(task);
           }}
           onDelete={deleteTask}
+          onReset={persistence?.reset ? (taskId) => mutate(async () => {
+            const saved = await persistence.reset!(taskId);
+            updateTasks((current) => current.map((task) => task.id === saved.id ? saved : task));
+            setEditing(saved);
+          }) : undefined}
         />
       </main>
     </AppShell>

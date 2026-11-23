@@ -71,3 +71,5 @@ export const VerticalFade: Story = {
 };
 export const VerticalFadeShortContent: Story = { args: { ...ShortContent.args, fade: "vertical" } };
 export const VerticalFadeDark: Story = { ...VerticalFade, globals: { theme: "dark" } };
+export const SmallVerticalFade: Story = { args: { ...VerticalFade.args, fadeSize: "sm" } };
+export const SmallVerticalFadeDark: Story = { ...SmallVerticalFade, globals: { theme: "dark" } };

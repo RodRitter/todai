@@ -34,6 +34,8 @@ async function request<T>(
 }
 
 export const taskApi = {
+  reset: (taskId: string) =>
+    request<Task>("/api/tasks/reset", { method: "POST", body: { taskId } }),
   stop: (taskId: string) =>
     request<Task>("/api/tasks/stop", { method: "POST", body: { taskId } }),
   run: (taskId: string) =>
