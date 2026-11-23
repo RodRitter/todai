@@ -61,7 +61,7 @@ export function ChatConversation({ session, busy, onSend, onDelete, onClear, age
     finally { submitting.current = false; setPending(null); }
   }
   return <section ref={region} aria-label="Task chat" className="flex min-h-0 flex-1 flex-col">
-    <ScrollArea fade="bottom" className="min-h-0 flex-1" viewportProps={{ ref: viewport }}><div ref={content} className="space-y-6 pb-4">
+    <ScrollArea fade="vertical" className="min-h-0 flex-1" viewportProps={{ ref: viewport }}><div ref={content} className="space-y-6 pb-4">
     {messages.length ? <ol aria-label="Chat messages, oldest first" className="space-y-6">
       {messages.map((message) => {
         const deleteButton = <Button type="button" variant="ghost-destructive" size="icon-xs" reveal="hover" aria-label="Delete chat message" disabled={locked}

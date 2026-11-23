@@ -56,3 +56,18 @@ export const BottomFade: Story = {
 };
 export const BottomFadeShortContent: Story = { args: { ...ShortContent.args, fade: "bottom" } };
 export const BottomFadeDark: Story = { ...BottomFade, globals: { theme: "dark" } };
+
+export const VerticalFade: Story = {
+  args: { ...Vertical.args, fade: "vertical" },
+  play: async ({ canvasElement }) => {
+    const viewport = canvasElement.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')!;
+    await expect(viewport).toHaveClass("scroll-fade-y", "scroll-fade-12");
+    await expect(getComputedStyle(viewport).maskImage).not.toBe("none");
+    viewport.scrollTop = (viewport.scrollHeight - viewport.clientHeight) / 2;
+    await expect(viewport.scrollTop).toBeGreaterThan(0);
+    viewport.scrollTop = viewport.scrollHeight;
+    await waitFor(() => expect(viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop).toBeLessThan(1));
+  },
+};
+export const VerticalFadeShortContent: Story = { args: { ...ShortContent.args, fade: "vertical" } };
+export const VerticalFadeDark: Story = { ...VerticalFade, globals: { theme: "dark" } };
