@@ -921,3 +921,11 @@ export const ReplyGutterJunctions: Story = {
 };
 export const ReplyGutterJunctionsDark: Story = { ...ReplyGutterJunctions, globals: { theme: "dark" } };
 export const ReplyGutterJunctionsNarrow: Story = { ...ReplyGutterJunctions, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
+
+export const CompactRootComments: Story = {
+  args: { comments: [
+    { ...threadRoot, id: "compact-root-1", body: "The changes are ready for review." },
+    { ...threadRoot, id: "compact-root-2", authorName: "Human", body: "The spacing looks correct.", createdAt: "2026-11-20T10:01:00Z" },
+    { ...threadRoot, id: "compact-root-3", body: "I will continue with the next task.", createdAt: "2026-11-20T10:02:00Z" },
+  ] },
+};
