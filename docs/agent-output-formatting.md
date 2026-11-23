@@ -4,7 +4,7 @@
 
 The local language reference is [Common writing rules](writing-rules.md). The authoritative output policy lives in `src/server/agent-output-policy.ts`. `agentPrompt` includes that policy in every task and reply run. Read both before changing agent comments, feedback text, handovers, or prompt formatting. Intent classification retains its machine-readable protocol.
 
-User-facing content is Markdown, including the `question` and `recommendation` values inside the feedback JSON envelope. Formatting never changes execution or approval semantics.
+User-facing content is Markdown, including the `question` and `recommendation` values in the `request_feedback` MCP arguments or the legacy feedback JSON envelope. Formatting never changes execution or approval semantics.
 
 ## Presentation contract
 
@@ -68,3 +68,14 @@ Terminal output can sit inside a collapsible trace. [shadcn Terminal](https://ui
 - Reported results match recorded evidence; material limitations remain visible.
 - Feedback retains valid JSON with Markdown string values.
 - UI changes follow `docs/design-guidelines.md`, including shared variants, accessibility, Storybook examples, and verification.
+
+## Feedback controls
+
+Agents use the `todai_artifacts.request_feedback` MCP tool to request Human feedback.
+Set `responseType` to `approval` for a specific proposal with Approve and Reject buttons.
+Set `responseType` to `text` when the agent needs a written answer.
+Supply a nonempty `question` and `recommendation` in Markdown.
+After the tool succeeds, stop work and end the run.
+The selected answer is saved as `Approved` or `Rejected` and resumes the same agent.
+A rejected proposal does not authorize changes.
+Existing JSON feedback requests without `responseType` continue to use text feedback.

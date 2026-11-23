@@ -100,7 +100,7 @@ function ActivityMessage({ agents, attentionId, onChat, comment, replies = [], a
   const replyButton = useRef<HTMLButtonElement>(null);
   const replyInput = useRef<HTMLDivElement>(null);
   const disabled = agentStatus === "Running" || agentStatus === "Queued";
-  const feedback = comment.feedbackStatus === "pending" ? <FeedbackInput commentId={comment.id} onAnswer={onAnswerFeedback} /> : undefined;
+  const feedback = comment.feedbackStatus === "pending" ? <FeedbackInput responseType={comment.responseType} commentId={comment.id} onAnswer={onAnswerFeedback} /> : undefined;
   const actions = <>
     {onPostComment && <Button ref={replyButton} type="button" size="xs" variant="ghost-muted" disabled={disabled}
       aria-expanded={threadOpen} aria-controls={`comment-content-${comment.id}`} onClick={() => { setThreadOpen(true); setReplying(true); requestAnimationFrame(() => replyInput.current?.querySelector<HTMLElement>('[role="textbox"]')?.focus()); }}><Reply aria-hidden="true" />Reply</Button>}
@@ -158,33 +158,41 @@ function CommentActions({ comment, replyCount = 0, onDelete, disabled }: {
   </>;
 }
 
-function FeedbackInput({ commentId, onAnswer }: {
+function FeedbackInput({ commentId, responseType, onAnswer }: {
+  responseType?: TaskComment["responseType"];
   commentId: string;
   onAnswer?: (commentId: string, body: string) => Promise<void>;
 }) {
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  async function submit() {
-    if (!onAnswer || !body.trim() || busy) return;
+  const submitting = useRef(false);
+  async function submit(answer = body) {
+    if (!onAnswer || !answer.trim() || submitting.current) return;
+    submitting.current = true;
     setBusy(true);
     setError("");
-    try { await onAnswer(commentId, body.trim()); }
+    try { await onAnswer(commentId, answer.trim()); }
     catch (error) { setError(error instanceof Error ? error.message : "Could not submit feedback."); }
-    finally { setBusy(false); }
+    finally { submitting.current = false; setBusy(false); }
   }
   return (
     <div className="space-y-2">
-      <label htmlFor={`feedback-${commentId}`} className="sr-only">Your feedback</label>
-      <Textarea id={`feedback-${commentId}`} value={body} disabled={busy}
-        placeholder="Share your feedback to continue…"
-        onChange={(event) => setBody(event.target.value)}
-        aria-invalid={!!error}
-        aria-describedby={error ? `feedback-error-${commentId}` : undefined} />
+      {responseType !== "approval" && <>
+        <label htmlFor={`feedback-${commentId}`} className="sr-only">Your feedback</label>
+        <Textarea id={`feedback-${commentId}`} value={body} disabled={busy}
+          placeholder="Share your feedback to continue…"
+          onChange={(event) => setBody(event.target.value)}
+          aria-invalid={!!error}
+          aria-describedby={error ? `feedback-error-${commentId}` : undefined} />
+      </>}
       {error && <p id={`feedback-error-${commentId}`} role="alert" className="text-sm text-destructive">{error}</p>}
-      <ConfirmationActions><Button type="button" size="sm" disabled={busy || !body.trim() || !onAnswer} onClick={() => void submit()}>
+      <ConfirmationActions>{responseType === "approval" ? <>
+        <Button type="button" size="sm" variant="outline" disabled={busy || !onAnswer} onClick={() => void submit("Rejected")}>Reject</Button>
+        <Button type="button" size="sm" disabled={busy || !onAnswer} onClick={() => void submit("Approved")}>{busy ? "Submitting…" : "Approve"}</Button>
+      </> : <Button type="button" size="sm" disabled={busy || !body.trim() || !onAnswer} onClick={() => void submit()}>
         {busy ? "Submitting…" : "Submit feedback"}
-      </Button></ConfirmationActions>
+      </Button>}</ConfirmationActions>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 ---
 name: todai-diagnosing-bugs
-description: Diagnose bugs through Todai’s Diagnose, Review & Report, and approval-gated Fix stages. Use for bug diagnosis board tasks or requests to follow the Todai diagnosis workflow.
+description: Diagnose bugs through Todai’s Diagnose and approval-gated Fix stages. Use for bug diagnosis board tasks or requests to follow the Todai diagnosis workflow.
 ---
 
 # Todai bug diagnosis
@@ -24,18 +24,6 @@ Then give the reproduction command and result; minimal scenario; ranked hypothes
 ### Unavailable reproduction
 
 Document attempts and missing evidence or access. Inspect code and report only evidence-backed leads explicitly marked **unconfirmed**, each with a falsifying check. This intentionally relaxes the original diagnosing-bugs skill’s reproduction gate, but never licenses a confirmed causal claim. Request human feedback when no useful independent work remains. Never fabricate successful commands or reproduction.
-
-## Review & Report — Diagnosis reviewer
-
-Check claims against the original symptom, command results, code locations, and alternative explanations. Run existing non-mutating checks where useful. Inspect cleanup and report any unfinished work; this role is read-only. Agent agreement is not evidence.
-
-Return approximately 150–250 words, shorter when sufficient:
-- **Verdict:** confirmed cause, likely cause, or insufficient evidence.
-- **Findings:** at most three ranked issues with evidence/location, confidence, and material contradictions. Separate confirmed issues from potential ones.
-- **Reproduction:** what ran and happened, or why it could not run.
-- **Next action:** proposed repair or smallest uncertainty-resolving check.
-
-Link detailed evidence instead of repeating logs. Do not invent findings to fill the format. Completed diagnosis does not mean the bug is fixed.
 
 ## Fix — Bug fixer
 

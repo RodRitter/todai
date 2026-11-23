@@ -108,8 +108,8 @@ export class ExecutionService {
           this.store.finishRun(run.id, "Complete", order.length ? `Reply order: ${order.map((agent) => agent.name).join(" → ")}.` : "No agent replies requested.", undefined, order);
           continue;
         }
-        const feedback = parseFeedback(summary);
-        this.store.finishRun(run.id, feedback ? "Waiting" : "Complete", feedback?.question ?? summary, feedback?.recommendation, undefined, artifacts?.pending);
+        const feedback = artifacts?.feedback ?? parseFeedback(summary);
+        this.store.finishRun(run.id, feedback ? "Waiting" : "Complete", feedback?.question ?? summary, feedback?.recommendation, undefined, artifacts?.pending, feedback?.responseType);
       } catch (error) {
         artifacts?.close();
         this.store.finishRun(

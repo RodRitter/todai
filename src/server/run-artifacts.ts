@@ -1,3 +1,4 @@
+import { parseFeedback, type FeedbackRequest } from "./feedback.ts";
 import { artifactPublicationPolicy } from "./artifact-policy.ts";
 import { randomBytes } from "node:crypto";
 import { createServer } from "node:http";
@@ -21,6 +22,8 @@ const tools: { name: string; description: string; properties: Record<string, { t
 export async function openRunArtifacts(store: TaskStore, run: AgentRun, signal: AbortSignal, chat?: ChatArtifactScope) {
   const library = new ArtifactStore(store.databasePath, run.workspaceId, chat ? undefined : run.id, chat);
   const pending: ArtifactReference[] = [];
+  let feedback: FeedbackRequest | undefined;
+  const availableTools: typeof tools = chat ? tools : [...tools, { name: "request_feedback", description: "Request Human feedback, then stop work and end your run. Use approval for Approve/Reject buttons or text for an open question. Both question and recommendation must be nonempty Markdown. This does not grant approval.", properties: { question: string, recommendation: string, responseType: { type: "string", enum: ["text", "approval"] } }, required: ["question", "recommendation", "responseType"] }];
   const token = randomBytes(32).toString("hex");
   let closed = false;
   function assertActive() {
@@ -30,16 +33,20 @@ export async function openRunArtifacts(store: TaskStore, run: AgentRun, signal: 
   }
   function call(name: string, args: Record<string, unknown>) {
     assertActive();
-    const tool = tools.find((tool) => tool.name === name);
+    const tool = availableTools.find((tool) => tool.name === name);
     if (!tool) throw new Error("Unknown artifact tool.");
     for (const key of tool.required) if (!(key in args)) throw new Error(`Missing ${key}.`);
     for (const [key, value] of Object.entries(args)) {
       const property = tool.properties[key];
       if (!property || typeof value !== property.type) throw new Error(`Invalid argument: ${key}.`);
     }
+    if (feedback) throw new Error("Feedback is already requested. Stop work and end your run.");
     const artifactId = args.artifactId as string;
     const revisionId = args.revisionId as string | undefined;
     switch (name) {
+      case "request_feedback":
+        feedback = parseFeedback(JSON.stringify({ type: "feedback_request", ...args }));
+        return { requested: true, message: "Stop work and end your run. Wait for the Human answer before continuing." };
       case "publish_artifact": {
         const { base64, artifactId: previous, ...fields } = args;
         const bytes = typeof base64 === "string" ? Buffer.from(base64, "base64") : undefined;
@@ -86,7 +93,7 @@ export async function openRunArtifacts(store: TaskStore, run: AgentRun, signal: 
       let result;
       if (message.method === "initialize") result = { protocolVersion: "2025-03-26", capabilities: { tools: {} }, serverInfo: { name: "todai-artifacts", version: "1.0.0" } };
       else if (message.method === "ping") result = {};
-      else if (message.method === "tools/list") result = { tools: tools.map(({ properties, required, ...tool }) => ({ ...tool, inputSchema: { type: "object", properties, required, additionalProperties: false } })) };
+      else if (message.method === "tools/list") result = { tools: availableTools.map(({ properties, required, ...tool }) => ({ ...tool, inputSchema: { type: "object", properties, required, additionalProperties: false } })) };
       else if (message.method === "tools/call") {
         try { result = { content: [{ type: "text", text: JSON.stringify(call(message.params?.name, message.params?.arguments ?? {})) }] }; }
         catch (error) { result = { isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : "Artifact operation failed." }] }; }
@@ -109,6 +116,6 @@ export async function openRunArtifacts(store: TaskStore, run: AgentRun, signal: 
     await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
     signal.addEventListener("abort", close, { once: true });
     signal.throwIfAborted();
-    return { connection: { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/mcp`, token, context }, pending, close };
+    return { connection: { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/mcp`, token, context }, pending, get feedback() { return feedback; }, close };
   } catch (error) { close(); throw error; }
 }

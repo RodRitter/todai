@@ -761,6 +761,7 @@ export class TaskStore {
     recommendation?: string,
     replyPlan?: AgentProfile[],
     artifacts: ArtifactReference[] = [],
+    responseType?: "text" | "approval",
   ) {
     this.assertOwnership("runs", runId);
     this.transaction(() => {
@@ -813,7 +814,7 @@ export class TaskStore {
           createdAt: finishedAt,
           authorName: run.profile.name,
           authorRole: "agent",
-          ...(status === "Waiting" ? { recommendation, feedbackStatus: "pending" } : {}),
+          ...(status === "Waiting" ? { recommendation, responseType, feedbackStatus: "pending" } : {}),
         });
         if (status === "Complete" || status === "Waiting") this.attachCommentArtifacts(commentId, artifacts);
       }
@@ -852,6 +853,8 @@ export class TaskStore {
       const run = request && this.history(taskId).find((item) => item.id === request.runId);
       if (!task || task.agentStatus !== "Waiting" || !request || !run)
         throw new FeedbackValidationError("This feedback request is no longer pending. Reload the task.");
+      if (request.responseType === "approval" && !["Approved", "Rejected"].includes(body.trim()))
+        throw new FeedbackValidationError("Select Approve or Reject.");
       this.db.prepare("UPDATE comments SET feedbackStatus = 'answered' WHERE comments.workspaceId = workspace_id() AND id = ?").run(commentId);
       this.addComment({ id: randomUUID(), taskId, body: body.trim(), createdAt: new Date().toISOString(), authorName: this.getUserName() || "Human", authorRole: "human", runId: run.id, parentCommentId: request.id });
       this.db.prepare("INSERT INTO runs (workspaceId, workspacePath, id, taskId, column, profile, status, createdAt, kind, commentId, replyPlan) VALUES (workspace_id(), (SELECT path FROM workspaces WHERE id = workspace_id()), ?, ?, ?, ?, 'Queued', ?, ?, ?, ?)")
@@ -986,7 +989,7 @@ export class TaskStore {
       catch { throw new CommentValidationError("Choose a valid artifact revision reference."); }
       this.db
         .prepare(
-          "INSERT INTO comments (workspaceId, id, taskId, body, createdAt, authorName, recommendation, feedbackStatus, runId, parentCommentId, authorRole) VALUES (workspace_id(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          "INSERT INTO comments (workspaceId, id, taskId, body, createdAt, authorName, recommendation, feedbackStatus, runId, parentCommentId, authorRole, responseType) VALUES (workspace_id(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .run(
           comment.id,
@@ -999,6 +1002,7 @@ export class TaskStore {
           comment.runId ?? null,
           comment.parentCommentId ?? null,
           comment.authorRole ?? null,
+          comment.responseType ?? null,
         );
       this.attachCommentArtifacts(comment.id, references);
       this.db.exec("RELEASE publish_comment");

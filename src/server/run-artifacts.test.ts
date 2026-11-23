@@ -257,3 +257,55 @@ test("generic chat can publish, read, revise and link artifacts without task com
     });
   } finally { chats.close(); f.close(); }
 });
+
+for (const answer of ["Approved", "Rejected"]) {
+  test(`MCP approval feedback persists and resumes with ${answer}`, async () => {
+    const f = fixture();
+    let resumed = false;
+    try {
+      const service = new ExecutionService(f.store, async ({ artifacts, task }) => {
+        const reply = task.comments?.find((comment) => comment.authorRole === "human");
+        if (reply) {
+          assert.equal(reply.body, answer);
+          resumed = true;
+          return "Decision received.";
+        }
+        assert.ok(artifacts);
+        await assert.rejects(rpc(artifacts, "request_feedback", { question: "Proceed?", recommendation: "Proceed.", responseType: "invalid" }), /responseType/);
+        await assert.rejects(rpc(artifacts, "request_feedback", { question: " ", recommendation: "Proceed.", responseType: "approval" }), /question/);
+        await rpc(artifacts, "request_feedback", { question: "Approve the change?", recommendation: "Approve the change to fix the error.", responseType: "approval" });
+        await assert.rejects(rpc(artifacts, "publish_artifact", { title: "Late", type: "text", content: "No" }), /Stop work/);
+        return "Waiting for your decision.";
+      });
+      await service.drain();
+      assert.equal(f.store.list()[0].agentStatus, "Waiting");
+      const reopened = new TaskStore(f.path);
+      try {
+        const request = reopened.list()[0].comments![0];
+        assert.equal(request.responseType, "approval");
+        assert.equal(request.body, "Approve the change?");
+        assert.throws(() => reopened.answerFeedback("task", request.id, "Maybe"), /Approve or Reject/);
+        reopened.answerFeedback("task", request.id, answer);
+        assert.throws(() => reopened.answerFeedback("task", request.id, answer), /no longer pending/);
+      } finally { reopened.close(); }
+      await service.drain();
+      assert.equal(resumed, true);
+    } finally { f.close(); }
+  });
+}
+
+test("MCP text feedback accepts a written answer", async () => {
+  const f = fixture();
+  try {
+    await new ExecutionService(f.store, async ({ artifacts }) => {
+      assert.ok(artifacts);
+      await rpc(artifacts, "request_feedback", { question: "Which file?", recommendation: "Use the newest file.", responseType: "text" });
+      return "Waiting for feedback.";
+    }).drain();
+    const request = f.store.list()[0].comments![0];
+    assert.equal(request.responseType, "text");
+    const task = f.store.answerFeedback("task", request.id, "Use report.md");
+    assert.equal(task.agentStatus, "Queued");
+    assert.ok(task.comments?.some((comment) => comment.body === "Use report.md"));
+  } finally { f.close(); }
+});

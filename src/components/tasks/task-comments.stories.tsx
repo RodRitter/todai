@@ -808,3 +808,44 @@ export const NamedHuman: Story = {
     await expect(root).toHaveClass("bg-transparent");
   },
 };
+
+const approvalRequest: TaskComment = {
+  ...request, responseType: "approval", body: "Approve the proposed change?",
+  recommendation: "Approve the change to hide archived tasks by default.",
+};
+export const ApproveFeedback: Story = {
+  args: { comments: [approvalRequest], onAnswerFeedback: fn() },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByRole("textbox")).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("button", { name: "Approve" }));
+    await expect(args.onAnswerFeedback).toHaveBeenCalledWith("request", "Approved");
+  },
+};
+export const RejectFeedback: Story = {
+  args: { comments: [approvalRequest], onAnswerFeedback: fn() },
+  play: async ({ canvasElement, args }) => {
+    await userEvent.click(within(canvasElement).getByRole("button", { name: "Reject" }));
+    await expect(args.onAnswerFeedback).toHaveBeenCalledWith("request", "Rejected");
+  },
+};
+export const ApprovalPending: Story = {
+  args: { comments: [approvalRequest], onAnswerFeedback: () => new Promise<void>(() => {}) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "Approve" }));
+    await expect(canvas.getByRole("button", { name: "Submitting…" })).toBeDisabled();
+    await expect(canvas.getByRole("button", { name: "Reject" })).toBeDisabled();
+  },
+};
+export const ApprovalError: Story = {
+  args: { comments: [approvalRequest], onAnswerFeedback: async () => { throw new Error("Could not save the answer. Try again."); } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "Reject" }));
+    await expect(await canvas.findByRole("alert")).toHaveTextContent("Could not save the answer.");
+    await expect(canvas.getByRole("button", { name: "Approve" })).toBeEnabled();
+  },
+};
+export const ApprovalDark: Story = { args: ApproveFeedback.args, globals: { theme: "dark" } };
+export const ApprovalNarrow: Story = { args: ApproveFeedback.args, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
