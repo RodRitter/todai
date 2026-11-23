@@ -74,6 +74,25 @@ export class UsageStore {
     this.db.prepare("INSERT INTO settings (key, value, workspaceId) VALUES ('creditOffset', ?, ?) ON CONFLICT(workspaceId, key) DO UPDATE SET value = excluded.value").run(String(offset), this.workspaceId);
     return this.trackedCredits();
   }
+  taskCredits(): Map<string, import("../domain/usage.ts").TaskCreditUsage> {
+    const rows = this.db.prepare(`
+      SELECT taskId, COALESCE(SUM(credits), 0) AS credits, COUNT(*) AS calls,
+        COUNT(credits) AS priced, SUM(outcome = 'Running') AS pending
+      FROM (
+        SELECT taskId, credits, outcome FROM task_usage WHERE workspaceId = ?
+        UNION ALL
+        SELECT taskId, NULL AS credits, status AS outcome FROM runs
+        WHERE workspaceId = ? AND startedAt IS NOT NULL
+          AND json_extract(profile, '$.tool') = 'codex'
+          AND NOT EXISTS (SELECT 1 FROM task_usage WHERE task_usage.id = runs.id)
+      ) GROUP BY taskId
+    `).all(this.workspaceId, this.workspaceId);
+    return new Map(rows.map(row => [String(row.taskId), {
+      credits: Number(row.credits), calls: Number(row.calls),
+      priced: Number(row.priced), pending: Number(row.pending),
+    }]));
+  }
+
   read(taskId: string): TaskUsage {
     if (!this.db.prepare("SELECT id FROM tasks WHERE id = ? AND workspaceId = ?").get(taskId, this.workspaceId)) throw new Error("Task not found.");
     for (const row of this.db.prepare("SELECT id, ownerPid, ownerIdentity FROM task_usage WHERE workspaceId = ? AND taskId = ? AND outcome = 'Running'").all(this.workspaceId, taskId)) {

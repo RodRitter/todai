@@ -35,6 +35,7 @@ function fixture() {
 test("all activity types record independent calls, repeated snapshots replace counts, and failures retain usage", async () => {
   const f = fixture();
   try {
+    assert.deepEqual(f.store.list()[0].creditUsage, { credits: 0, calls: 0, priced: 0, pending: 0 });
     const runner = async (request: RunRequest) => { request.onUsage?.(tokens); request.onUsage?.(tokens); return "Done"; };
     await runWithUsage(f.store, runner, f.request);
     await runWithUsage(f.store, runner, { ...f.request, run: { ...f.request.run, id: "reply", kind: "reply" } });
@@ -43,6 +44,7 @@ test("all activity types record independent calls, repeated snapshots replace co
     await assert.rejects(runWithUsage(f.store, async request => { request.onUsage?.(tokens); throw new Error("No handover"); }, { ...f.request, run: { ...f.request.run, id: "failed" } }));
     const data = f.store.usage().read("task");
     assert.equal(data.totals.calls, 5); assert.equal(data.totals.tokens, 550000); assert.equal(data.totals.credits, 18.5);
+    assert.deepEqual(f.store.list()[0].creditUsage, { credits: 18.5, calls: 5, priced: 5, pending: 0 });
     assert.equal(data.groups.chat.calls, 1); assert.equal(data.groups.background.calls, 1); assert.equal(data.groups.reply.calls, 1);
     assert.equal(data.calls.find(c => c.id === "failed")!.credits, 3.7);
     assert.equal(data.calls[0].rate!.version, "2026-11-23");
@@ -56,12 +58,16 @@ test("missing counts, unknown rates, restart recovery and workspace isolation", 
     await runWithUsage(f.store, async () => "Done", f.request);
     await runWithUsage(f.store, async request => { request.onUsage?.(tokens); return "Done"; }, { ...f.request, run: { ...f.request.run, id: "unknown-model", profile: { ...f.request.run.profile, model: "custom" } } });
     f.store.usage().begin({ ...f.request, run: { ...f.request.run, id: "orphan" } }, "chat");
+    assert.deepEqual(f.store.list()[0].creditUsage, { credits: 0, calls: 3, priced: 0, pending: 1 });
     const db = new DatabaseSync(f.path); db.prepare("UPDATE task_usage SET ownerPid = -1, ownerIdentity = 'missing' WHERE id = 'orphan'").run(); db.close();
     const data = f.store.usage().read("task");
     assert.equal(data.totals.unknown, 2); assert.equal(data.totals.unpriced, 1);
     assert.equal(data.calls.find(c => c.id === "orphan")!.outcome, "Interrupted");
     const other = f.store.createWorkspace("Other", f.directory); const otherStore = new TaskStore(f.path, other.id);
-    assert.throws(() => otherStore.usage().read("task")); otherStore.close();
+    assert.throws(() => otherStore.usage().read("task"));
+    otherStore.save({ id: "other-task", title: "Other", description: "", status: "To do" });
+    assert.deepEqual(otherStore.list()[0].creditUsage, { credits: 0, calls: 0, priced: 0, pending: 0 });
+    otherStore.close();
     const previous = process.env.TODAI_DB_PATH; process.env.TODAI_DB_PATH = f.path;
     try {
       assert.equal(GET(new Request("http://localhost/api/tasks/usage?taskId=task")).status, 400);

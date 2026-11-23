@@ -45,3 +45,5 @@ export type WorkspaceCredits = {
   credits: number; calls: number; priced: number; measured: number;
   breakdown: Record<"uncachedInput" | "cachedInput" | "output", { tokens: number; credits: number }>;
 };
+
+export type TaskCreditUsage = Pick<UsageTotals, "credits" | "calls" | "priced" | "pending">;

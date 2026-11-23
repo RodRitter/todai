@@ -9,7 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { TaskId } from "./task-id";
+import { TaskCardMetadata } from "./task-card-metadata";
 import { AgentStatus } from "./agent-status";
 import type { Task } from "@/domain/task";
 
@@ -66,7 +66,7 @@ export function TaskCard({
       onDragEnd={onDragEnd}
     >
       <CardHeader>
-        <TaskId number={task.taskNumber} />
+        <TaskCardMetadata task={task} />
         <CardTitle title={task.title}>{task.title}</CardTitle>
       </CardHeader>
       <CardFooter className="text-xs">

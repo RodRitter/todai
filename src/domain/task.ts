@@ -17,6 +17,7 @@ export const agentStatuses = [
 export type AgentStatus = (typeof agentStatuses)[number];
 export type Board = { id: string; name: string; columns: string[] };
 export type Task = {
+  creditUsage?: import("./usage.ts").TaskCreditUsage;
   /** Assigned by the database when the task is first saved. */
   taskNumber?: number;
   boardId?: string;

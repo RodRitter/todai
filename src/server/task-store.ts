@@ -456,12 +456,14 @@ export class TaskStore {
   }
 
   list(): Task[] {
+    const credits = this.usage().taskCredits();
     return (
       this.db
         .prepare("SELECT tasks.*, task_numbers.number AS taskNumber FROM tasks JOIN task_numbers ON task_numbers.taskId = tasks.id WHERE tasks.workspaceId = workspace_id() ORDER BY tasks.rowid")
         .all() as unknown as Task[]
     ).map((task) => ({
       ...task,
+      creditUsage: credits.get(task.id) ?? { credits: 0, calls: 0, priced: 0, pending: 0 },
       autoWorkflow: Boolean(task.autoWorkflow),
       autoRun: Boolean(task.autoRun),
       comments: this.db

@@ -4,6 +4,7 @@ export const exampleTasks: Task[] = [
   {
     id: "1",
     taskNumber: 1,
+    creditUsage: { credits: 12.34, calls: 2, priced: 2, pending: 0 },
     title: "Plan the project",
     description: "Outline the scope and main deliverables.",
     status: "To do",

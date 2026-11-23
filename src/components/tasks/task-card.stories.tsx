@@ -28,6 +28,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   play: async ({ canvasElement }) => {
     await expect(within(canvasElement).getByText("TASK-1")).toBeVisible();
+    await expect(within(canvasElement).getByText("12.34 credits")).toBeVisible();
   },
 };
 export const Dark: Story = { globals: { theme: "dark" } };
@@ -96,3 +97,8 @@ export const KeyboardActivation: Story = {
     await expect(args.onEdit).toHaveBeenCalledWith(args.task);
   },
 };
+
+export const NoCreditUsage: Story = { args: { task: { ...exampleTasks[0], creditUsage: { credits: 0, calls: 0, priced: 0, pending: 0 } } } };
+export const PendingCredits: Story = { args: { task: { ...exampleTasks[0], creditUsage: { credits: 0, calls: 1, priced: 0, pending: 1 } } } };
+export const UnavailableCredits: Story = { args: { task: { ...exampleTasks[0], creditUsage: { credits: 0, calls: 1, priced: 0, pending: 0 } } } };
+export const PartialCredits: Story = { args: { task: { ...exampleTasks[0], creditUsage: { credits: 12.34, calls: 2, priced: 1, pending: 1 } } } };
