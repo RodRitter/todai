@@ -237,6 +237,7 @@ function CommentInput({ agents, onPost, agentStatus, variant = "default", id = "
       key={version}
       id={id}
       label={reply ? "Your reply" : "Your message"}
+      placeholder={reply ? "Reply" : "Send comment"}
       variant={reply ? "reply" : "prompt"}
       autoFocus={autoFocus}
       onSubmit={() => void submit()}

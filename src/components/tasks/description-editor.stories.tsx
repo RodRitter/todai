@@ -311,7 +311,7 @@ export const CompactReply: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const editor = await canvas.findByRole("textbox", { name: "Your reply" });
-    await expect(editor).toHaveAttribute("data-placeholder", "Send a reply");
+    await expect(editor).toHaveAttribute("data-placeholder", "Reply");
     await expect(canvas.queryByRole("button", { name: "Send reply" })).not.toBeInTheDocument();
     await expect(canvas.queryByRole("button", { name: "Attach artifact" })).not.toBeInTheDocument();
     const surface = editor.closest('[data-slot="input-group"]')!;
