@@ -337,15 +337,15 @@ export const CollapsibleReplyThread: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole("button", { name: "Reply" }));
     await userEvent.type(canvas.getByLabelText("Your reply"), "Keep this draft while collapsed.");
-    await userEvent.click(canvas.getByRole("button", { name: "Collapse 1 reply" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Collapse comment by Reviewer" }));
     await expect(canvas.getByLabelText("Your reply")).not.toBeVisible();
-    const expand = canvas.getByRole("button", { name: "Expand 1 reply" });
+    const expand = canvas.getByRole("button", { name: "Expand comment by Reviewer" });
     await expect(expand).toHaveAttribute("aria-expanded", "false");
     expand.focus();
     await userEvent.keyboard("{Enter}");
     await expect(canvas.getByLabelText("Your reply")).toBeVisible();
     await expect(canvas.getByLabelText("Your reply")).toHaveTextContent("Keep this draft while collapsed.");
-    await userEvent.click(canvas.getByRole("button", { name: "Collapse 1 reply" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Collapse comment by Reviewer" }));
     await userEvent.click(canvas.getByRole("button", { name: "Reply" }));
     await expect(canvas.getByLabelText("Your reply")).toBeVisible();
   },
@@ -375,10 +375,11 @@ export const ConnectedAvatars: Story = {
     const newer = canvas.getByText(/Confirmed\./);
     await expect(newer.getBoundingClientRect().top).toBeGreaterThan(older.getBoundingClientRect().top);
     await expect(older.getBoundingClientRect().top).toBeGreaterThan(parent.getBoundingClientRect().top);
-    await userEvent.click(canvas.getByRole("button", { name: "Collapse 2 replies" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Collapse comment by Reviewer" }));
     await expect(older).not.toBeVisible();
-    await expect(parent).toBeVisible();
-    await userEvent.click(canvas.getByRole("button", { name: "Expand 2 replies" }));
+    await expect(parent).not.toBeVisible();
+    await expect(canvas.getByText("2 replies")).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Expand comment by Reviewer" }));
     await expect(newer).toBeVisible();
   },
 };
@@ -487,7 +488,7 @@ export const ResponseArrival: Story = {
     const scroll = spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => {});
     try {
       await expect(scroll).not.toHaveBeenCalled();
-      await userEvent.click(canvas.getByRole("button", { name: "Collapse 1 reply" }));
+      await userEvent.click(canvas.getByRole("button", { name: "Collapse comment by Reviewer" }));
       await userEvent.click(canvas.getByRole("button", { name: "Finish reply" }));
       await expect(await canvas.findByText("Reviewer response 2")).toBeVisible();
       await expect(canvasElement.querySelector("#comment-arrival-2")).toHaveAttribute("data-attention", "true");
@@ -611,11 +612,12 @@ export const NestedFeedback: Story = {
     const list = canvas.getByRole("list", { name: "Activity, oldest first" });
     await expect(list.children).toHaveLength(1);
     const requestNode = canvas.getByRole("group", { name: "Feedback request" });
-    await expect(requestNode.closest('[data-slot="message-reply"]')).not.toBeNull();
+    await expect(requestNode.closest('[data-slot="message-group"][data-variant="reply"]')).not.toBeNull();
     await expect(requestNode.closest('[data-slot="message-replies"]')).toHaveAttribute("id", "thread-triggering-reply");
-    await expect(getComputedStyle(requestNode).borderTopColor).toBe("rgba(0, 0, 0, 0)");
+    await expect(getComputedStyle(requestNode).paddingLeft).toBe("0px");
+    await expect(getComputedStyle(requestNode).borderTopWidth).toBe("0px");
     const mainContent = list.querySelector('[data-slot="message-content"]')!;
-    await expect(getComputedStyle(mainContent, "::before").borderLeftWidth).toBe("1px");
+    await expect(getComputedStyle(mainContent, "::before").borderLeftWidth).toBe("0px");
     await userEvent.type(canvas.getByLabelText("Your feedback"), "Approved.");
     await userEvent.click(canvas.getByRole("button", { name: "Submit feedback" }));
     await expect(canvas.getByText("Your answer")).toBeVisible();
@@ -633,23 +635,22 @@ export const LongReplyPreview: Story = {
   ] },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const toggle = await canvas.findByRole("button", { name: "Show full reply" });
-    await expect(canvas.getAllByRole("button", { name: "Show full reply" })).toHaveLength(1);
+    const reply = within(canvasElement.querySelector<HTMLElement>("#comment-long-reply")!);
+    const toggle = reply.getByRole("button", { name: "Collapse comment by Reviewer" });
+    const content = canvasElement.ownerDocument.getElementById(toggle.getAttribute("aria-controls")!)!;
+    await expect(content).toHaveTextContent("Long line 15");
+    await expect(canvas.queryByRole("button", { name: /Show full|Show less/ })).not.toBeInTheDocument();
+    await userEvent.click(toggle);
+    await expect(content).not.toBeVisible();
+    await expect(reply.queryByText("0 replies")).not.toBeInTheDocument();
+    const root = within(canvasElement.querySelector<HTMLElement>("#comment-thread-root")!);
+    await userEvent.click(root.getAllByRole("button", { name: "Collapse comment by Reviewer" })[0]);
+    await expect(root.getByText("2 replies")).toBeVisible();
+    await userEvent.click(root.getByRole("button", { name: "Expand comment by Reviewer" }));
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
-    const preview = canvasElement.ownerDocument.getElementById(toggle.getAttribute("aria-controls")!)!;
-    const limit = parseFloat(getComputedStyle(preview).lineHeight) * 10;
-    await expect(getComputedStyle(preview).maskImage).not.toBe("none");
-    await expect(preview.getBoundingClientRect().height).toBeLessThanOrEqual(limit + 1);
-    await userEvent.click(toggle);
-    await expect(toggle).toHaveAttribute("aria-expanded", "true");
-    await expect(getComputedStyle(preview).maskImage).toBe("none");
-    await expect(preview.getBoundingClientRect().height).toBeGreaterThan(limit);
-    await userEvent.click(canvas.getByRole("button", { name: "Collapse 2 replies" }));
-    await userEvent.click(canvas.getByRole("button", { name: "Expand 2 replies" }));
-    await expect(toggle).toHaveAttribute("aria-expanded", "true");
-    await userEvent.click(toggle);
-    await waitFor(() => expect(preview.getBoundingClientRect().height).toBeLessThanOrEqual(limit + 1));
-    await expect(canvas.getByRole("button", { name: "Show full reply" })).toHaveAttribute("aria-expanded", "false");
+    toggle.focus();
+    await userEvent.keyboard(" ");
+    await expect(content).toBeVisible();
   },
 };
 
@@ -658,17 +659,17 @@ export const LongRootPreview: Story = {
   args: { comments: [{ ...threadRoot, body: Array.from({ length: 15 }, (_, i) => `Root line ${i + 1}`).join("  \n") }] },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const toggle = await canvas.findByRole("button", { name: "Show full message" });
-    await expect(toggle).toHaveAttribute("aria-expanded", "false");
-    const preview = canvasElement.ownerDocument.getElementById(toggle.getAttribute("aria-controls")!)!;
-    const limit = parseFloat(getComputedStyle(preview).lineHeight) * 10;
-    await expect(getComputedStyle(preview).maskImage).not.toBe("none");
-    await expect(preview.getBoundingClientRect().height).toBeLessThanOrEqual(limit + 1);
+    const toggle = canvas.getByRole("button", { name: /Collapse comment by/ });
+    const content = canvasElement.ownerDocument.getElementById(toggle.getAttribute("aria-controls")!)!;
+    await expect(content).toHaveTextContent("Root line 15");
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(canvas.queryByRole("button", { name: /Show full|Show less/ })).not.toBeInTheDocument();
     await userEvent.click(toggle);
-    await waitFor(() => expect(preview.getBoundingClientRect().height).toBeGreaterThan(limit));
-    await expect(getComputedStyle(preview).maskImage).toBe("none");
-    await userEvent.click(canvas.getByRole("button", { name: "Show less" }));
-    await waitFor(() => expect(preview.getBoundingClientRect().height).toBeLessThanOrEqual(limit + 1));
+    await expect(content).not.toBeVisible();
+    await expect(canvas.getByText("0 replies")).toBeVisible();
+    toggle.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(content).toBeVisible();
   },
 };
 export const LongRootFeedbackPreview: Story = {
@@ -694,10 +695,10 @@ export const StableReplyScroll: Story = {
     await waitFor(() => expect(viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop).toBeLessThan(2));
     const target = canvasElement.querySelector<HTMLElement>("#comment-scroll-8")!;
     viewport.scrollTop += target.getBoundingClientRect().top - viewport.getBoundingClientRect().top - 40;
-    const thread = within(canvasElement.querySelector<HTMLElement>("#thread-scroll-8")!);
-    for (const name of ["Collapse 1 reply", "Expand 1 reply", "Show full reply", "Show less"]) {
+    const thread = within(target);
+    for (const name of ["Collapse comment by Reviewer", "Expand comment by Reviewer"]) {
       const top = viewport.scrollTop;
-      await userEvent.click(thread.getByRole("button", { name }));
+      await userEvent.click(thread.getAllByRole("button", { name })[0]);
       await waitFor(() => {
         const running = viewport.getAnimations({ subtree: true }).filter((animation) =>
           animation instanceof CSSTransition ? animation.transitionProperty === "height" :
@@ -714,7 +715,7 @@ export const StableReplyScroll: Story = {
 export const ReplyClosesWithoutFlicker: Story = {
   render: () => <ThreadExample />,
   play: async ({ canvasElement }) => {
-    const trigger = within(canvasElement).getByRole("button", { name: "Collapse 1 reply" });
+    const trigger = within(canvasElement).getByRole("button", { name: "Collapse comment by Reviewer" });
     const content = canvasElement.ownerDocument.getElementById(trigger.getAttribute("aria-controls")!)!;
     const heights: number[] = [];
     const started = performance.now();
@@ -731,5 +732,71 @@ export const ReplyClosesWithoutFlicker: Story = {
       await expect(heights[index]).toBeLessThanOrEqual(heights[index - 1] + 1);
     }
     await expect(heights.at(-1)).toBe(0);
+  },
+};
+
+
+export const BusyDiscussion: Story = {
+  args: { comments: [
+    { ...threadRoot, body: "The board changes are ready for review.\n\n- Keep completed tasks available through the filter.\n- Preserve keyboard navigation." },
+    { ...threadRoot, id: "review-reply", parentCommentId: threadRoot.id, authorName: "Human", body: "Please keep the selected filter when I return to the board.", createdAt: "2026-11-20T10:01:00Z" },
+    { ...threadRoot, id: "review-answer", parentCommentId: threadRoot.id, authorName: "Builder", body: "The selected filter now stays active. The keyboard checks passed.", createdAt: "2026-11-20T10:02:00Z" },
+    { ...request, id: "next-decision", createdAt: "2026-11-20T10:03:00Z" },
+    { ...threadRoot, id: "next-comment", body: "The remaining changes are ready for a separate review.", createdAt: "2026-11-20T10:04:00Z" },
+  ] },
+};
+export const BusyDiscussionDark: Story = { ...BusyDiscussion, globals: { theme: "dark" } };
+export const BusyDiscussionNarrow: Story = { ...BusyDiscussion, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
+
+
+export const ReplyInputBelowCard: Story = {
+  render: () => <ThreadExample />,
+  play: async ({ canvasElement }) => {
+    const input = within(canvasElement).getByRole("textbox", { name: "Your reply" });
+    const card = canvasElement.querySelector('[data-slot="message-thread-card"]')!;
+    const header = canvasElement.querySelector('[data-slot="message-header"]')!;
+    const content = canvasElement.querySelector('[data-slot="message-content"]')!;
+    await expect(header.querySelector('[data-slot="message-avatar"]')).not.toBeNull();
+    await expect(card.getBoundingClientRect().left).toBe(content.getBoundingClientRect().left);
+    await expect(input.closest('[data-slot="message-reply-composer"]')!.getBoundingClientRect().left).toBe(card.getBoundingClientRect().left);
+    await expect(card.contains(input)).toBe(false);
+    await expect(input.getBoundingClientRect().top).toBeGreaterThanOrEqual(card.getBoundingClientRect().bottom);
+  },
+};
+export const ReplyInputBelowCardDark: Story = { ...ReplyInputBelowCard, globals: { theme: "dark" } };
+export const ReplyInputBelowCardNarrow: Story = { ...ReplyInputBelowCard, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
+
+
+export const CollapsedDiscussion: Story = {
+  ...BusyDiscussion,
+  play: async ({ canvasElement }) => {
+    const root = within(canvasElement.querySelector<HTMLElement>("#comment-thread-root")!);
+    await userEvent.click(root.getAllByRole("button", { name: "Collapse comment by Reviewer" })[0]);
+    await expect(root.getByText("2 replies")).toBeVisible();
+    await expect(root.getByRole("button", { name: "Expand comment by Reviewer" })).toHaveAttribute("aria-expanded", "false");
+  },
+};
+export const CollapsedDiscussionDark: Story = { ...CollapsedDiscussion, globals: { theme: "dark" } };
+export const CollapsedDiscussionNarrow: Story = { ...CollapsedDiscussion, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
+
+
+export const InputCollapseKeepsScroll: Story = {
+  ...StableReplyScroll,
+  args: { ...StableReplyScroll.args, onPostComment: fn() },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewport = canvasElement.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')!;
+    const target = canvasElement.querySelector<HTMLElement>("#comment-scroll-8")!;
+    for (const editor of [within(target).getByRole("textbox", { name: "Your reply" }), canvas.getByRole("textbox", { name: "Your message" })]) {
+      editor.focus();
+      await expect(editor).toHaveFocus();
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      viewport.scrollTo({ top: 200, behavior: "instant" });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const top = viewport.scrollTop;
+      editor.blur();
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      await expect(Math.abs(viewport.scrollTop - top)).toBeLessThan(2);
+    }
   },
 };

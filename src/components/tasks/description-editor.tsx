@@ -1,5 +1,6 @@
 "use client";
 
+import { preserveScroll } from "@/components/ui/preserve-scroll";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { EntityPicker, type EntityReference } from "./entity-picker";
 import { referenceMatch, type Match } from "./description-references";
@@ -152,7 +153,15 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
         requestAnimationFrame(revealReply);
       }}
       onBlurCapture={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget) && !(event.relatedTarget instanceof Element && event.relatedTarget.closest("[data-reference-picker]"))) setExpanded(false);
+        if (!event.currentTarget.contains(event.relatedTarget) && !(event.relatedTarget instanceof Element && event.relatedTarget.closest("[data-reference-picker]"))) {
+          if (expanded && !disabled && (variant === "reply" || variant === "prompt")) {
+            const node = event.currentTarget;
+            const viewport = node.closest<HTMLElement>('[data-slot="scroll-area-viewport"]')
+              ?? node.closest('[data-slot="conversation-composer"]')?.parentElement?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
+            preserveScroll(viewport ?? node);
+          }
+          setExpanded(false);
+        }
       }}
       disabled={disabled}
       onClick={(event) => {

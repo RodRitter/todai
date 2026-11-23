@@ -4,7 +4,6 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 import { ChevronDown, LoaderCircle } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 
 export function isReplyInputActive(document: Document) {
@@ -27,11 +26,12 @@ function useMessageAttention(attention: boolean) {
   return ref;
 }
 
-function MessageGroup({ className, variant = "default", ...props }: React.ComponentProps<"div"> & { variant?: "default" | "reply" }) {
+function MessageGroup({ className, variant = "default", ...props }: React.ComponentProps<"div"> & { variant?: "default" | "comment" | "reply" }) {
   return (
     <div
       data-slot="message-group"
-      className={cn("flex min-w-0 flex-col gap-2", variant === "reply" && "relative pb-5 last:pb-0 before:pointer-events-none before:absolute before:left-4 before:top-10 before:bottom-0 before:border-l before:border-border last:before:hidden", className)}
+      data-variant={variant}
+      className={cn("flex min-w-0 flex-col gap-2", variant === "comment" && "rounded-2xl bg-card text-card-foreground", variant === "reply" && "border-b border-border/60 py-3 first:pt-0 last:border-b-0 last:pb-0", className)}
       {...props}
     />
   )
@@ -137,20 +137,47 @@ export function MessageReplies({ className, variant = "default", ...props }: Rea
   )} {...props} />;
 }
 
-export function MessageReply({ attention = false, label, avatarName = label, createdAt, actions, children, className, connected = false, ...props }: React.ComponentProps<"div"> & { attention?: boolean; connected?: boolean; label: string; avatarName?: string; createdAt?: string; actions?: React.ReactNode }) {
+export function MessageDisclosure({ open, onOpenChange, label, avatarName = label, createdAt, actions, replyCount, attention = false, nested = false, children, ...props }: React.ComponentProps<"div"> & {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  label: string;
+  avatarName?: string;
+  createdAt?: string;
+  actions?: React.ReactNode;
+  replyCount: number;
+  attention?: boolean;
+  nested?: boolean;
+}) {
   const attentionRef = useMessageAttention(attention);
-  return <div ref={attentionRef} data-attention={attention || undefined} data-slot="message-reply" className={cn("group/reply relative flex min-w-0 gap-2 pb-5 last:pb-0 before:absolute before:left-4 before:top-10 before:bottom-1 before:border-l before:border-border last:before:hidden", className)} {...props}>
-    <MessageAvatar name={avatarName} />
-    <MessageContent connected={connected}>
-      <MessageHeader><MessageAuthor createdAt={createdAt}>{label}</MessageAuthor>{actions}</MessageHeader>
-      {children}
-    </MessageContent>
-  </div>;
+  const trigger = <CollapsibleTrigger asChild>
+    <button type="button" aria-label={`${open ? "Collapse" : "Expand"} comment by ${label}`}
+      className="flex min-w-0 cursor-pointer items-center gap-2 rounded-sm text-left text-sm font-semibold text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring">
+      <MessageAvatar name={avatarName} />
+      <span className="min-w-0 wrap-anywhere">{label}</span>
+      <ChevronDown aria-hidden="true" className={cn("size-4 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none", !open && "-rotate-90")} />
+    </button>
+  </CollapsibleTrigger>;
+  return <Collapsible open={open} onOpenChange={onOpenChange} asChild>
+    <MessageGroup ref={attentionRef} variant={nested ? "reply" : "comment"} data-attention={attention || undefined} {...props}>
+      <div data-slot={nested ? "message-reply" : "message"}>
+        <MessageHeader>
+          {createdAt ? <TooltipProvider><Tooltip><TooltipTrigger asChild>{trigger}</TooltipTrigger><TooltipContent><time dateTime={createdAt}>{new Date(createdAt).toLocaleString()}</time></TooltipContent></Tooltip></TooltipProvider> : trigger}
+          {actions}
+          {!open && !nested && <span data-slot="message-reply-summary" className="ml-auto shrink-0 text-xs text-muted-foreground">{replyCount} {replyCount === 1 ? "reply" : "replies"}</span>}
+        </MessageHeader>
+      </div>
+      <CollapsibleContent forceMount>
+        <div data-slot="message-content" className="min-w-0 space-y-3 text-sm">
+          {children}
+        </div>
+      </CollapsibleContent>
+    </MessageGroup>
+  </Collapsible>;
 }
 
 export function MessageReplyComposer({ className, ...props }: React.ComponentProps<"div">) {
   return <div data-slot="message-reply-composer" className={cn(
-    "relative min-w-0 pb-5 pl-10 last:pb-0 before:absolute before:left-4 before:top-0 before:bottom-0 before:border-l before:border-border",
+    "relative min-w-0 pt-3",
     className,
   )} {...props} />;
 }
@@ -164,39 +191,10 @@ export function MessageAuthor({ className, createdAt, ...props }: React.Componen
   </Tooltip></TooltipProvider>;
 }
 
-export function MessageThread({ count, open, onOpenChange, children, className, position = "below", ...props }: React.ComponentProps<"div"> & {
-  position?: "above" | "below";
-  count: number;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const label = count ? `${count} ${count === 1 ? "reply" : "replies"}` : "Reply thread";
-  const trigger = <div className={cn(
-    "relative before:absolute before:-left-6 before:border-l before:border-border",
-    position === "above" ? "pt-3 before:top-0 before:-bottom-2" : "pb-3 before:-top-2.5 before:bottom-0",
-  )}>
-    <CollapsibleTrigger asChild>
-      <Button type="button" variant="ghost-muted" size="sm"
-        aria-label={`${open ? "Collapse" : "Expand"} ${label.toLowerCase()}`}>
-        <span>{label}</span>
-        <ChevronDown aria-hidden="true" className={cn("size-4 shrink-0 transition-transform motion-reduce:transition-none", !open ? "-rotate-90" : position === "above" && "rotate-180")} />
-      </Button>
-    </CollapsibleTrigger>
+export function MessageThread({ children, className, ...props }: React.ComponentProps<"div">) {
+  return <div data-slot="message-replies" className={cn("min-w-0", className)} {...props}>
+    <div data-slot="message-thread-card" className="rounded-2xl border border-border/60 bg-muted/25 p-3 dark:bg-muted">{children}</div>
   </div>;
-  return <Collapsible open={open} onOpenChange={onOpenChange} asChild>
-    <div data-slot="message-replies" data-position={position} className={cn("relative ml-10 min-w-0 self-stretch", className)} {...props}>
-      {position === "below" && trigger}
-      <CollapsibleContent forceMount className={cn(
-        "relative before:pointer-events-none before:absolute before:-left-6 before:w-6 before:border-l before:border-border",
-        position === "above"
-          ? "before:top-4 before:bottom-0 before:rounded-tl-xl before:border-t"
-          : "before:top-0 before:h-4 before:rounded-bl-xl before:border-b",
-      )}>
-        {children}
-      </CollapsibleContent>
-      {position === "above" && trigger}
-    </div>
-  </Collapsible>;
 }
 
 export function MessageAgentStatus({ status }: { status: "Running" | "Queued" }) {

@@ -104,13 +104,13 @@
   35%, 65% { background-color: color-mix(in oklab, var(--primary) 14%, transparent); }
 }
 
-:is([data-slot="message"], [data-slot="message-reply"])[data-attention="true"] {
+:is([data-slot="message"], [data-slot="message-reply"], [data-slot="message-group"])[data-attention="true"] {
   border-radius: var(--radius);
   animation: message-attention 1.8s ease-in-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :is([data-slot="message"], [data-slot="message-reply"])[data-attention="true"] {
+  :is([data-slot="message"], [data-slot="message-reply"], [data-slot="message-group"])[data-attention="true"] {
     animation: none;
   }
 }
