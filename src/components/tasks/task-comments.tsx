@@ -53,7 +53,7 @@ export function TaskComments({ taskId, active = true, onChat, embedded = false, 
   const activity = <div ref={content} className={embedded ? "space-y-6 pb-4" : "space-y-6"}>
       {!comments.length && agentStatus !== "Running" && agentStatus !== "Queued" && <ConversationEmptyState variant="comments" />}
       {comments.length ? (
-        <ol aria-label="Activity, oldest first" className="space-y-4">
+        <ol aria-label="Activity, oldest first" className="space-y-8">
           {groupActivity(comments).toReversed().map(({ message: comment, replies }) => (
             <li key={comment.id} tabIndex={-1} id={`comment-${comment.id}`} className="group">
               <ActivityMessage agents={agents} attentionId={attentionId} onChat={onChat} comment={comment} replies={replies} agentStatus={agentStatus} onDeleteComment={onDeleteComment} onAnswerFeedback={onAnswerFeedback} onPostComment={onPostComment} />

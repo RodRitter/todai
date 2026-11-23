@@ -177,7 +177,7 @@ export function MessageDisclosure({ open, onOpenChange, label, avatarName = labe
 
 export function MessageReplyComposer({ className, ...props }: React.ComponentProps<"div">) {
   return <div data-slot="message-reply-composer" className={cn(
-    "relative min-w-0 pt-3",
+    "relative min-w-0",
     className,
   )} {...props} />;
 }
