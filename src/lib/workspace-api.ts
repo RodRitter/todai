@@ -7,6 +7,7 @@ import type { Task } from "@/domain/task";
 export type BoardSnapshot = {
   tasks: Task[];
   columns: string[];
+  columnInstructions?: Record<string, string>;
   assignments: ColumnAssignment[];
 };
 
@@ -142,7 +143,7 @@ export function boardSettingsApi(boardId: string) {
   return {
     load: () => request<BoardSnapshot>("/api/tasks?workspace=true", { headers }),
     create: (name: string) => request<string[]>("/api/columns", { headers, method: "POST", body: name }),
-    rename: (column: string, name: string) => request<string[]>("/api/columns", { headers, method: "PATCH", body: { column, name } }),
+    rename: (column: string, name: string, instructions?: string) => request<string[]>("/api/columns", { headers, method: "PATCH", body: { column, name, ...(instructions !== undefined ? { instructions } : {}) } }),
     remove: (column: string) => request<string[]>("/api/columns", { headers, method: "DELETE", body: column }),
     reorder: (columns: string[]) => request<string[]>("/api/columns", { headers, method: "PUT", body: columns }),
   };

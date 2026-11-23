@@ -142,7 +142,7 @@ function BoardColumns({ boardId, persistence, disabled, onColumnsChange }: {
     onColumnsChange(columns);
     return columns;
   }
-  return <ColumnEditor initialColumns={snapshot.columns} initialTaskCounts={Object.fromEntries(snapshot.columns.map((column) => [column, snapshot.tasks.filter((task) => task.status === column).length]))}
+  return <ColumnEditor initialInstructions={snapshot.columnInstructions} configure={(column, name, instructions) => update(() => api.rename(column, name, instructions))} initialColumns={snapshot.columns} initialTaskCounts={Object.fromEntries(snapshot.columns.map((column) => [column, snapshot.tasks.filter((task) => task.status === column).length]))}
     disabled={disabled} create={(name) => update(() => api.create(name))} rename={(column, name) => update(() => api.rename(column, name))}
     remove={(column) => update(() => api.remove(column))} reorder={(columns) => update(() => api.reorder(columns))} />;
 }

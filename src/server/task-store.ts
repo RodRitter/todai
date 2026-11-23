@@ -42,6 +42,7 @@ export type AgentRun = {
   taskId: string;
   column: Task["status"];
   profile: AgentProfile;
+  columnInstructions?: string;
   status: "Queued" | "Running" | "Complete" | "Failed" | "Interrupted" | "Stopped" | "Waiting";
   kind?: "intent" | "reply" | null;
   commentId?: string | null;
@@ -213,13 +214,14 @@ export class TaskStore {
     return this.transaction(() => ({
       tasks: this.list().filter((task) => task.boardId === this.boardId),
       columns: this.listColumns(),
+      columnInstructions: this.columnInstructions(),
       assignments: this.listColumnAgents(),
     }));
   }
 
   exportConfiguration(): Configuration {
     return this.transaction(() => {
-      const columns = this.db.prepare("SELECT id, name FROM board_columns WHERE board_columns.workspaceId = workspace_id() AND board_columns.boardId = board_id() ORDER BY position").all() as { id: string; name: string }[];
+      const columns = this.db.prepare("SELECT id, name, instructions FROM board_columns WHERE board_columns.workspaceId = workspace_id() AND board_columns.boardId = board_id() ORDER BY position").all() as { id: string; name: string; instructions: string }[];
       return {
         format: "todai-configuration", version: 1,
         agents: this.listAgents(), columns: columns.map((column) => ({ ...column })),
@@ -278,6 +280,7 @@ export class TaskStore {
           this.db.prepare("INSERT INTO board_columns (workspaceId, boardId, id, name, position) VALUES (workspace_id(), board_id(), ?, ?, ?)").run(conflictMode === "overwrite" ? column.id : randomUUID(), name, existing.length);
           existing.push(name);
         }
+        this.db.prepare("UPDATE board_columns SET instructions = ? WHERE workspaceId = workspace_id() AND boardId = board_id() AND name = ?").run(column.instructions ?? "", name);
         columnNames.set(column.id, name);
       }
       for (const assignment of data.assignments) {
@@ -296,6 +299,10 @@ export class TaskStore {
       .prepare("SELECT name FROM board_columns WHERE board_columns.workspaceId = workspace_id() AND board_columns.boardId = ? ORDER BY position")
       .all(boardId)
       .map((row) => row.name as string);
+  }
+
+  columnInstructions(boardId = this.boardId): Record<string, string> {
+    return Object.fromEntries(this.db.prepare("SELECT name, instructions FROM board_columns WHERE workspaceId = workspace_id() AND boardId = ?").all(boardId).map((row) => [row.name as string, row.instructions as string]));
   }
 
   private columnName(input: unknown, current?: string): string {
@@ -332,7 +339,9 @@ export class TaskStore {
     });
   }
 
-  renameColumn(column: unknown, input: unknown): string[] {
+  renameColumn(column: unknown, input: unknown, instructions?: unknown): string[] {
+    if (instructions !== undefined && (typeof instructions !== "string" || instructions.length > 20000))
+      throw new ColumnValidationError("Column instructions must contain no more than 20,000 characters.");
     return this.transaction(() => {
       if (typeof column !== "string" || !this.listColumns().includes(column)) {
         throw new ColumnValidationError(
@@ -340,6 +349,8 @@ export class TaskStore {
         );
       }
       const name = this.columnName(input, column);
+      if (instructions !== undefined)
+        this.db.prepare("UPDATE board_columns SET instructions = ? WHERE workspaceId = workspace_id() AND boardId = board_id() AND name = ?").run(instructions as string, column);
       this.db
         .prepare("UPDATE board_columns SET name = ? WHERE board_columns.workspaceId = workspace_id() AND board_columns.boardId = board_id() AND name = ?")
         .run(name, column);
@@ -686,6 +697,9 @@ export class TaskStore {
       const waiting = new Set(this.list().filter((task) => task.agentStatus === "Stopped" || task.comments?.some((comment) => comment.feedbackStatus === "pending")).map((task) => task.id));
       const run = this.history().sort((a, b) => a.createdAt.localeCompare(b.createdAt)).find((run) => run.status === "Queued" && !waiting.has(run.taskId));
       if (!run) return;
+      const taskBoard = this.db.prepare("SELECT boardId FROM tasks WHERE workspaceId = workspace_id() AND id = ?").get(run.taskId)!.boardId as string;
+      const columnInstructions = run.kind === "intent" ? "" : this.columnInstructions(taskBoard)[run.column] ?? "";
+      this.db.prepare("UPDATE runs SET columnInstructions = ? WHERE id = ? AND workspaceId = workspace_id()").run(columnInstructions, run.id);
       const startedAt = new Date().toISOString();
       const ownerIdentity = processIdentity(process.pid);
       if (!ownerIdentity)
@@ -701,6 +715,7 @@ export class TaskStore {
       return {
         ...run,
         status: "Running",
+        columnInstructions,
         startedAt,
         ownerPid: process.pid,
         ownerIdentity,

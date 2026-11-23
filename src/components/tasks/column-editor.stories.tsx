@@ -42,3 +42,23 @@ export const NarrowLongNames: Story = {
   args: { initialColumns: ["Research and validation before implementation", "Done"] },
   decorators: [(Story) => <div className="max-w-80"><Story /></div>],
 };
+
+export const ColumnInstructions: Story = {
+  args: {
+    initialInstructions: { "To do": "Check the task scope before planning." },
+    configure: async (_column, name) => [name, "Done"],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "Configure To do" }));
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog", { name: "Column settings" }));
+    await expect(dialog.getByLabelText("Custom instructions")).toHaveValue("Check the task scope before planning.");
+    await userEvent.clear(dialog.getByLabelText("Custom instructions"));
+    await userEvent.type(dialog.getByLabelText("Custom instructions"), "Record open questions.");
+    await userEvent.click(dialog.getByRole("button", { name: "Save settings" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Configure To do" }));
+    const reopened = within(await within(canvasElement.ownerDocument.body).findByRole("dialog", { name: "Column settings" }));
+    await expect(reopened.getByLabelText("Custom instructions")).toHaveValue("Record open questions.");
+  },
+};
+export const ColumnInstructionsDark: Story = { ...ColumnInstructions, globals: { theme: "dark" } };

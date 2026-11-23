@@ -79,7 +79,7 @@ export function EntityPicker({ editor, id, match, agents, artifacts, keyboardRef
         return payload.references;
       }));
       if (abort.signal.aborted) return;
-      setResponse({ key, items: responses.flatMap((result) => result.status === "fulfilled" ? result.value : []), failed: responses.flatMap((result, index) => result.status === "rejected" ? [kinds[index].label] : []) });
+      setResponse({ key, items: responses.flatMap<EntityReference>((result) => result.status === "fulfilled" ? result.value : []), failed: responses.flatMap((result, index) => result.status === "rejected" ? [kinds[index].label] : []) });
     }, 150);
     return () => { clearTimeout(timer); abort.abort(); };
   }, [key, filter, query, artifacts]);

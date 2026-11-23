@@ -4,7 +4,7 @@ export type Configuration = {
   format: "todai-configuration";
   version: 1;
   agents: AgentProfile[];
-  columns: { id: string; name: string }[];
+  columns: { id: string; name: string; instructions?: string }[];
   assignments: { columnId: string; agentId: string }[];
 };
 
@@ -25,6 +25,8 @@ export function parseConfiguration(input: unknown): Configuration {
     return fail("Agent IDs must be unique.");
   if (data.columns.some((column) => !column || typeof column.id !== "string" || !column.id.trim() || typeof column.name !== "string" || !column.name.trim() || column.name !== column.name.trim() || column.name.length > 80))
     return fail("Column names must contain 1–80 characters without surrounding spaces.");
+  if (data.columns.some((column) => column.instructions !== undefined && (typeof column.instructions !== "string" || column.instructions.length > 20000)))
+    return fail("Column instructions must contain no more than 20,000 characters.");
   if (new Set(data.columns.map((column) => column.name.toLowerCase())).size !== data.columns.length)
     return fail("Column names must be unique.");
   if (new Set(data.columns.map((column) => column.id)).size !== data.columns.length)
@@ -36,7 +38,7 @@ export function parseConfiguration(input: unknown): Configuration {
   });
   if (new Set(assignments.map((assignment) => assignment.columnId)).size !== assignments.length)
     return fail("Each column can have only one assignment.");
-  return { format: "todai-configuration", version: 1, agents, columns: data.columns.map(({ id, name }) => ({ id, name })), assignments };
+  return { format: "todai-configuration", version: 1, agents, columns: data.columns.map(({ id, name, instructions }) => ({ id, name, ...(instructions !== undefined ? { instructions } : {}) })), assignments };
 }
 
 export function selectConfiguration(data: Configuration, agentIds: string[], columns: string[]): Configuration {

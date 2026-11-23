@@ -1,5 +1,5 @@
-import { withTaskStore } from "@/server/database";
-import { ColumnValidationError, type TaskStore } from "@/server/task-store";
+import { withTaskStore } from "../../../server/database.ts";
+import { ColumnValidationError, type TaskStore } from "../../../server/task-store.ts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,7 +59,7 @@ export function PATCH(request: Request) {
         "Choose a column and enter its new name.",
       );
     }
-    return store.renameColumn(input.column, input.name);
+    return store.renameColumn(input.column, input.name, "instructions" in input ? input.instructions : undefined);
   });
 }
 export function DELETE(request: Request) {

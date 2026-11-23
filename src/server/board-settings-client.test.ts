@@ -18,7 +18,7 @@ test("local settings editors retain their own board scope without changing the t
     const product = boardSettingsApi("product");
     await research.load();
     await product.load();
-    await research.rename("Ideas", "Backlog");
+    await research.rename("Ideas", "Backlog", "Check scope");
     await product.create("Review");
     await research.reorder(["Backlog", "Done"]);
     await product.remove("Review");
@@ -26,7 +26,7 @@ test("local settings editors retain their own board scope without changing the t
     assert.deepEqual(requests.map((request) => request.board), ["research", "product", "research", "product", "research", "product", "original"]);
     assert.ok(requests.every((request) => request.workspace === "workspace"));
     assert.equal(requests[2].method, "PATCH");
-    assert.deepEqual(JSON.parse(requests[2].body as string), { column: "Ideas", name: "Backlog" });
+    assert.deepEqual(JSON.parse(requests[2].body as string), { column: "Ideas", name: "Backlog", instructions: "Check scope" });
   } finally {
     if (previousDocument) Object.defineProperty(globalThis, "document", previousDocument);
     else Reflect.deleteProperty(globalThis, "document");

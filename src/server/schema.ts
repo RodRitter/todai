@@ -130,6 +130,10 @@ export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
     }
     migrateWorkspaceOwnership(db, !fresh || seedWorkspace);
     migrateBoards(db);
+    if (!db.prepare("PRAGMA table_info(board_columns)").all().some((field) => field.name === "instructions"))
+      db.exec("ALTER TABLE board_columns ADD COLUMN instructions TEXT NOT NULL DEFAULT ''");
+    if (!db.prepare("PRAGMA table_info(runs)").all().some((field) => field.name === "columnInstructions"))
+      db.exec("ALTER TABLE runs ADD COLUMN columnInstructions TEXT NOT NULL DEFAULT ''");
     initializeArtifactSchema(db);
     initializeChatSchema(db);
     if (!db.prepare("PRAGMA table_info(agents)").all().some((column) => column.name === "requireApprovalBeforeEdits")) {

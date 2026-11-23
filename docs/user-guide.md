@@ -101,3 +101,15 @@ Agents can nominate exact revisions for their final handover or feedback request
 ## Jira import
 
 Task dialogs separate **Detail** (ticket fields) from **Activity** (comments and artifacts). New tasks also offer **Import JIRA Ticket**: select an existing agent and paste an HTTPS `/browse/KEY-123` link. The importer uses that agent's executor/model with dedicated instructions to read only the specified ticket and never edit, comment, transition, or otherwise change Jira. Browser/Jira access must already be configured; this prompt is not a Jira permission boundary. Successful imports fill an unsaved draft with a source link, turn off automatic execution, and return to Detail for review. Creating the task is a separate action; failed imports preserve the draft.
+
+## Column instructions
+
+In **Settings → Board**, select a board. Select a column’s **Configure** button to edit its name and custom instructions.
+Instructions supplement the agent’s reusable instructions. They apply to task runs and agent replies in that column.
+Todai captures the instructions when each run starts and keeps that copy in the run record.
+Changes affect queued runs when they start. Changes do not affect an active run.
+Instructions remain with a column when it is renamed or reordered. Configuration exports include them.
+
+Use the instructions to describe the stage’s purpose, required work, verification steps, and expected handover.
+For example: “Review the changes against the task requirements. Run the relevant tests. Report findings, test results, and unfinished work.”
+Instructions guide the agent. They do not change Auto-run, Auto-workflow, or the agent’s permissions.
