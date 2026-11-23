@@ -4,6 +4,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toast";
 
+import { ThemeProvider } from "@/components/theme-provider";
+import { themeScript } from "@/lib/theme";
+
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
@@ -18,10 +21,13 @@ export default function RootLayout({
   let workspaces;
   try { workspaces = store.listWorkspaces().map((workspace) => ({ ...workspace })); } finally { store.close(); }
   return (
-    <html lang="en" data-workspace-id={workspaces[0]?.id}>
+    <html suppressHydrationWarning lang="en" data-workspace-id={workspaces[0]?.id}>
+      <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body className="font-sans antialiased">
-        <WorkspaceSelection workspaces={workspaces}>{children}</WorkspaceSelection>
-        <Toaster />
+        <ThemeProvider>
+          <WorkspaceSelection workspaces={workspaces}>{children}</WorkspaceSelection>
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );

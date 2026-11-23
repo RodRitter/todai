@@ -44,6 +44,8 @@ Prefer the shared Base UI `ScrollArea` for bounded lists, panels, previews, tabl
 
 Use the shared shadcn `Dialog` component for all application prompts and confirmations. Follow the [Dialog composition](https://ui.shadcn.com/docs/components/base/dialog). Do not use browser `alert`, `confirm`, or `prompt` calls. Browser-controlled page exit warnings must use `beforeunload`.
 
+Task modals open in the expanded view by default. The Task actions menu lets users collapse or expand the current modal.
+
 Place modal titles on the left and close buttons on the right. Use compact headers and footers without divider lines. Use `DialogContent layout="prompt"` for confirmation prompts. Use `Button size="sm"` for prompt actions and `size="icon-sm"` for close buttons. Use `variant="ghost-destructive"` for delete buttons. Outside clicks close dialogs unless an operation is pending.
 
 ## Interaction and accessibility
@@ -59,3 +61,26 @@ Run history follows the [shadcn Chain of Thought composition](https://ui.shadcn.
 Add or update Storybook examples for changed variants and meaningful interaction states. Check narrow and wide layouts, long content, keyboard focus, disabled/loading/error states, and both themes where appearance changes. For run history, cover expansion, summary retention, empty/error/retry, and active/failed runs.
 
 Run the repository lint and typecheck scripts plus a Storybook build for UI changes. Execute relevant interaction checks when changing behavior. Inspect the resulting UI where browser tooling is available; report any verification that could not be completed. Review the diff for visual overrides left at call sites and move them into the owning component before finishing.
+
+## Theme contract
+
+The app header provides an Appearance popout menu with a Dark mode toggle switch.
+The menu uses the same icon button and popover pattern as Running servers.
+The app follows operating system changes until the user selects a theme.
+The switch saves an explicit light or dark preference.
+The browser stores the selection under `todai-theme`. The selection applies to all workspaces and synchronizes between tabs.
+If browser storage is unavailable, the selection remains active until the page reloads.
+
+`src/lib/theme.ts` owns the storage key, valid values, and startup script. The root layout runs this script before page content appears.
+`ThemeProvider` connects components to the browser state in `src/lib/theme-store.ts`. Use `useTheme()` for integrations that require a resolved theme, such as notifications.
+Apply the `dark` class only to the document root. This keeps dialogs, menus, tooltips, and other portals consistent.
+The root color scheme also controls native form fields and scrollbars.
+
+Define each semantic color in both token sets in `src/app/globals.css`. Keep foreground and background colors together.
+Reuse semantic tokens in components. Keep specialized palettes inside their shared component, with explicit light and dark treatments.
+Do not add theme state, storage keys, or document class changes inside feature components.
+
+Use the Storybook theme toolbar to inspect components. Use `globals: { theme: "dark" }` for dark stories.
+Do not use a local `.dark` wrapper: portals render outside that wrapper.
+Check both themes for fields, menus, dialogs, notifications, reference badges, status indicators, and editor content.
+Run `npm run test:theme` after changes to theme behavior or tokens.

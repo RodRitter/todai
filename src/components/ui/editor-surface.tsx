@@ -11,8 +11,8 @@ export function EditorSurface({
   ...props
 }: ComponentProps<"div"> & { disabled?: boolean; collapsed?: boolean; variant?: "default" | "prompt" | "compact" | "reply" }) {
   if (variant !== "default") return <InputGroup data-disabled={disabled} className={cn("min-w-0 max-w-full h-auto flex-col items-stretch has-[[contenteditable=true]:focus-visible]:border-ring has-[[contenteditable=true]:focus-visible]:ring-3 has-[[contenteditable=true]:focus-visible]:ring-ring/50", variant === "compact" || variant === "reply" ? "p-2" : "p-3",
-    variant === "reply" && "has-[[contenteditable=true]:focus-visible]:ring-inset overflow-clip [interpolate-size:allow-keywords] transition-[height,box-shadow] duration-200 ease-out motion-reduce:transition-none [&_.tiptap]:leading-5",
-    collapsed && "h-10", className)} {...props} />;
+    (variant === "reply" || variant === "prompt") && "has-[[contenteditable=true]:focus-visible]:ring-inset overflow-clip [interpolate-size:allow-keywords] transition-[height,box-shadow] duration-200 ease-out motion-reduce:transition-none [&_.tiptap]:leading-5",
+    collapsed && "h-10 p-2", className)} {...props} />;
   return (
     <div
       data-slot="editor-surface"

@@ -30,7 +30,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
 }) {
   const surface = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(autoFocus || !!value.trim());
-  const collapsed = variant === "reply" && !expanded;
+  const collapsed = (variant === "reply" || variant === "prompt") && !expanded && !disabled;
   const compactVariant = variant === "compact" || variant === "reply";
   const revealReply = useCallback(() => {
     const node = surface.current;

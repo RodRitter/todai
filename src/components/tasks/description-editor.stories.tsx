@@ -469,3 +469,29 @@ export const UnifiedTagShortcuts: Story = {
     await expect(canvas.getByRole("link", { name: "Review notes" })).toBeVisible();
   },
 };
+
+export const CollapsibleMessage: Story = {
+  ...CompactReply,
+  args: { variant: "prompt", compact: true, label: "Your message", actions: <PromptSend aria-label="Send message"><ArrowUp /></PromptSend>, toolbarActions: <Button size="xs">Attach artifact</Button> },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const editor = await canvas.findByRole("textbox", { name: "Your message" });
+    const surface = editor.closest('[data-slot="input-group"]')!;
+    await expect(surface.getBoundingClientRect().height).toBe(40);
+    await expect(canvas.queryByRole("button", { name: "Send message" })).not.toBeInTheDocument();
+    editor.focus();
+    await expect(await canvas.findByRole("button", { name: "Send message" })).toBeVisible();
+    await waitFor(() => expect(surface.getBoundingClientRect().height).toBeGreaterThan(40));
+    await userEvent.type(editor, "Keep this message.{Shift>}{Enter}{/Shift}Second line.");
+    await userEvent.click(canvas.getByRole("button", { name: "Attach artifact" }));
+    await expect(canvas.getByRole("button", { name: "Send message" })).toBeVisible();
+    await userEvent.click(canvasElement);
+    await waitFor(() => expect(surface.getBoundingClientRect().height).toBe(40));
+    await expect(canvas.queryByRole("button", { name: "Send message" })).not.toBeInTheDocument();
+    await userEvent.click(editor);
+    await expect(await canvas.findByRole("button", { name: "Send message" })).toBeVisible();
+    await expect(editor).toHaveTextContent("Keep this message.Second line.");
+  },
+};
+export const CollapsibleMessageNarrow: Story = { ...CollapsibleMessage, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
+export const CollapsibleMessageDark: Story = { ...CollapsibleMessage, decorators: [(Story) => <div className="dark bg-background text-foreground p-4"><Story /></div>] };

@@ -28,6 +28,6 @@ function VariantGallery() {
 const meta = { title: "Foundations/Design variants", component: VariantGallery, parameters: { layout: "padded" } } satisfies Meta<typeof VariantGallery>;
 export default meta;
 type Story = StoryObj<typeof meta>;
-export const Light: Story = {};
-export const Dark: Story = { decorators: [(Story) => <div className="dark"><Story /></div>] };
+export const Light: Story = { globals: { theme: "light" } };
+export const Dark: Story = { globals: { theme: "dark" } };
 export const Narrow: Story = { decorators: [(Story) => <div className="max-w-72"><Story /></div>] };

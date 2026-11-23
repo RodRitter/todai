@@ -9,6 +9,8 @@ import { WorkspaceSwitcher } from "@/components/workspace-selection";
 import { ExecutionActivity } from "@/components/execution-activity";
 import { ServerNotifications } from "@/components/server-notifications";
 
+import { ThemeSwitcher } from "@/components/theme-switcher";
+
 export function AppShell({
   children,
   headerActions,
@@ -116,6 +118,7 @@ export function AppShell({
             {headerActions}
             <ExecutionActivity />
             <ServerNotifications />
+            <ThemeSwitcher />
           </div>
         </header>
         {children}

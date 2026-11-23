@@ -2,6 +2,8 @@
 
 import { Toaster as SonnerToaster, toast } from "sonner";
 
+import { useTheme } from "@/components/theme-provider";
+
 export { toast };
 
 export function dismissLatestNotification() {
@@ -15,8 +17,10 @@ export function dismissLatestNotification() {
 }
 
 export function Toaster() {
+  const { resolvedTheme } = useTheme();
   return (
     <SonnerToaster
+      theme={resolvedTheme}
       position="bottom-right"
       style={{ pointerEvents: "auto" }}
       closeButton

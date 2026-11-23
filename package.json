@@ -14,7 +14,8 @@
     "storybook": "storybook dev -p 6006 --host 127.0.0.1 --no-open",
     "build-storybook": "storybook build",
     "typecheck:app": "next typegen && tsc --noEmit -p tsconfig.app.json",
-    "test": "node --experimental-strip-types --test src/server/*.test.ts"
+    "test": "node --experimental-strip-types --test src/server/*.test.ts tests/*.test.ts",
+    "test:theme": "node --experimental-strip-types --test tests/theme.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "1.9.0",

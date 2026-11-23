@@ -92,7 +92,7 @@ function TaskEditorSession({
   const movedBoard = selectedBoard !== (editing?.boardId ?? boardId);
   const pendingRun =
     editing?.agentStatus === "Queued" || editing?.agentStatus === "Running";
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [tab, setTab] = useState<string>(initialTab);
   const [chatDraft, setChatDraft] = useState("");
   const [chatDraftVersion, setChatDraftVersion] = useState(0);
