@@ -495,3 +495,20 @@ export const CollapsibleMessage: Story = {
 };
 export const CollapsibleMessageNarrow: Story = { ...CollapsibleMessage, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
 export const CollapsibleMessageDark: Story = { ...CollapsibleMessage, decorators: [(Story) => <div className="dark bg-background text-foreground p-4"><Story /></div>] };
+
+
+export const DisabledCompactReply: Story = {
+  args: { ...CompactReply.args, disabled: true, autoFocus: true, value: "Keep this draft." },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const editor = await canvas.findByRole("textbox", { name: "Your reply" });
+    await expect(editor).toHaveAttribute("contenteditable", "false");
+    await expect(editor).toHaveTextContent("Keep this draft.");
+    await expect(editor.closest('[data-slot="input-group"]')!.getBoundingClientRect().height).toBe(40);
+    await expect(canvas.queryByRole("button", { name: "Send reply" })).not.toBeInTheDocument();
+  },
+};
+export const DisabledCompactMessage: Story = {
+  ...DisabledCompactReply,
+  args: { ...DisabledCompactReply.args, variant: "prompt" },
+};
