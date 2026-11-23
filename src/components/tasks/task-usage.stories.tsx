@@ -15,9 +15,18 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 export const Complete: Story = { play: async ({ canvasElement }) => {
   const canvas = within(canvasElement);
-  await expect(await canvas.findByText("Recorded tokens")).toBeVisible();
+  await expect(await canvas.findByRole("button", { name: "Tokens" })).toBeVisible();
   await expect(canvas.getAllByText("Uncached input")[0]).toBeVisible();
-  await userEvent.hover(canvas.getByRole("button", { name: "About Estimated credits" }));
+  const credits = canvas.getByRole("button", { name: "Credits" });
+  await userEvent.tab();
+  await expect(credits).toHaveFocus();
+  await expect(await within(document.body).findByRole("tooltip")).toHaveTextContent("Published Standard rates");
+  await userEvent.keyboard("{Escape}");
+  await userEvent.tab();
+  await expect(canvas.getByRole("button", { name: "Tokens" })).toHaveFocus();
+  await expect(await within(document.body).findByRole("tooltip")).toHaveTextContent("Tracking started");
+  await userEvent.keyboard("{Escape}");
+  await userEvent.hover(credits);
   await expect(await within(document.body).findByRole("tooltip")).toHaveTextContent("Published Standard rates");
 } };
 export const Empty: Story = { args: { load: async () => data([]) } };
@@ -28,7 +37,7 @@ export const Failed: Story = { args: { load: async () => data([{ ...call, outcom
 export const Loading: Story = { args: { load: () => new Promise(() => {}) } };
 export const Unavailable: Story = { args: { load: async () => { throw new Error("Offline"); } } };
 export const Retry: Story = { args: { load: (() => { let first = true; return async () => { if (first) { first = false; throw new Error("Offline"); } return data([call]); }; })() }, play: async ({ canvasElement }) => {
-  const canvas = within(canvasElement); await userEvent.click(await canvas.findByRole("button", { name: "Retry" })); await expect(await canvas.findByText("Recorded tokens")).toBeVisible();
+  const canvas = within(canvasElement); await userEvent.click(await canvas.findByRole("button", { name: "Retry" })); await expect(await canvas.findByRole("button", { name: "Tokens" })).toBeVisible();
 } };
 export const Narrow: Story = { args: { load: async () => data([{ ...call, agentName: "Builder with a very long agent name for narrow task dialogs" }]) }, decorators: [(Story) => <div className="max-w-72"><Story /></div>] };
 export const Dark: Story = { globals: { theme: "dark" } };
@@ -47,7 +56,7 @@ export const TabBadge: Story = {
     const canvas = within(canvasElement);
     await waitFor(() => expect(canvas.getByRole("tab", { name: "Usage" })).toHaveTextContent("3.7"));
     await userEvent.click(canvas.getByRole("tab", { name: "Usage" }));
-    await expect(await canvas.findByText("Estimated credits")).toBeVisible();
+    await expect(await canvas.findByRole("button", { name: "Credits" })).toBeVisible();
   },
 };
 export const ZeroCreditsBadge: Story = { ...TabBadge, args: { load: async () => data([]) }, play: async ({ canvasElement }) => {

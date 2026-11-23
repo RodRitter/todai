@@ -5,6 +5,7 @@ import { workspaceFetch } from "@/lib/workspace-fetch";
 import { usageLabels, type TaskUsageOverview as UsageData, type UsageKind, type UsageTotals } from "@/domain/usage";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { UsageMetrics, UsageBreakdown, ModelUsageBreakdown, UsageNote } from "@/components/ui/usage-metrics";
 
 async function loadUsage(taskId: string, signal: AbortSignal): Promise<UsageData> {
@@ -38,14 +39,14 @@ export function TaskUsage({ taskId, active, load = loadUsage, onCreditsChange }:
     {error && <p role="alert">Could not refresh task usage. <Button type="button" size="sm" variant="ghost-muted" onClick={() => setAttempt(value => value + 1)}>Retry</Button></p>}
     {!data && !error && <p role="status">Loading usage…</p>}
     {data && <>
-      <UsageMetrics items={[
-        { label: "Recorded tokens", value: tokenValue(data.totals), hint: `Tracking started ${new Date(data.trackingSince).toLocaleString()}. Earlier private chat and draft imports are excluded. Only usage reported by Codex is included.` },
-        { label: "Estimated credits", value: creditValue(data.totals), hint: "Published Standard rates. This estimate does not establish billed charges or credit deductions. Unknown model rates are excluded." },
-        { label: "Codex calls", value: data.totals.calls.toLocaleString() },
+      <UsageMetrics variant="summary" items={[
+        { label: "Credits", value: creditValue(data.totals), hint: "Published Standard rates. This estimate does not establish billed charges or credit deductions. Unknown model rates are excluded." },
+        { label: "Tokens", value: tokenValue(data.totals), hint: `Tracking started ${new Date(data.trackingSince).toLocaleString()}. Earlier private chat and draft imports are excluded. Only usage reported by Codex is included.` },
       ]} />
       {incomplete && <UsageNote label={data.totals.unknown || data.totals.unpriced ? "Partial totals" : "Usage pending"} hint={`${data.totals.pending} pending calls; ${data.totals.unknown} calls with unknown or incomplete counts; ${data.totals.unpriced} calls without credit rates. Known usage is included.`} />}
       {!data.totals.calls ? <p>No Codex usage yet.</p> : <>
         <UsageMetrics items={[
+          { label: "Codex calls", value: data.totals.calls.toLocaleString() },
           { label: "Uncached input", value: tokenValue(data.totals, data.totals.uncachedInput) },
           { label: "Cached input", value: tokenValue(data.totals, data.totals.cachedInput) },
           { label: "Output", value: tokenValue(data.totals, data.totals.output), hint: "Output includes reasoning tokens. Reasoning is not counted again." },
@@ -53,15 +54,19 @@ export function TaskUsage({ taskId, active, load = loadUsage, onCreditsChange }:
         <Tabs defaultValue="activity" className="space-y-4">
           <TabsList aria-label="Usage breakdown"><TabsTrigger value="activity">Activity</TabsTrigger><TabsTrigger value="model">Model</TabsTrigger></TabsList>
           <TabsContent value="activity" forceMount>
-        <UsageBreakdown rows={(Object.entries(data.groups) as [UsageKind, UsageData["totals"]][]).map(([kind, totals]) => ({
-          label: usageLabels[kind], calls: totals.calls.toLocaleString(), tokens: tokenValue(totals), credits: creditValue(totals),
-        }))} />
+            <Card elevation="flat"><CardContent>
+              <UsageBreakdown rows={(Object.entries(data.groups) as [UsageKind, UsageData["totals"]][]).map(([kind, totals]) => ({
+                label: usageLabels[kind], calls: totals.calls.toLocaleString(), tokens: tokenValue(totals), credits: creditValue(totals),
+              }))} />
+            </CardContent></Card>
           </TabsContent>
           <TabsContent value="model" forceMount>
-            <ModelUsageBreakdown rows={data.models.map(({ model, effort, totals }) => ({
-              model, effort: effort ?? "Unknown", tokens: tokenValue(totals), credits: creditValue(totals),
-              input: tokenValue(totals, totals.uncachedInput), cached: tokenValue(totals, totals.cachedInput), output: tokenValue(totals, totals.output),
-            }))} />
+            <Card elevation="flat"><CardContent>
+              <ModelUsageBreakdown rows={data.models.map(({ model, effort, totals }) => ({
+                model, effort: effort ?? "Unknown", tokens: tokenValue(totals), credits: creditValue(totals),
+                input: tokenValue(totals, totals.uncachedInput), cached: tokenValue(totals, totals.cachedInput), output: tokenValue(totals, totals.output),
+              }))} />
+            </CardContent></Card>
           </TabsContent>
         </Tabs>
       </>}
