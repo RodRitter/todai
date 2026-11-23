@@ -1,114 +1,170 @@
+<div align="center">
+
 # Todai
 
-A local task board for managing work with AI coding agents. Organize tasks, assign agents to columns, and follow their progress from one workspace.
+### Your tasks. Your agents. Your machine.
 
-Built with Next.js, React, TypeScript, Tailwind CSS, and SQLite.
+A local task board for AI coding agents.<br>
+Plan work, run Codex CLI or Claude Code, and review the results in one place.
 
-## Features
+**🏠 Hosted locally · 🤖 Subscription access · 🗂️ Workspaces · ⚡ Optional automation**
 
-- Drag-and-drop task board with customizable columns.
-- Rich text task descriptions and human comments, with @agent mentions and ordered agent replies.
-- Reusable Codex CLI and Claude Code profiles with tool-specific model, effort, instructions, and permissions.
-- Queued agent execution with live status updates and persisted run history.
-- Manual execution by default, with a Run button in each task and optional Auto-run on column entry.
-- Optional auto-workflow to move tasks to the next column after a successful run.
-- JSON import and export of agents, columns, and their assignments.
-- Workspace artifact library for text, Markdown, file uploads, and external links.
-- Local SQLite storage and a Storybook component explorer.
+[Quick start](#-quick-start) · [Features](#-built-for-your-workflow) · [Development](#-development) · [User guide](docs/user-guide.md)
 
-## Getting started
+</div>
 
-Requires Node.js 24 or newer and npm. Agent execution also requires Codex CLI or Claude Code installed and signed in on the machine running Todai. Claude Code requires version 2.1.259 or newer.
+![Todai in light mode, with a four-column task board, assigned agents, and task status badges.](docs/images/todai-board.png)
+
+<p align="center"><sub>The Todai board in light mode, shown with sample tasks.</sub></p>
+
+## ✨ Built for your workflow
+
+| | What you get |
+| :--- | :--- |
+| 🏠 **Your machine, your data** | Run the board locally. Store tasks, settings, history, and artifacts in SQLite. No hosted Todai service required. |
+| 💳 **Use your Codex subscription** | Sign in to Codex CLI with an eligible ChatGPT plan. Use subscription access without a separate API key. |
+| 🤖 **Agents for your workflow** | Create agents with custom roles and instructions. Choose each agent’s executor, model, effort, and permissions. Optional starter agents help you begin. |
+| ⚡ **Control when work starts** | Run tasks manually, or enable Auto-run and Auto-workflow to connect the steps. |
+| 🗂️ **Keep projects organized** | Use separate workspaces and multiple boards. Customize columns and assign an agent to each stage. |
+| 💬 **Review work in context** | Mention agents in comments, follow their replies, and inspect saved run history. |
+| 📎 **Keep the outputs** | Store documents, images, and files with revision history. Link artifacts to tasks or cite exact revisions in comments. |
+| 🔁 **Reuse your setup** | Import and export agents, columns, and assignments as JSON. Import Jira tickets into task drafts. |
+
+**Local hosting keeps the board under your control.** The supplied server commands bind to `127.0.0.1`.
+AI requests still go to the selected provider and can include task content and code.
+Local hosting does not remove those external data flows or the need to set agent permissions.
+
+**Codex uses your existing CLI sign-in.** ChatGPT subscription access remains subject to plan limits.
+API-key authentication uses separate API billing. See [OpenAI’s authentication guide](https://developers.openai.com/codex/auth).
+
+## 🚀 Quick start
+
+### 1. Check the requirements
+
+| Requirement | Details |
+| :--- | :--- |
+| Runtime | **Node.js 24 or newer**, with npm |
+| Platform | **macOS or Linux**, with a persistent local Node.js process |
+| Agent executor | **Codex CLI** or **Claude Code**, installed and signed in on the same machine |
+| Claude Code, if used | Version **2.1.259 or newer** |
+
+For Codex CLI:
 
 ```sh
+npm install -g @openai/codex
+codex
+```
+
+Select **Sign in with ChatGPT** to use an eligible subscription.
+See the [official Codex installation instructions](https://github.com/openai/codex#installing-and-running-codex-cli) for other installation methods.
+
+### 2. Start Todai
+
+```sh
+git clone https://github.com/RodRitter/todai.git
+cd todai
 npm ci
 npm run dev
 ```
 
-Open [localhost:3000](http://127.0.0.1:3000).
+Open **[http://127.0.0.1:3000](http://127.0.0.1:3000)**.
+The default setup needs no `.env` file or separate database server.
 
-1. In **Settings → Workspace**, select your workspace directory.
-2. In **Settings → Executors**, check tool status, test connections, and choose a default executor for new agents.
-3. In **Agents**, choose an executor, model, effort, and permissions.
-4. Assign an agent through a column’s settings, then create or move a task into that column. Open the saved task and press **Run** to queue its agent.
+### 3. Run your first task
 
-Add another named workspace in **Settings → Workspace → Add workspace**, then switch using the sidebar selector. Each workspace has its own tasks, agents, columns, assignments, and default executor. Selection lives in the browser URL, so separate tabs can work independently. Switching clears unsaved drafts and leaves queued and active runs in their original directories.
+1. Create a workspace with a name and an existing project folder.
+2. Select the optional **Planner**, **Builder**, and **Reviewer** starter agents.
+3. In **Settings → Executors**, check installation and sign-in status.
+4. In **Agents**, select a model available to your account and set the agent’s permissions.
+5. Assign an agent through a column’s agent selector.
+6. Create a task in that column with a clear title and description.
+7. Save the task, then select **Run**.
 
-Task automation is opt-in. Enable **Auto-run** to start the assigned agent when a task enters a column. Enable **Auto-workflow** to move to the next column after a successful run; the next agent waits for **Run** unless Auto-run is also enabled. Save task edits before pressing Run.
+The workspace folder is the project that agents work in. It can be a different repository from Todai.
+Keep the Todai server running while agents work. Agents run one at a time.
 
-New boards start with **To do**, **In progress**, **In review**, and **Done**. Customize them in **Settings → Board**.
+> 💡 **Start manually. Automate when ready.** Tasks use manual execution by default.
+> Enable **Auto-run** to start work on column entry.
+> Enable **Auto-workflow** to move a task to the next column after a successful run.
 
-In a task’s Comments section, write a rich text comment and type **@** to select agents. Comments without mentions stay as context. A lightweight intent agent selects which tagged agents are being asked to respond and orders their replies; agents mentioned only as context do not respond. For example, “@Reviewer what do you think of @Implementor's comment?” asks only Reviewer to reply. Each responding agent sees earlier responses. The intent agent uses the default executor with `gpt-6-luna` (Codex) or `haiku` (Claude), at low effort. If intent detection fails, no replies start; post the comment again to retry. Comment replies keep the task in its current column.
+## 🧭 From task to reviewed work
 
-Open **Run history** in a saved task’s Comments tab to inspect previous runs, their statuses, and saved summaries. The history refreshes while expanded.
-
-The header’s execution indicator shows the active agent, task, and workspace, along with queued jobs across workspaces. **Stop current run** terminates the agent and its commands, preserves saved files and history, and pauses the queue across all workspaces. The pause survives app restarts. **Run again** on a stopped task requests a new run using saved work and history; **Resume queue** is a separate action. Other queued requests remain queued, and requests for a stopped task wait until you explicitly run it again.
-
-To change a workspace directory, stop the running agent or use **Pause queue** in the header. Save the directory in **Settings → Workspace**, then choose **Resume queue**. If queued jobs still reference an old directory, confirm their new destinations; cancelling leaves the queue paused. Explicitly running a stopped task uses the current workspace directory.
-
-Use **Archive this workspace** in Settings when it has no running or queued jobs. Archived workspaces leave the selector but retain their tasks, history, configuration, and files. Restore them from Settings; when no active workspaces remain, the app offers creation and restoration.
-
-Agents run one at a time. Keep the server running while they work. Todai is designed for a persistent local Node.js process on macOS or Linux.
-
-## Data and configuration
-
-Data is stored in `.todai/tasks.sqlite`. Set `TODAI_DB_PATH` to use another database file. Preserve the database to keep your tasks, profiles, settings, and run history across restarts.
-
-The agent workspace is configured separately in Settings. Configuration exports include selected agents, columns, and assignments; they do not include tasks or workspace paths.
-
-Settings tabs can be linked directly with `/settings?tab=general`, `/settings?tab=workspaces`, `/settings?tab=board`, or `/settings?tab=executors`.
-
-Changing the default executor only affects new agent forms. Existing profiles and queued runs retain their executor. Codex sandbox modes and Claude permission modes have different meanings; the agent editor shows the available choices for each tool. Claude runs deny unresolved permission prompts and report denied actions as failures. Connection tests make a small model request; refreshing installation and sign-in status does not.
-
-## Artifacts
-
-Open **Artifacts** in the sidebar. **Create artifact** opens a document modal; its adjacent dropdown offers **Document** and **Image**. Documents use the same rich-text Markdown editor as task descriptions. Images accept PNG, JPEG, GIF, WebP, AVIF, and BMP uploads. Plain text and Markdown are grouped as documents. Search the workspace collection and filter by type or creator. Existing files and external links remain available, and agents can still publish them. Creator names are descriptive labels entered by the publisher.
-
-Stored content is limited to **20 MiB per revision** and downloaded using its artifact ID. Content and metadata are published atomically in the application database alongside tasks, so backing up `.todai/tasks.sqlite` (or `TODAI_DB_PATH`) also preserves artifacts. Uploading copies the bytes: moving, editing, or deleting the original file does not affect the artifact. External links store only their URL and metadata; remote content can change.
-
-Use **Publish revision** to update an artifact without changing its identity. Each publication retains its own author, timestamp, metadata, and stored bytes. **Revision history** lists earlier publications and downloads their exact content. External-link revisions preserve only the URL and metadata; upload a stored copy to preserve remote content.
-
-**Archive** removes an artifact from normal discovery. Select **Archived artifacts** to find it again; all revisions and downloads remain available. Archival does not delete content. Concurrent publications receive distinct revision identities and remain in history.
-
-In saved task details, use **Link artifact to task** to reuse a workspace artifact. Task links follow its latest revision. Choose the **paperclip** while composing a comment to pin the selected revision. Removing a task link keeps comment attachments intact; deleting a task preserves the artifacts. Task details group all references into one card per artifact and identify each comment source. Use **Linked task** in the library to filter by either kind of reference, including the archived view.
-
-Type **#** in the comment editor to search workspace artifacts and insert a titled citation at the cursor. Citations pin the revision selected, even if a newer revision is published before you post. Hover or focus a saved citation for its title, type, and pinned revision. Click it to preview that revision and access its download or external URL; archived artifacts remain accessible. Agents can use the same Markdown form: `[Artifact title](#artifact/ARTIFACT_ID/REVISION_ID)`. Repeated citations share one tracked association per comment and revision.
-
-Open an artifact to preview its exact revision inside Todai. Text and Markdown are readable, raster images display inline, and PDFs have page controls. PDF pages render with [PDF.js](https://mozilla.github.io/pdf.js/examples/) without document scripts or interactive forms. Unsupported files (including HTML, SVG, and Office documents) offer metadata and downloads. External links show metadata and an explicit navigation action; they do not embed remote pages. Empty, unavailable, or damaged content has an explanatory state, with downloads available for stored files.
-
-During a run, Codex and Claude receive the same workspace-scoped artifact tools automatically. Agents can publish text, Markdown, file bytes (base64), and external links; publish new revisions; search and read artifacts; and link or unlink the current task. Only current-task metadata is included in the starting prompt. Published revisions record their task and run provenance and appear in the library immediately.
-
-Agents can nominate exact revisions for their final handover or feedback request. Those attachments are saved atomically with the comment and deduplicated with inline citations. Tools expire when execution ends or is interrupted. Published work survives failure or interruption; nominations are not attached to failure or interruption notices. The tools cannot archive artifacts or choose a different workspace, task, creator, or run.
-
-## Development
-
-```sh
-npm run lint             # ESLint
-npm run typecheck        # App and Storybook types
-npm test                 # Server tests using temporary databases
-npm run storybook        # Component explorer on port 6006
-npm run build-storybook  # Static component explorer
+```text
+    To do          In progress         In review           Done
+   Planner   ───▶    Builder     ───▶    Reviewer    ───▶  Complete
 ```
 
-To run a production build locally:
+Columns and assignments are configurable. Each agent can use Codex CLI or Claude Code.
+Task comments and artifacts keep the context with the work.
+
+- **Ask an agent:** Type `@` in a comment to select agents. Requested replies run in order.
+- **Inspect a run:** Open the saved task’s **Activity** tab to read the agent’s comments and results.
+- **Stop work:** Use **Stop current run** in the header. This stops the agent and pauses the queue across workspaces.
+- **Continue work:** Use **Run again** for a stopped task or **Resume queue** for other queued work.
+- **Share an output:** Link an artifact to a task, or type `#` in a comment to cite an exact revision.
+
+See the [user guide](docs/user-guide.md) for queue controls, workspace changes, artifact revisions, and Jira imports.
+
+## 💾 Local data and configuration
+
+```text
+todai/
+└── .todai/
+    └── tasks.sqlite    # Tasks, agents, settings, run history, and stored artifacts
+```
+
+Todai creates the database automatically. The `.todai/` directory is excluded from Git.
+To use another database file:
+
+```sh
+TODAI_DB_PATH=/absolute/path/to/tasks.sqlite npm run dev
+```
+
+Set the same variable when starting a production build if you use a custom database path.
+Stop Todai before copying the database for a simple file backup.
+Back up your project folders separately; the database does not contain the source files that agents edit.
+
+Configuration exports include agents, columns, and assignments. They do not include tasks or workspace paths.
+
+## 🛠️ Development
+
+**Next.js · React · TypeScript · Tailwind CSS · SQLite**
+
+| Command | Purpose |
+| :--- | :--- |
+| `npm run dev` | Start the local development server |
+| `npm run lint` | Run ESLint |
+| `npm run typecheck` | Check application and Storybook types |
+| `npm test` | Run server and project tests with temporary databases |
+| `npm run test:theme` | Check theme behavior |
+| `npm run storybook` | Open the component explorer on port 6006 |
+| `npm run build-storybook` | Build the static component explorer |
+
+For a production build on your machine:
 
 ```sh
 npm run build
 npm start
 ```
 
-Shared styling conventions and component usage are documented in Storybook under **Foundations → Component styling** ([source](src/components/ui/style-guide.mdx)). Use its light/dark theme toolbar when reviewing components and dialogs.
+### Project map
 
-## Project structure
+```text
+src/
+├── app/           # Pages and API routes
+├── components/    # UI components and Storybook stories
+├── domain/        # Shared models and validation
+├── lib/           # Client API and utilities
+└── server/        # SQLite storage, agent execution, and server tests
+docs/              # Usage, design, and writing guides
+tests/             # Project tests
+```
 
-- `src/app/` — pages and API routes.
-- `src/components/` — UI components and Storybook stories.
-- `src/domain/` — shared models and validation.
-- `src/lib/` — client API and utilities.
-- `src/server/` — persistence, agent execution, and tests.
+### Contributing
 
-## Contributing
+Keep changes focused. Add tests for new behavior. Run lint, type checks, and tests before opening a pull request.
 
-Keep changes focused, add tests for new behavior, and run lint, type checks, and tests before opening a pull request.
-
-Task dialogs separate **Detail** (ticket fields) from **Activity** (comments and artifacts). New tasks also offer **Import JIRA Ticket**: select an existing agent and paste an HTTPS `/browse/KEY-123` link. The importer uses that agent's executor/model with dedicated instructions to read only the specified ticket and never edit, comment, transition, or otherwise change Jira. Browser/Jira access must already be configured; this prompt is not a Jira permission boundary. Successful imports fill an unsaved draft with a source link, turn off automatic execution, and return to Detail for review. Creating the task is a separate action; failed imports preserve the draft.
+- [Design guidelines](docs/design-guidelines.md) — shared components, interaction, and themes.
+- [Component styling](src/components/ui/style-guide.mdx) — also available in Storybook under **Foundations → Component styling**.
+- [Writing rules](docs/writing-rules.md) — project language and documentation conventions.
+- [User guide](docs/user-guide.md) — detailed operating instructions.
