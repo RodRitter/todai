@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { expect, within } from "storybook/test";
 import { Markdown } from "./markdown";
+import { ScrollArea } from "./scroll-area";
 
 const meta = {
   title: "Content/Markdown",
@@ -35,6 +36,33 @@ export const Formatted: Story = {
   },
 };
 export const Compact: Story = { args: { compact: true } };
+export const NestedTable: Story = {
+  args: { children: "| Check | Result |\n| --- | --- |\n| Tests | Passed |" },
+  render: (args) => (
+    <ScrollArea className="h-80 w-80">
+      <Markdown {...args} />
+      {Array.from({ length: 30 }, (_, index) => <p key={index}>Activity entry {index + 1}</p>)}
+    </ScrollArea>
+  ),
+  play: async ({ canvasElement }) => {
+    const [panel, content] = canvasElement.querySelectorAll<HTMLElement>('[data-slot="scroll-area-viewport"]');
+    await expect(panel.scrollHeight).toBeGreaterThan(panel.clientHeight);
+    await expect(getComputedStyle(panel).overscrollBehaviorY).toBe("contain");
+    await expect(getComputedStyle(content).overscrollBehaviorY).toBe("auto");
+  },
+};
+export const NestedShortCode: Story = {
+  ...NestedTable,
+  args: { children: "```ts\nconst status = 'Complete';\n```" },
+};
+export const NestedLongCode: Story = {
+  ...NestedTable,
+  args: { children: `\`\`\`text\n${Array.from({ length: 50 }, (_, index) => `Line ${index + 1}: ${"Long output. ".repeat(15)}`).join("\n")}\n\`\`\`` },
+};
+export const NestedWideTable: Story = {
+  ...NestedTable,
+  args: { children: `| Check | Result |\n| --- | --- |\n| ${"Wide_column_".repeat(20)} | Passed |` },
+};
 export const UntrustedContent: Story = {
   args: {
     children:

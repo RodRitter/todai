@@ -21,7 +21,9 @@ function ScrollArea({ className, children, orientation = "vertical", fade = "non
       className,
     )} {...props}>
       <ScrollAreaPrimitive.Viewport data-slot="scroll-area-viewport" className={cn(
-        "min-h-0 w-full flex-1 rounded-[inherit] overscroll-contain outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/50",
+        "min-h-0 w-full flex-1 rounded-[inherit] outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/50",
+        // Embedded content must pass scrolling to its parent at its boundaries.
+        variant === "table" || variant === "code" ? "overscroll-auto" : "overscroll-contain",
         fade === "bottom" && "scroll-fade-b scroll-fade-12",
         fade === "vertical" && "scroll-fade-y scroll-fade-12",
         orientation === "vertical" && "overflow-x-hidden!",

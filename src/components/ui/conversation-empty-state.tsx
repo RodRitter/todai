@@ -12,7 +12,7 @@ export function ConversationEmptyState({ variant }: { variant: "comments" | "cha
         {chat ? "Ask a question, discuss a comment, or leave a note." : "Share an update, ask a question, or request work."}
       </p>
       <p className="text-sm leading-6 text-muted-foreground">
-        Type <span className="font-semibold text-foreground">@</span> to choose an agent and include them in your message.
+        Type <span className="font-semibold text-foreground">@</span> to search agents, artifacts, skills, and files.
       </p>
       {chat && <p className="text-xs leading-5 text-muted-foreground">Agents reply only when your message needs a response.</p>}
     </div>

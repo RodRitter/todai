@@ -6,12 +6,13 @@ import type { Editor } from "@tiptap/react";
 import { Popover } from "radix-ui";
 
 // The virtual anchor follows the caret without adding elements to editable content.
-export function ReferencePopover({ editor, id, label, activeIndex, children, onDismiss }: {
+export function ReferencePopover({ editor, id, label, activeIndex, children, header, onDismiss }: {
   editor: Editor;
   id: string;
   label: string;
   activeIndex: number;
   children: ReactNode;
+  header?: ReactNode;
   onDismiss: () => void;
 }) {
   const content = useRef<HTMLDivElement>(null);
@@ -53,21 +54,22 @@ export function ReferencePopover({ editor, id, label, activeIndex, children, onD
       <Popover.Portal>
         <Popover.Content
           ref={content}
-          id={id}
-          role="listbox"
-          aria-label={label}
+          data-reference-picker=""
+          aria-label="Add a tag"
           align="start"
           sideOffset={6}
           collisionPadding={12}
           updatePositionStrategy="always"
-          className="z-50 w-80 max-w-[calc(100vw-1.5rem)] rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+          className="z-50 flex max-h-[var(--radix-popover-content-available-height)] w-96 max-w-[calc(100vw-1.5rem)] flex-col rounded-md border bg-popover p-2 text-popover-foreground shadow-md"
+          onClick={(event) => event.stopPropagation()}
           onOpenAutoFocus={(event) => event.preventDefault()}
           onCloseAutoFocus={(event) => event.preventDefault()}
           onInteractOutside={(event) => {
             if (event.target instanceof Node && editor.view.dom.contains(event.target)) event.preventDefault();
           }}
         >
-          <ScrollArea className="max-h-[min(16rem,var(--radix-popover-content-available-height))]" viewportProps={{ tabIndex: -1 }}>{children}</ScrollArea>
+          {header}
+          <ScrollArea fade="bottom" className="max-h-80" viewportProps={{ tabIndex: -1 }}><div id={id} role="listbox" aria-label={label}>{children}</div></ScrollArea>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

@@ -15,6 +15,16 @@ function EditorExample(args: ComponentProps<typeof DescriptionEditor>) {
   }} />;
 }
 
+function placeCaret(editor: HTMLElement, atStart: boolean) {
+  const range = editor.ownerDocument.createRange();
+  range.selectNodeContents(editor);
+  range.collapse(atStart);
+  const selection = editor.ownerDocument.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  editor.ownerDocument.dispatchEvent(new Event("selectionchange"));
+}
+
 const meta = {
   title: "Forms/Rich text editor",
   component: DescriptionEditor,
@@ -88,7 +98,7 @@ export const SurfaceFocus: Story = {
     const surface = editor.closest('[data-slot="editor-surface"]');
     if (!surface) throw new Error("Missing shared editor surface");
     await userEvent.click(surface);
-    await expect(editor).toHaveFocus();
+    await waitFor(() => expect(editor).toHaveFocus());
     await userEvent.keyboard("A focused editor");
     await expect(editor).toHaveTextContent("A focused editor");
   },
@@ -129,7 +139,8 @@ export const QuickArtifact: Story = {
     await expect(artifactRequest).not.toHaveBeenCalledWith("POST");
     await expect(artifactSaved).not.toHaveBeenCalled();
     await userEvent.click(editor);
-    await userEvent.keyboard("{End}x{Backspace}");
+    placeCaret(editor, false);
+    await userEvent.keyboard("x{Backspace}");
     await within(canvasElement.ownerDocument.body).findByRole("option", { name: "Create artifact “Notes”" });
     await userEvent.keyboard("{Enter}");
     const reopened = await page.findByRole("dialog");
@@ -228,9 +239,10 @@ export const LongDescriptionSuggestions: Story = {
     const page = within(canvasElement.ownerDocument.body);
     const editor = await canvas.findByRole("textbox", { name: "Description" });
     await userEvent.click(editor);
-    await userEvent.keyboard("{Control>}{Home}{/Control}#Notes");
+    placeCaret(editor, true);
+    await userEvent.keyboard("#Notes");
     const option = await page.findByRole("option", { name: /Notes Revision/ });
-    await expect(editor).toHaveFocus();
+    await waitFor(() => expect(editor).toHaveFocus());
     const list = page.getByRole("listbox", { name: "Workspace artifacts" });
     await waitFor(() => {
       const bounds = list.getBoundingClientRect();
@@ -244,7 +256,7 @@ export const LongDescriptionSuggestions: Story = {
     await expect(option).toHaveAttribute("aria-selected", "true");
     await userEvent.keyboard("{Escape}");
     await expect(page.queryByRole("listbox")).not.toBeInTheDocument();
-    await expect(editor).toHaveFocus();
+    await waitFor(() => expect(editor).toHaveFocus());
   },
 };
 
@@ -305,21 +317,21 @@ export const CompactReply: Story = {
     const surface = editor.closest('[data-slot="input-group"]')!;
     const height = surface.getBoundingClientRect().height;
     await userEvent.click(editor);
-    await expect(editor).toHaveFocus();
+    await waitFor(() => expect(editor).toHaveFocus());
     await expect(getComputedStyle(surface).getPropertyValue("--tw-ring-inset").trim()).toBe("inset");
-    await expect(canvas.getByRole("button", { name: "Send reply" })).toBeVisible();
+    await expect(await canvas.findByRole("button", { name: "Send reply" })).toBeVisible();
     await expect(canvas.getByRole("button", { name: "Attach artifact" })).toBeVisible();
     await waitFor(() => expect(surface.getBoundingClientRect().height).toBeGreaterThan(height));
     await userEvent.type(editor, "Keep this reply.");
     await expect(editor).toHaveTextContent("Keep this reply.");
     await userEvent.click(canvas.getByRole("button", { name: "Attach artifact" }));
-    await expect(canvas.getByRole("button", { name: "Send reply" })).toBeVisible();
+    await expect(await canvas.findByRole("button", { name: "Send reply" })).toBeVisible();
     await userEvent.click(canvasElement);
     await waitFor(() => expect(canvas.queryByRole("button", { name: "Send reply" })).not.toBeInTheDocument());
     await waitFor(() => expect(surface.getBoundingClientRect().height).toBe(height));
     await expect(editor).toHaveTextContent("Keep this reply.");
     await userEvent.click(editor);
-    await expect(canvas.getByRole("button", { name: "Send reply" })).toBeVisible();
+    await expect(await canvas.findByRole("button", { name: "Send reply" })).toBeVisible();
     await expect(editor).toHaveTextContent("Keep this reply.");
   },
 };
@@ -330,9 +342,130 @@ export const CompactReplyKeyboard: Story = {
     const editor = await canvas.findByRole("textbox", { name: "Your reply" });
     editor.focus();
     await waitFor(() => expect(canvas.getByRole("button", { name: "Send reply" })).toBeVisible());
-    await expect(editor).toHaveFocus();
+    await waitFor(() => expect(editor).toHaveFocus());
   },
 };
 export const CompactReplyDisabled: Story = { args: { ...CompactReply.args, disabled: true } };
 export const CompactReplyNarrow: Story = { ...CompactReply, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
 export const CompactReplyDark: Story = { ...CompactReply, globals: { theme: "dark" } };
+
+const unifiedAgents = [{ id: "reviewer", name: "Reviewer", tool: "codex" as const, model: "test", effort: "medium" as const, permissions: "workspace-write" as const, instructions: "Review code and proposed changes." }];
+function mockTagSearch() {
+  const original = globalThis.fetch;
+  globalThis.fetch = async (input, options) => {
+    const url = new URL(String(input), "http://localhost");
+    if (url.pathname === "/api/artifacts") return Response.json([{ ...artifact, title: "Review notes" }].filter((item) => item.title.toLowerCase().includes((url.searchParams.get("search") ?? "").toLowerCase())));
+    if (url.pathname === "/api/references") {
+      const references = url.searchParams.get("kind") === "skill"
+        ? [{ kind: "skill", label: "$code-review", path: "/workspace/skills/code-review/SKILL.md", detail: "Review code changes." }]
+        : [{ kind: "file", label: "/review.ts", path: "/workspace/src/review.ts", detail: "src/review.ts" }];
+      return Response.json({ references: references.filter((item) => item.label.toLowerCase().includes((url.searchParams.get("q") ?? "").toLowerCase())) });
+    }
+    return original(input, options);
+  };
+  return () => { globalThis.fetch = original; };
+}
+export const UnifiedTags: Story = {
+  args: { agents: unifiedAgents, artifacts: true, variant: "prompt", onArtifactSelect: artifactSaved },
+  beforeEach: mockTagSearch,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const editor = await canvas.findByRole("textbox", { name: "Description" });
+    await userEvent.type(editor, "@review");
+    for (const name of [/@Reviewer/, /Review notes Revision/, /\$code-review/, /\/review.ts/]) await page.findByRole("option", { name });
+    await waitFor(() => expect(editor).toHaveFocus());
+    await userEvent.click(page.getByRole("button", { name: "Artifacts" }));
+    await expect(page.getByRole("textbox", { name: "Search tags" })).toHaveValue("review");
+    await page.findByRole("option", { name: /Review notes Revision/ });
+    await expect(page.queryByRole("option", { name: /@Reviewer/ })).not.toBeInTheDocument();
+    await userEvent.click(page.getByRole("button", { name: "All" }));
+    await page.findByRole("option", { name: /\$code-review/ });
+    await userEvent.click(page.getByRole("textbox", { name: "Search tags" }));
+    await userEvent.clear(page.getByRole("textbox", { name: "Search tags" }));
+    await userEvent.type(page.getByRole("textbox", { name: "Search tags" }), "code-review");
+    await page.findByRole("option", { name: /\$code-review/ });
+    await userEvent.keyboard("{Enter}");
+    await expect(canvas.getByRole("link", { name: "$code-review" })).toHaveAttribute("href", "/workspace/skills/code-review/SKILL.md");
+    await waitFor(() => expect(editor).toHaveFocus());
+    await userEvent.click(canvas.getByRole("button", { name: "Add tag" }));
+    await page.findByRole("option", { name: /Review notes Revision/ });
+  },
+};
+export const UnifiedTagsDark: Story = { ...UnifiedTags, globals: { theme: "dark" } };
+export const UnifiedTagSelection: Story = {
+  ...UnifiedTags,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const editor = await canvas.findByRole("textbox", { name: "Description" });
+    await userEvent.type(editor, "See ");
+    for (const [option, label, href] of [
+      [/@Reviewer/, "@Reviewer", "#agent/reviewer"],
+      [/Review notes Revision/, "Review notes", "#artifact/quick/r1"],
+      [/\$code-review/, "$code-review", "/workspace/skills/code-review/SKILL.md"],
+      [/\/review.ts/, "/review.ts", "/workspace/src/review.ts"],
+    ] as const) {
+      await userEvent.click(canvas.getByRole("button", { name: "Add tag" }));
+      await userEvent.click(await page.findByRole("option", { name: option }));
+      await expect(canvas.getByRole("link", { name: label })).toHaveAttribute("href", href);
+    }
+    await expect(editor).toHaveTextContent("See @Reviewer Review notes $code-review /review.ts");
+    await expect(artifactSaved).toHaveBeenCalledWith(expect.objectContaining({ id: "quick", revisionId: "r1" }));
+  },
+};
+export const UnifiedTagsEmpty: Story = {
+  ...UnifiedTags,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const editor = await canvas.findByRole("textbox", { name: "Description" });
+    await userEvent.type(editor, "@missing");
+    await page.findByText("No matching references. Try another name or type.");
+    await userEvent.keyboard("{Enter}");
+    await expect(editor).toHaveTextContent("@missing");
+    await userEvent.keyboard("{Escape}");
+    await expect(page.queryByRole("listbox")).not.toBeInTheDocument();
+  },
+};
+export const UnifiedTagsFailure: Story = {
+  ...UnifiedTags,
+  beforeEach: () => {
+    const cleanup = mockTagSearch();
+    const success = globalThis.fetch;
+    let fail = true;
+    globalThis.fetch = async (input, options) => {
+      if (String(input).startsWith("/api/artifacts") && fail) { fail = false; return Response.json({}, { status: 500 }); }
+      return success(input, options);
+    };
+    return cleanup;
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole("button", { name: "Add tag" }));
+    await page.findByText("Could not load: Artifacts.");
+    await expect(page.getByRole("option", { name: /@Reviewer/ })).toBeVisible();
+    await userEvent.click(page.getByRole("button", { name: "Retry" }));
+    await page.findByRole("option", { name: /Review notes Revision/ });
+    await expect(page.queryByText("Could not load: Artifacts.")).not.toBeInTheDocument();
+  },
+};
+export const UnifiedTagShortcuts: Story = {
+  ...UnifiedTags,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const editor = await canvas.findByRole("textbox", { name: "Description" });
+    for (const [prefix, filter, name] of [["$code", "Skills", /\$code-review/], ["/review", "Files", /\/review.ts/], ["#Review", "Artifacts", /Review notes Revision/]] as const) {
+      await userEvent.type(editor, prefix);
+      await expect(page.getByRole("button", { name: filter })).toHaveAttribute("aria-pressed", "true");
+      await page.findByRole("option", { name });
+      await userEvent.keyboard("{Tab}");
+      await waitFor(() => expect(page.queryByRole("listbox")).not.toBeInTheDocument());
+    }
+    await expect(canvas.getByRole("link", { name: "$code-review" })).toBeVisible();
+    await expect(canvas.getByRole("link", { name: "/review.ts" })).toBeVisible();
+    await expect(canvas.getByRole("link", { name: "Review notes" })).toBeVisible();
+  },
+};

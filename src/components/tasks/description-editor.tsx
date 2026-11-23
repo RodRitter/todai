@@ -1,11 +1,10 @@
 "use client";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ReferencePopover } from "./reference-popover";
+import { EntityPicker, type EntityReference } from "./entity-picker";
 import { referenceMatch, type Match } from "./description-references";
 import { ArtifactCreateDialog } from "@/components/artifacts/artifact-create-dialog";
 import { Button } from "@/components/ui/button";
-import { workspaceFetch } from "@/lib/workspace-fetch";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
@@ -19,10 +18,8 @@ import { EditorSurface, editorLabelClassName } from "@/components/ui/editor-surf
 import { richTextClassName } from "@/components/ui/rich-text-styles";
 import { artifactMentionPath } from "@/domain/artifact-mentions";
 import type { Artifact } from "@/domain/artifact";
-import { agentMentionPath } from "@/domain/agent-mentions";
 import type { AgentProfile } from "@/domain/column-agent";
-import type { TaskReference } from "@/domain/reference";
-import { Bold, Italic, Heading2, List, ListOrdered, Code } from "lucide-react";
+import { Bold, Italic, Heading2, List, ListOrdered, Code, AtSign } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -56,17 +53,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
 
   const [creating, setCreating] = useState<Match | null>(null);
   const [match, setMatch] = useState<Match | null>(null);
-  const [response, setResponse] = useState<{ key: string; items: TaskReference[]; artifacts?: Artifact[] }>({ key: "", items: [] });
-  const matchKey = JSON.stringify(match);
-  const agentMode = agents !== undefined && match?.kind === "agent";
-  const results: TaskReference[] = agentMode
-    ? agents.filter((agent) => agent.name.toLowerCase().includes(match.query.toLowerCase())).map((agent) => ({ kind: "file", label: `@${agent.name}`, path: agentMentionPath(agent.id), detail: agent.instructions }))
-    : response.key === matchKey ? response.items : [];
-  const canCreate = match?.kind === "artifact" && response.key === matchKey;
-  const optionCount = results.length + (canCreate ? 1 : 0);
-  const [status, setStatus] = useState("Loading references…");
-  const [selected, setSelected] = useState(0);
-  const activeIndex = selected < optionCount ? selected : 0;
+  const pickerKeyboard = useRef<(event: KeyboardEvent) => boolean>(() => false);
   const keyboard = useRef<(event: KeyboardEvent) => boolean>(() => false);
   const editor = useEditor({
     extensions: [StarterKit.configure({ link: { openOnClick: false } }), Markdown, TableKit, TaskList, TaskItem.configure({ nested: true }), Image],
@@ -78,17 +65,20 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
     editorProps: {
       attributes: {
         id, role: "textbox", "aria-label": label, "aria-multiline": "true", "aria-disabled": String(disabled),
-        "data-placeholder": variant === "reply" ? "Send a reply" : variant !== "default" ? "Send a message… Use @ to mention an agent" : "",
+        "data-placeholder": variant === "reply" ? "Send a reply" : variant !== "default" ? "Send a message… Use @ to add a tag" : "",
         class: `${variant !== "default" ? "[&:has(>p:only-child>br:only-child)]:before:content-[attr(data-placeholder)] [&:has(>p:only-child>br:only-child)]:before:text-muted-foreground [&:has(>p:only-child>br:only-child)]:before:pointer-events-none [&:has(>p:only-child>br:only-child)]:before:float-left [&:has(>p:only-child>br:only-child)]:before:h-0" : ""} ${richTextClassName} p-3 outline-none [&_.tableWrapper]:my-3 [&_.tableWrapper]:overflow-x-auto [&_.tableWrapper]:rounded-lg [&_.tableWrapper]:border [&_ul[data-type=taskList]]:list-none [&_li[data-type=taskItem]]:flex [&_li[data-type=taskItem]]:gap-2 [&_li[data-type=taskItem]>label]:mt-1 [&_li[data-type=taskItem]>div]:min-w-0 [&_li[data-type=taskItem]>div]:flex-1 [&_li[data-type=taskItem]>div>p]:my-1`,
       },
       handleKeyDown: (_view, event) => keyboard.current(event),
     },
     onUpdate: ({ editor }) => onChange(editor.getMarkdown()),
-    onTransaction: ({ editor }) => {
-      const next = referenceMatch(editor, agents !== undefined, artifacts);
+    onTransaction: ({ editor, transaction }) => {
+      if (!transaction.docChanged && !transaction.selectionSet) return;
+      const next = referenceMatch(editor, artifacts);
       setMatch((previous) => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
     },
-    onBlur: () => setMatch(null),
+    onBlur: ({ event }) => {
+      if (!(event.relatedTarget instanceof Element) || !event.relatedTarget.closest("[data-reference-picker]")) setMatch(null);
+    },
   });
 
   const activeFormats = useEditorState({
@@ -123,44 +113,20 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
   ];
 
   useEffect(() => { editor?.setEditable(!disabled, false); }, [editor, disabled]);
-  useEffect(() => {
-    if (!match || disabled || agentMode) return;
-    const abort = new AbortController();
-    const timer = setTimeout(async () => {
-      setResponse({ key: "", items: [] });
-      setSelected(0);
-      setStatus("Loading references…");
-      try {
-        const response = await workspaceFetch(match.kind === "artifact" ? `/api/artifacts?search=${encodeURIComponent(match.query)}` : `/api/references?kind=${match.kind}&q=${encodeURIComponent(match.query)}`, { signal: abort.signal });
-        if (!response.ok) throw new Error("References unavailable");
-        const payload = await response.json();
-        const data: { references: TaskReference[] } = match.kind === "artifact"
-          ? { references: (payload as Artifact[]).map((artifact) => ({ kind: "artifact", label: artifact.title, path: artifactMentionPath({ artifactId: artifact.id, revisionId: artifact.revisionId }), detail: `Revision ${artifact.revisionNumber} · ${artifact.type}` })) }
-          : payload;
-        if (abort.signal.aborted) return;
-        setResponse({ key: JSON.stringify(match), items: data.references, artifacts: match.kind === "artifact" ? payload : undefined });
-        setStatus(data.references.length ? "" : "No matching references.");
-      } catch {
-        if (!abort.signal.aborted) setStatus("Could not load references. Type again to retry.");
-      }
-    }, 150);
-    return () => { clearTimeout(timer); abort.abort(); };
-  }, [match, disabled, agentMode]);
-
-  function insert(reference: TaskReference, range = match) {
+  function insert(reference: EntityReference, range = match) {
     if (!editor || !range || disabled) return;
     editor.chain().focus().insertContentAt({ from: range.from, to: range.to }, [
       { type: "text", text: reference.label, marks: [{ type: "link", attrs: { href: reference.path } }] },
       { type: "text", text: " " },
     ]).run();
     setMatch(null);
-    const artifact = response.artifacts?.find((item) => artifactMentionPath({ artifactId: item.id, revisionId: item.revisionId }) === reference.path);
-    if (artifact) onArtifactSelect?.(artifact);
+    if (reference.artifact) onArtifactSelect?.(reference.artifact);
   }
-  function create() {
-    if (!match || disabled) return;
-    setCreating(match);
-    setMatch(null);
+  function openTags() {
+    if (!editor || disabled) return;
+    const { $from } = editor.state.selection;
+    const before = $from.parent.textBetween(0, $from.parentOffset);
+    editor.chain().focus().insertContent(before && !/\s$/.test(before) ? " @" : "@").run();
   }
   useEffect(() => {
   keyboard.current = (event) => {
@@ -169,20 +135,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
       if (variant !== "default" && event.key === "Enter" && !event.shiftKey) { event.preventDefault(); onSubmit?.(); return true; }
       return false;
     }
-    if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setMatch(null); return true; }
-    if (optionCount && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
-      event.preventDefault();
-      setSelected((index) => (index + (event.key === "ArrowDown" ? 1 : -1) + optionCount) % optionCount);
-      return true;
-    }
-    if (optionCount && (event.key === "Enter" || event.key === "Tab")) {
-      event.preventDefault();
-      if (activeIndex === results.length) create();
-      else insert(results[activeIndex]);
-      return true;
-    }
-    if (match.kind === "artifact" && event.key === "Enter") { event.preventDefault(); return true; }
-    return false;
+    return pickerKeyboard.current(event);
   };
   });
 
@@ -199,7 +152,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
         requestAnimationFrame(revealReply);
       }}
       onBlurCapture={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setExpanded(false);
+        if (!event.currentTarget.contains(event.relatedTarget) && !(event.relatedTarget instanceof Element && event.relatedTarget.closest("[data-reference-picker]"))) setExpanded(false);
       }}
       disabled={disabled}
       onClick={(event) => {
@@ -241,6 +194,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
                   ))}
                 </ToggleGroup>
               ))}
+              <Button type="button" variant="ghost-muted" size={compactVariant ? "icon-xs" : "icon-sm"} disabled={disabled || !editor} aria-label="Add tag" title="Add tag" onMouseDown={(event) => event.preventDefault()} onClick={openTags}><AtSign aria-hidden="true" /></Button>
               {toolbarActions}
             </div>
           </TooltipProvider>
@@ -248,19 +202,9 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
         </div>
         <ScrollArea className="max-h-96" viewportProps={{ tabIndex: -1 }}><EditorContent editor={editor} className="min-w-0 max-w-full" /></ScrollArea>
         {match && !disabled && editor && (
-          <ReferencePopover editor={editor} id={`${id}-references`} activeIndex={activeIndex} onDismiss={() => setMatch(null)} label={agentMode ? "Available agents" : match.kind === "artifact" ? "Workspace artifacts" : match.kind === "skill" ? "Available skills" : "Workspace files"}>
-            {agentMode && !results.length && <p role="status" className="p-2 text-xs text-muted-foreground">No matching agents.</p>}
-            {!agentMode && (response.key !== matchKey || status) && <p role="status" className="p-2 text-xs text-muted-foreground">{response.key !== matchKey && !status.startsWith("Could not") ? "Loading references…" : status}</p>}
-            {results.map((reference, index) => (
-              <button key={reference.path} id={`${id}-references-${index}`} type="button" role="option" aria-selected={index === activeIndex} className={`block w-full rounded px-2 py-1.5 text-left text-sm ${index === activeIndex ? "bg-accent" : "hover:bg-muted"}`} onMouseDown={(event) => event.preventDefault()} onClick={() => insert(reference)}>
-                <span className="block break-words font-medium">{reference.label}</span>
-                <span className="block truncate text-xs text-muted-foreground">{reference.detail}</span>
-              </button>
-            ))}
-            {canCreate && <Button type="button" variant={activeIndex === results.length ? "secondary" : "ghost"} align="start" className="w-full" id={`${id}-references-${results.length}`} role="option" aria-selected={activeIndex === results.length} onMouseDown={(event) => event.preventDefault()} onClick={create}>
-              {match.query ? `Create artifact “${match.query}”` : "Create new artifact"}
-            </Button>}
-          </ReferencePopover>
+          <EntityPicker key={`${match.from}:${match.kind}`} editor={editor} id={`${id}-references`} match={match} agents={agents} artifacts={artifacts}
+            keyboardRef={pickerKeyboard} onDismiss={() => setMatch(null)} onSelect={insert}
+            onCreate={(query) => { setCreating({ ...match, query }); setMatch(null); }} />
         )}
       </div>
       {footer && <div aria-hidden={collapsed || undefined} inert={collapsed || undefined} className={`space-y-2 [&:not(:empty)]:mt-3 ${collapsed ? "invisible" : ""}`}>{footer}</div>}

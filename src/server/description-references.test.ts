@@ -18,7 +18,7 @@ function replacementState(prefix = "See ", suffix = "") {
   return state;
 }
 function match(state: EditorState) {
-  return referenceMatch({ state }, false, true);
+  return referenceMatch({ state }, true);
 }
 test("artifact tagging works when replacing a pasted link", () => {
   const state = replacementState();
@@ -39,4 +39,20 @@ test("URL fragments do not trigger artifact tagging", () => {
 test("code blocks do not trigger artifact tagging", () => {
   const doc = schema.node("doc", null, schema.node("codeBlock", null, schema.text("#Notes")));
   assert.equal(match(EditorState.create({ schema, doc, selection: TextSelection.create(doc, 7) })), null);
+});
+
+test("unified tags and shortcuts select the correct search type", () => {
+  for (const [text, kind] of [["@Review", "all"], ["#Review", "artifact"], ["$Review", "skill"], ["/Review", "file"]]) {
+    const doc = schema.node("doc", null, schema.node("paragraph", null, schema.text(text)));
+    const state = EditorState.create({ schema, doc, selection: TextSelection.create(doc, text.length + 1) });
+    assert.deepEqual(referenceMatch({ state }, true), { from: 1, to: text.length + 1, kind, query: "Review" });
+    if (kind === "artifact") assert.equal(referenceMatch({ state }, false), null);
+    else assert.equal(referenceMatch({ state }, false)?.kind, kind);
+  }
+});
+
+test("email addresses do not open the unified picker", () => {
+  const text = "name@example.com";
+  const doc = schema.node("doc", null, schema.node("paragraph", null, schema.text(text)));
+  assert.equal(match(EditorState.create({ schema, doc, selection: TextSelection.create(doc, text.length + 1) })), null);
 });
