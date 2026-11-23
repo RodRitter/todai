@@ -10,6 +10,7 @@ import type { BoardSnapshot } from "@/lib/workspace-api";
 import { useBoardMotion } from "@/hooks/use-board-motion";
 import { statuses, type Status, type Task } from "@/domain/task";
 import { TaskCard } from "./task-card";
+import { ColumnSettingsDialog } from "./column-settings-dialog";
 import { TaskColumn } from "./task-column";
 import { ColumnAgentPicker } from "./column-agent-picker";
 import { type AgentProfile, type ColumnAssignment } from "@/domain/column-agent";
@@ -22,6 +23,8 @@ export function TaskBoard({
   initialTasks = [],
   initialAgents = [],
   initialAssignments = [],
+  initialColumnInstructions = {},
+  configureColumn,
   assignAgent,
   persistence,
 }: {
@@ -31,6 +34,8 @@ export function TaskBoard({
   initialTasks?: Task[];
   initialAgents?: AgentProfile[];
   initialAssignments?: ColumnAssignment[];
+  initialColumnInstructions?: Record<string, string>;
+  configureColumn?: (column: string, name: string, instructions: string) => Promise<string[]>;
   assignAgent?: (
     column: Status,
     agentId: string | null,
@@ -48,6 +53,9 @@ export function TaskBoard({
 }) {
   const [agents] = useState(initialAgents);
   const [columns, setColumns] = useState(initialColumns);
+  const [columnInstructions, setColumnInstructions] = useState(initialColumnInstructions);
+  const columnFocus = useRef<string | null>(null);
+  const [editingColumn, setEditingColumn] = useState<{ name: string; instructions: string } | null>(null);
   const [assignments, setAssignments] = useState(initialAssignments);
   const saving = useRef(false);
   const revision = useRef(0);
@@ -76,6 +84,7 @@ export function TaskBoard({
             setTasks(latest.tasks);
             setColumns(latest.columns);
             setAssignments(latest.assignments);
+            setColumnInstructions(latest.columnInstructions ?? {});
           }
         }
         if (active && errorToast !== undefined) {
@@ -113,6 +122,7 @@ export function TaskBoard({
     try {
       await operation();
     } finally {
+      revision.current++;
       saving.current = false;
       setBusy(false);
     }
@@ -177,6 +187,8 @@ export function TaskBoard({
               <TaskColumn
                 key={column}
                 status={column}
+                configureDisabled={busy}
+                onConfigure={configureColumn || !persistence ? () => { columnFocus.current = column; setEditingColumn({ name: column, instructions: columnInstructions[column] ?? "" }); } : undefined}
                 agentSelector={
                   <ColumnAgentPicker
                     column={column}
@@ -232,6 +244,25 @@ export function TaskBoard({
             );
           })}
         </div>
+        {editingColumn && <ColumnSettingsDialog column={editingColumn.name} instructions={editingColumn.instructions} open
+          restoreFocus={() => {
+            const button = Array.from(boardRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? []).find((button) => button.getAttribute("aria-label") === `Edit ${columnFocus.current} column settings`);
+            button?.focus();
+          }}
+          onOpenChange={(open) => { if (!open) setEditingColumn(null); }}
+          onSave={(name, instructions) => mutate(async () => {
+            const previous = editingColumn.name;
+            if (!columns.includes(previous)) throw new Error("This column changed. Close settings and try again.");
+            if (columns.some((column) => column !== previous && column.toLowerCase() === name.toLowerCase()))
+              throw new Error("A column with that name already exists.");
+            const next = configureColumn ? await configureColumn(previous, name, instructions) : columns.map((column) => column === previous ? name : column);
+            columnFocus.current = name;
+            setColumns(next);
+            setColumnInstructions((current) => ({ ...current, [name]: instructions }));
+            setAssignments((current) => current.map((assignment) => assignment.column === previous ? { ...assignment, column: name } : assignment));
+            updateTasks((current) => current.map((task) => task.status === previous ? { ...task, status: name } : task));
+            window.dispatchEvent(new Event("todai:boards-changed"));
+          })} />}
         <TaskEditor
           boards={boards}
           boardId={boardId}

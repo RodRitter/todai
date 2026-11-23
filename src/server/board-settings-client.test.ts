@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { boardSettingsApi, taskApi } from "../lib/workspace-api.ts";
+import { boardSettingsApi, columnApi, taskApi } from "../lib/workspace-api.ts";
 
 test("local settings editors retain their own board scope without changing the task board", async (context) => {
   const previousDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
@@ -23,9 +23,11 @@ test("local settings editors retain their own board scope without changing the t
     await research.reorder(["Backlog", "Done"]);
     await product.remove("Review");
     await taskApi.list();
-    assert.deepEqual(requests.map((request) => request.board), ["research", "product", "research", "product", "research", "product", "original"]);
+    await columnApi.rename("To do", "Plan", "Define the scope.");
+    assert.deepEqual(requests.map((request) => request.board), ["research", "product", "research", "product", "research", "product", "original", "original"]);
     assert.ok(requests.every((request) => request.workspace === "workspace"));
     assert.equal(requests[2].method, "PATCH");
+    assert.deepEqual(JSON.parse(requests[7].body as string), { column: "To do", name: "Plan", instructions: "Define the scope." });
     assert.deepEqual(JSON.parse(requests[2].body as string), { column: "Ideas", name: "Backlog", instructions: "Check scope" });
   } finally {
     if (previousDocument) Object.defineProperty(globalThis, "document", previousDocument);

@@ -1,11 +1,15 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { Status } from "@/domain/task";
 
 export type TaskColumnProps = {
   status: Status;
   agentSelector?: ReactNode;
+  onConfigure?: () => void;
+  configureDisabled?: boolean;
   isEmpty?: boolean;
   isDropTarget?: boolean;
   canDrop?: boolean;
@@ -18,6 +22,8 @@ export type TaskColumnProps = {
 export function TaskColumn({
   status,
   agentSelector,
+  onConfigure,
+  configureDisabled = false,
   isEmpty = false,
   isDropTarget = false,
   canDrop = false,
@@ -51,9 +57,10 @@ export function TaskColumn({
       }}
     >
       <div className="space-y-1">
-        <h2 className="min-w-0 text-lg font-semibold wrap-anywhere">
-          {status}
-        </h2>
+        <div className="group flex w-fit max-w-full items-center gap-1">
+          <h2 className="min-w-0 text-lg font-semibold wrap-anywhere">{status}</h2>
+          {onConfigure && <Button type="button" variant="ghost-muted" size="icon-xs" reveal="hover" disabled={configureDisabled} aria-label={`Edit ${status} column settings`} title="Column settings" onClick={onConfigure}><Pencil aria-hidden="true" /></Button>}
+        </div>
         {agentSelector}
       </div>
       {isEmpty ? (

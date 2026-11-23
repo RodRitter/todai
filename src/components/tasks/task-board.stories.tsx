@@ -369,3 +369,51 @@ export const OpenComments: Story = {
     await expect(dialog.getByRole("tab", { name: "Detail" })).toHaveAttribute("aria-selected", "true");
   },
 };
+
+export const ColumnSettings: Story = {
+  args: { initialColumnInstructions: { "To do": "Define the scope.", "In review": "Review the changes." } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    const heading = canvas.getByRole("heading", { name: "To do" });
+    await userEvent.hover(heading);
+    await userEvent.click(canvas.getByRole("button", { name: "Edit To do column settings" }));
+    const dialog = within(await body.findByRole("dialog", { name: "Column settings" }));
+    await expect(dialog.getByLabelText("Column name")).toHaveValue("To do");
+    await expect(dialog.getByLabelText("Custom instructions")).toHaveValue("Define the scope.");
+    await userEvent.clear(dialog.getByLabelText("Column name"));
+    await userEvent.type(dialog.getByLabelText("Column name"), "Planning");
+    await userEvent.clear(dialog.getByLabelText("Custom instructions"));
+    await userEvent.type(dialog.getByLabelText("Custom instructions"), "Record the scope and open questions.");
+    await userEvent.click(dialog.getByRole("button", { name: "Save settings" }));
+    await waitFor(() => expect(body.queryByRole("dialog")).not.toBeInTheDocument());
+    await expect(canvas.getByRole("heading", { name: "Planning" })).toBeVisible();
+    for (const task of exampleTasks.filter((task) => task.status === "To do"))
+      await expect(within(canvas.getByRole("region", { name: "Planning" })).getByText(task.title, { exact: true })).toBeVisible();
+    await userEvent.hover(canvas.getByRole("heading", { name: "Planning" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Edit Planning column settings" }));
+    const reopened = within(await body.findByRole("dialog", { name: "Column settings" }));
+    await expect(reopened.getByLabelText("Custom instructions")).toHaveValue("Record the scope and open questions.");
+    await userEvent.click(reopened.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(body.queryByRole("dialog")).not.toBeInTheDocument());
+    await expect(canvas.getByRole("button", { name: "Edit Planning column settings" })).toHaveFocus();
+    await userEvent.hover(canvas.getByRole("heading", { name: "In review" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Edit In review column settings" }));
+    const review = within(await body.findByRole("dialog", { name: "Column settings" }));
+    await expect(review.getByLabelText("Custom instructions")).toHaveValue("Review the changes.");
+  },
+};
+export const ColumnSettingsFailure: Story = {
+  args: { configureColumn: async () => { throw new Error("Could not save column settings. Try again."); } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.hover(canvas.getByRole("heading", { name: "To do" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Edit To do column settings" }));
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog", { name: "Column settings" }));
+    await userEvent.type(dialog.getByLabelText("Custom instructions"), "Keep this draft.");
+    await userEvent.click(dialog.getByRole("button", { name: "Save settings" }));
+    await expect(await dialog.findByRole("alert")).toHaveTextContent("Could not save column settings");
+    await expect(dialog.getByLabelText("Custom instructions")).toHaveValue("Keep this draft.");
+  },
+};
+export const ColumnSettingsDark: Story = { ...ColumnSettings, globals: { theme: "dark" } };

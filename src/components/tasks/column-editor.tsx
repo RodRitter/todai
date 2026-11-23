@@ -26,8 +26,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { ColumnSettingsDialog } from "./column-settings-dialog";
 import { Label } from "@/components/ui/label";
 
 export type ColumnEditorProps = {
@@ -46,7 +45,6 @@ export type ColumnEditorProps = {
 
 export function ColumnEditor({ initialInstructions = {}, configure, initialColumns, initialTaskCounts = {}, create, reorder, rename, remove, compact = false, disabled = false, onEditingChange }: ColumnEditorProps) {
   const [instructions, setInstructions] = useState(initialInstructions);
-  const [instructionDraft, setInstructionDraft] = useState("");
   const [columns, setColumns] = useState(initialColumns);
   const [taskCounts, setTaskCounts] = useState(initialTaskCounts);
   const [name, setName] = useState("");
@@ -303,7 +301,6 @@ export function ColumnEditor({ initialInstructions = {}, configure, initialColum
                               onClick={() => {
                                 setEditing(column);
                                 setDraft(column);
-                                setInstructionDraft(instructions[column] ?? "");
                                 setError("");
                               }}
                             >
@@ -369,34 +366,18 @@ export function ColumnEditor({ initialInstructions = {}, configure, initialColum
               </form>
               {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
             </section>
-      {configure && <Dialog open={editing !== null} onOpenChange={(open) => { if (!busy && !open) setEditing(null); }}>
-        <DialogContent closeDisabled={busy} aria-describedby={`${id}-help`}>
-          <DialogHeader><DialogTitle>Column settings</DialogTitle></DialogHeader>
-          <p id={`${id}-help`} className="text-sm text-muted-foreground">Set instructions for agents that work in this column. Changes apply when a run starts.</p>
-          <form className="space-y-4" onSubmit={(event) => {
-            event.preventDefault();
-            if (!editing) return;
-            const column = editing;
-            void save(async () => {
-              const next = await configure(column, draft, instructionDraft);
-              const name = draft.trim();
-              setInstructions((current) => ({ ...current, [name]: instructionDraft }));
-              setTaskCounts((current) => ({ ...current, [name]: current[column] ?? 0 }));
-              return next;
-            }, "Column settings saved.");
-          }}>
-            <div className="space-y-2"><Label htmlFor={`${id}-edit-name`}>Column name</Label>
-              <Input id={`${id}-edit-name`} value={draft} maxLength={80} required disabled={busy} onChange={(event) => setDraft(event.target.value)} />
-            </div>
-            <div className="space-y-2"><Label htmlFor={`${id}-instructions`}>Custom instructions</Label>
-              <Textarea id={`${id}-instructions`} value={instructionDraft} rows={6} maxLength={20000} disabled={busy} onChange={(event) => setInstructionDraft(event.target.value)} aria-describedby={`${id}-instructions-help`} />
-              <p id={`${id}-instructions-help`} className="text-sm text-muted-foreground">Optional. These instructions supplement the assigned agent’s instructions. They do not grant approval or change workflow rules.</p>
-            </div>
-            {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-            <DialogFooter><Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => setEditing(null)}>Cancel</Button><Button size="sm" disabled={busy || !draft.trim()}>{busy ? "Saving…" : "Save settings"}</Button></DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>}
+      {configure && editing !== null && <ColumnSettingsDialog column={editing} instructions={instructions[editing] ?? ""} open disabled={disabled}
+        onOpenChange={(open) => { if (!open) setEditing(null); }}
+        onSave={async (name, instructionDraft) => {
+          if (saving.current) throw new Error("Wait for the current save to finish.");
+          saving.current = true; setBusy(true);
+          try {
+            const next = await configure(editing, name, instructionDraft);
+            setColumns(next);
+            setInstructions((current) => ({ ...current, [name]: instructionDraft }));
+            setTaskCounts((current) => ({ ...current, [name]: current[editing] ?? 0 }));
+          } finally { saving.current = false; setBusy(false); }
+        }} />}
       <DeleteConfirmation
         open={pendingDelete !== null}
         onOpenChange={(open) => { if (!open) setPendingDelete(null); }}

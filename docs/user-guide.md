@@ -105,6 +105,8 @@ Task dialogs separate **Detail** (ticket fields) from **Activity** (comments and
 ## Column instructions
 
 In **Settings → Board**, select a board. Select a column’s **Configure** button to edit its name and custom instructions.
+On the task board, hover over a column name and select its edit button to open the same settings.
+The edit button also appears on keyboard focus and touch devices.
 Instructions supplement the agent’s reusable instructions. They apply to task runs and agent replies in that column.
 Todai captures the instructions when each run starts and keeps that copy in the run record.
 Changes affect queued runs when they start. Changes do not affect an active run.

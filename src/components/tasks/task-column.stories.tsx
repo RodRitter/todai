@@ -59,3 +59,19 @@ export const LongAgentName: Story = {
     agentSelector: agentSelector("Architecture and implementation review specialist"),
   },
 };
+
+export const EditableHeading: Story = {
+  args: { ...Empty.args, onConfigure: fn() },
+  play: async ({ canvasElement, args }) => {
+    const { expect, userEvent, within, waitFor } = await import("storybook/test");
+    const canvas = within(canvasElement);
+    const button = canvas.getByRole("button", { name: "Edit In review column settings" });
+    const heading = canvas.getByRole("heading", { name: "In review" });
+    await userEvent.hover(heading);
+    await waitFor(() => expect(button).toHaveStyle({ opacity: "1" }));
+    await userEvent.click(button);
+    await expect(args.onConfigure).toHaveBeenCalledOnce();
+  },
+};
+export const EditableHeadingDark: Story = { ...EditableHeading, globals: { theme: "dark" } };
+export const EditableLongHeading: Story = { args: { ...EditableHeading.args, status: "Research and validation before implementation" }, decorators: [(Story) => <div className="max-w-64"><Story /></div>] };

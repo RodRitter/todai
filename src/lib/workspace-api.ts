@@ -72,10 +72,10 @@ export const agentApi = {
 export const columnApi = {
   create: (name: string) =>
     request<string[]>("/api/columns", { method: "POST", body: name }),
-  rename: (column: string, name: string) =>
+  rename: (column: string, name: string, instructions?: string) =>
     request<string[]>("/api/columns", {
       method: "PATCH",
-      body: { column, name },
+      body: { column, name, ...(instructions !== undefined ? { instructions } : {}) },
     }),
   remove: (column: string) =>
     request<string[]>("/api/columns", { method: "DELETE", body: column }),
