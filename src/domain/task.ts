@@ -36,6 +36,7 @@ export type TaskComment = {
   body: string;
   createdAt: string;
   authorName?: string | null;
+  authorRole?: "human" | "agent" | null;
   recommendation?: string | null;
   feedbackStatus?: "pending" | "answered" | "cancelled" | null;
   runId?: string | null;

@@ -1,5 +1,7 @@
 import { conversationDeletion, removeConversationMessages } from "./conversation-messages.ts";
 import { groupActivity } from "../domain/activity.ts";
+import { parseUserName } from "../domain/user-name.ts";
+import { isHumanComment } from "../domain/comment-author.ts";
 import { parseWorkspaceSetup, starterAgentProfile } from "../domain/workspace-setup.ts";
 import type { ArtifactReference } from "../domain/artifact.ts";
 import { artifactMentions } from "./artifact-mentions.ts";
@@ -122,6 +124,7 @@ export class TaskStore {
         this.db.prepare("INSERT INTO agents (workspaceId, id, name, tool, model, effort, instructions, permissions) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
           .run(workspace.id, agent.id, agent.name, agent.tool, agent.model, agent.effort, agent.instructions, agent.permissions);
       }
+      if (setup.userName !== undefined) this.setUserName(setup.userName);
       return workspace;
     });
   }
@@ -135,6 +138,16 @@ export class TaskStore {
   private assertInputOwnership(input: unknown) {
     if (input && typeof input === "object" && "workspaceId" in input && input.workspaceId !== this.workspaceId)
       throw new WorkspaceOwnershipError("This data belongs to another workspace.");
+  }
+
+  getUserName(): string {
+    return String(this.db.prepare("SELECT value FROM general_settings WHERE key = 'userName'").get()?.value ?? "");
+  }
+
+  setUserName(value: unknown): string {
+    const name = parseUserName(value);
+    this.db.prepare("INSERT INTO general_settings (key, value) VALUES ('userName', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(name);
+    return name;
   }
 
   getWorkspace(): Workspace {
@@ -799,6 +812,7 @@ export class TaskStore {
           body: summary,
           createdAt: finishedAt,
           authorName: run.profile.name,
+          authorRole: "agent",
           ...(status === "Waiting" ? { recommendation, feedbackStatus: "pending" } : {}),
         });
         if (status === "Complete" || status === "Waiting") this.attachCommentArtifacts(commentId, artifacts);
@@ -839,7 +853,7 @@ export class TaskStore {
       if (!task || task.agentStatus !== "Waiting" || !request || !run)
         throw new FeedbackValidationError("This feedback request is no longer pending. Reload the task.");
       this.db.prepare("UPDATE comments SET feedbackStatus = 'answered' WHERE comments.workspaceId = workspace_id() AND id = ?").run(commentId);
-      this.addComment({ id: randomUUID(), taskId, body: body.trim(), createdAt: new Date().toISOString(), authorName: "Human", runId: run.id, parentCommentId: request.id });
+      this.addComment({ id: randomUUID(), taskId, body: body.trim(), createdAt: new Date().toISOString(), authorName: this.getUserName() || "Human", authorRole: "human", runId: run.id, parentCommentId: request.id });
       this.db.prepare("INSERT INTO runs (workspaceId, workspacePath, id, taskId, column, profile, status, createdAt, kind, commentId, replyPlan) VALUES (workspace_id(), (SELECT path FROM workspaces WHERE id = workspace_id()), ?, ?, ?, ?, 'Queued', ?, ?, ?, ?)")
         .run(randomUUID(), taskId, task.status, JSON.stringify(run.profile), run.createdAt, run.kind ?? null, run.commentId ?? null, run.replyPlan ? JSON.stringify(run.replyPlan) : null);
       this.db.prepare("UPDATE tasks SET agentStatus = 'Queued' WHERE tasks.workspaceId = workspace_id() AND id = ?").run(taskId);
@@ -893,7 +907,7 @@ export class TaskStore {
       const agents = this.listAgents();
       // Use the recorded profile so renaming or removing an agent does not change authorship.
       const matchingAuthors = agents.filter((agent) => agent.name === parent?.authorName);
-      const author = parent && parent.authorName !== "Human"
+      const author = parent && !isHumanComment(parent)
         ? this.history(taskId).find((run) => run.id === parent.runId)?.profile
           ?? (matchingAuthors.length === 1 ? matchingAuthors[0] : undefined)
         : undefined;
@@ -904,7 +918,7 @@ export class TaskStore {
         return agent;
       }).filter((agent) => agent.id !== author?.id);
       const commentId = randomUUID();
-      this.addComment({ id: commentId, taskId, body: body.trim(), createdAt: new Date().toISOString(), authorName: "Human", parentCommentId: threadId });
+      this.addComment({ id: commentId, taskId, body: body.trim(), createdAt: new Date().toISOString(), authorName: this.getUserName() || "Human", authorRole: "human", parentCommentId: threadId });
       this.attachCommentArtifacts(commentId, attachments);
       if (author) this.queueCommentRun(taskId, task.status, author, "reply", commentId, []);
       if (profiles.length) {
@@ -972,7 +986,7 @@ export class TaskStore {
       catch { throw new CommentValidationError("Choose a valid artifact revision reference."); }
       this.db
         .prepare(
-          "INSERT INTO comments (workspaceId, id, taskId, body, createdAt, authorName, recommendation, feedbackStatus, runId, parentCommentId) VALUES (workspace_id(), ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          "INSERT INTO comments (workspaceId, id, taskId, body, createdAt, authorName, recommendation, feedbackStatus, runId, parentCommentId, authorRole) VALUES (workspace_id(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .run(
           comment.id,
@@ -984,6 +998,7 @@ export class TaskStore {
           comment.feedbackStatus ?? null,
           comment.runId ?? null,
           comment.parentCommentId ?? null,
+          comment.authorRole ?? null,
         );
       this.attachCommentArtifacts(comment.id, references);
       this.db.exec("RELEASE publish_comment");

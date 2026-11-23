@@ -136,6 +136,12 @@ export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
       db.exec("ALTER TABLE runs ADD COLUMN columnInstructions TEXT NOT NULL DEFAULT ''");
     initializeArtifactSchema(db);
     initializeChatSchema(db);
+    db.exec("CREATE TABLE IF NOT EXISTS general_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+    for (const table of ["comments", "chat_messages"]) {
+      if (!db.prepare(`PRAGMA table_info(${table})`).all().some((field) => field.name === "authorRole")) {
+        db.exec(`ALTER TABLE ${table} ADD COLUMN authorRole TEXT`);
+      }
+    }
     if (!db.prepare("PRAGMA table_info(agents)").all().some((column) => column.name === "requireApprovalBeforeEdits")) {
       db.exec("ALTER TABLE agents ADD COLUMN requireApprovalBeforeEdits INTEGER NOT NULL DEFAULT 0");
       // Move the installed Bug fixer policy into the reusable setting once.

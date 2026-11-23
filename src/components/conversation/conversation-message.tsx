@@ -1,4 +1,6 @@
 "use client";
+import { isHumanComment } from "@/domain/comment-author";
+
 
 import type { ReactNode } from "react";
 import type { TaskComment } from "@/domain/task";
@@ -23,7 +25,7 @@ export function ConversationMessage({ message, variant, actions, feedback, atten
   attention?: boolean;
   connected?: boolean;
 }) {
-  const personal = variant === "chat" && message.authorName === "Human";
+  const personal = variant === "chat" && isHumanComment(message);
   const body = <ConversationMessageBody message={message} feedback={feedback} embedded={variant === "comment"} />;
   return <Message className="group" attention={attention} align={personal ? "end" : "start"}>
     {variant === "chat" && !personal && <MessageAvatar name={message.authorName || "Agent"} />}

@@ -8,6 +8,7 @@ import type { TaskStore, AgentRun } from "./task-store.ts";
 import type { Task } from "../domain/task.ts";
 
 export type RunRequest = {
+  userName?: string;
   run: AgentRun;
   task: Task;
   workspace: string;
@@ -90,6 +91,7 @@ export class ExecutionService {
         if (this.store.interruptionRequested(run.id)) controller.abort();
         controller.signal.throwIfAborted();
         summary = await this.runner({
+          userName: this.store.getUserName(),
           artifacts: artifacts?.connection,
           run,
           task,

@@ -148,3 +148,8 @@ export function boardSettingsApi(boardId: string) {
     reorder: (columns: string[]) => request<string[]>("/api/columns", { headers, method: "PUT", body: columns }),
   };
 }
+
+export const generalSettingsApi = {
+  get: () => request<{ userName: string }>("/api/general-settings"),
+  save: (userName: string) => request<{ userName: string }>("/api/general-settings", { method: "PUT", body: { userName } }),
+};

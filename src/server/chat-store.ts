@@ -30,7 +30,7 @@ export class ChatStore {
     const running = !!row.lease && Date.parse(String(row.lease)) > Date.now();
     return { id, taskId: String(row.taskId), createdAt: String(row.createdAt), updatedAt: String(row.updatedAt),
       running, error: row.lease && !running ? "The response was interrupted. Send a message to continue." : row.error as string | null,
-      messages: this.db.prepare("SELECT id, authorName, agentId, body, createdAt FROM chat_messages WHERE sessionId = ? ORDER BY createdAt, rowid").all(id)
+      messages: this.db.prepare("SELECT id, authorName, authorRole, agentId, body, createdAt FROM chat_messages WHERE sessionId = ? ORDER BY createdAt, rowid").all(id)
         .map((message) => ({ ...message, taskId: String(row.taskId) })) as ChatSession["messages"] };
   }
   forTask(taskId: string) {
@@ -51,8 +51,8 @@ export class ChatStore {
       const lease = new Date(Date.now() + 360000).toISOString();
       const now = new Date().toISOString();
       this.db.prepare("UPDATE chat_sessions SET lease = ?, error = NULL, updatedAt = ? WHERE id = ?").run(lease, now, session.id);
-      this.db.prepare("INSERT INTO chat_messages (id, sessionId, authorName, body, createdAt) VALUES (?, ?, 'Human', ?, ?)")
-        .run(randomUUID(), session.id, body.trim(), now);
+      this.db.prepare("INSERT INTO chat_messages (id, sessionId, authorName, body, createdAt, authorRole) VALUES (?, ?, ?, ?, ?, 'human')")
+        .run(randomUUID(), session.id, this.tasks.getUserName() || "Human", body.trim(), now);
       this.db.exec("COMMIT");
       return { session: this.get(session.id), task, lease };
     } catch (error) { this.db.exec("ROLLBACK"); throw error; }
@@ -60,8 +60,8 @@ export class ChatStore {
   append(id: string, lease: string, body: string, agent: AgentProfile) {
     this.row(id);
     const now = new Date().toISOString();
-    const result = this.db.prepare(`INSERT INTO chat_messages (id, sessionId, authorName, body, createdAt, agentId)
-      SELECT ?, id, ?, ?, ?, ? FROM chat_sessions WHERE id = ? AND workspaceId = ? AND lease = ? AND lease > ?`)
+    const result = this.db.prepare(`INSERT INTO chat_messages (id, sessionId, authorName, body, createdAt, agentId, authorRole)
+      SELECT ?, id, ?, ?, ?, ?, 'agent' FROM chat_sessions WHERE id = ? AND workspaceId = ? AND lease = ? AND lease > ?`)
       .run(randomUUID(), agent.name, body, now, agent.id, id, this.tasks.workspaceId, lease, now);
     if (!result.changes) throw new Error("The chat response expired. Send a message to continue.");
   }

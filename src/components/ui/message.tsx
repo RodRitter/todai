@@ -31,7 +31,7 @@ function MessageGroup({ className, variant = "default", ...props }: React.Compon
     <div
       data-slot="message-group"
       data-variant={variant}
-      className={cn("flex min-w-0 flex-col gap-2", variant === "comment" && "rounded-2xl bg-card text-card-foreground", variant === "reply" && "border-b border-border/60 py-3 first:pt-0 last:border-b-0 last:pb-0", className)}
+      className={cn("flex min-w-0 flex-col gap-2", variant === "comment" && "rounded-2xl bg-transparent text-card-foreground", variant === "reply" && "border-b border-border/60 py-3 first:pt-0 last:border-b-0 last:pb-0", className)}
       {...props}
     />
   )

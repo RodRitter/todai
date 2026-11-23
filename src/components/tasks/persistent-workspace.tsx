@@ -4,6 +4,7 @@ import { useEffect, useState, type ComponentProps } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
+import { GeneralSettings } from "./general-settings";
 import { ConfigurationTransfer } from "./configuration-transfer";
 import { WorkspaceSettingsTab } from "./workspace-settings-tab";
 import { ExecutorSettings } from "./executor-settings";
@@ -94,7 +95,7 @@ export function PersistentWorkspace({
           ]),
         )}
         executorSettings={<ExecutorSettings />}
-        generalSettings={<ConfigurationTransfer onImported={() => setAttempt((value) => value + 1)} />}
+        generalSettings={<><GeneralSettings /><ConfigurationTransfer onImported={() => setAttempt((value) => value + 1)} /></>}
         workspaceSettings={<WorkspaceSettingsTab />}
         {...columnApi}
       />

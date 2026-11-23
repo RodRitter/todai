@@ -1,3 +1,4 @@
+import { isHumanComment } from "./comment-author.ts";
 import type { TaskComment } from "./task.ts";
 
 // Feedback answers share the requesting run's ID; ordinary messages do not.
@@ -5,7 +6,7 @@ export function groupActivity(comments: TaskComment[]) {
   const questions = new Map(comments.filter((comment) => comment.feedbackStatus && comment.runId).map((comment) => [comment.runId!, comment.id]));
   const byId = new Map(comments.map((comment) => [comment.id, comment]));
   const parents = new Map(comments.map((comment) => {
-    const questionId = comment.authorName === "Human" && !comment.feedbackStatus && comment.runId ? questions.get(comment.runId) : undefined;
+    const questionId = isHumanComment(comment) && !comment.feedbackStatus && comment.runId ? questions.get(comment.runId) : undefined;
     return [comment.id, comment.parentCommentId && byId.has(comment.parentCommentId) ? comment.parentCommentId : questionId];
   }));
   const replies = new Map<string, TaskComment[]>();

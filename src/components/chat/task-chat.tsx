@@ -1,4 +1,6 @@
 "use client";
+import { isHumanComment } from "@/domain/comment-author";
+
 import { useEffect, useRef, useState } from "react";
 import { useBottomScroll } from "@/components/conversation/use-bottom-scroll";
 import { ConversationComposer } from "@/components/conversation/conversation-composer";
@@ -32,7 +34,7 @@ export function ChatConversation({ session, busy, onSend, onDelete, onClear, age
   const latestBody = useRef(body);
   useEffect(() => { latestBody.current = body; }, [body]);
   const accepted = pending && session.messages.some((message) =>
-    !pending.previousIds.has(message.id) && message.authorName === "Human" && message.body === pending.message.body);
+    !pending.previousIds.has(message.id) && isHumanComment(message) && message.body === pending.message.body);
   const messages = pending && !accepted ? [...session.messages, pending.message] : session.messages;
   const agentStatus = session.running ? "Running" : pending && !accepted ? "Queued" : undefined;
   const deletion = useMessageDeletion<string | null>({

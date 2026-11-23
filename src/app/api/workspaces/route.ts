@@ -1,3 +1,4 @@
+import { UserNameValidationError } from "../../../domain/user-name.ts";
 import { WorkspaceSetupError } from "../../../domain/workspace-setup.ts";
 import { openTaskStore } from "../../../server/database.ts";
 import { WorkspaceOwnershipError, RunValidationError } from "../../../server/task-store.ts";
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
   try {
     return Response.json(store.createWorkspace(name, path, input), { status: 201 });
   } catch (error) {
-    const invalid = error instanceof WorkspaceSetupError || error instanceof WorkspaceValidationError || error instanceof WorkspaceOwnershipError;
+    const invalid = error instanceof UserNameValidationError || error instanceof WorkspaceSetupError || error instanceof WorkspaceValidationError || error instanceof WorkspaceOwnershipError;
     return Response.json({ error: invalid ? error.message : "Could not create workspace." }, { status: invalid ? 400 : 500 });
   } finally { store.close(); }
 }

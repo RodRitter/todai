@@ -1,4 +1,6 @@
 "use client";
+import { isHumanComment } from "@/domain/comment-author";
+
 
 import { useBottomScroll } from "@/components/conversation/use-bottom-scroll";
 import { ConversationComposer } from "@/components/conversation/conversation-composer";
@@ -44,7 +46,7 @@ export function TaskComments({ taskId, active = true, onChat, embedded = false, 
   if (observed.comments !== comments || observed.taskId !== taskId || observed.active !== active) {
     const previousIds = new Set(observed.comments.map((comment) => comment.id));
     const latest = active && observed.active && observed.taskId === taskId
-      ? comments.filter((comment) => !previousIds.has(comment.id) && comment.authorName !== "Human")
+      ? comments.filter((comment) => !previousIds.has(comment.id) && !isHumanComment(comment))
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt)).at(-1)
       : undefined;
     setObserved({ taskId, comments, active });
@@ -116,7 +118,7 @@ function ActivityMessage({ agents, attentionId, onChat, comment, replies = [], a
       {replies.length > 0 && <MessageThread id={`thread-${comment.id}`} aria-label="Reply thread">
         {groupActivity(replies).toReversed().map(({ message, replies: children }) => <ActivityMessage key={message.id} nested
           agents={agents} attentionId={attentionId} onChat={onChat} comment={message} replies={children} agentStatus={agentStatus}
-          label={comment.feedbackStatus && message.runId === comment.runId && message.authorName === "Human" ? "Your answer" : undefined}
+          label={comment.feedbackStatus && message.runId === comment.runId && isHumanComment(message) ? "Your answer" : undefined}
           onDeleteComment={onDeleteComment} onAnswerFeedback={onAnswerFeedback} />)}
       </MessageThread>}
       {(replies.length > 0 || replying) && onPostComment && <MessageReplyComposer ref={replyInput}>

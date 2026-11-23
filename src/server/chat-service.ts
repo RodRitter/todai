@@ -30,6 +30,7 @@ export async function sendChat(tasks: TaskStore, chats: ChatStore, taskId: strin
           column: task.status, ...(classify ? { kind: "intent" as const } : {}), profile: toolsEnabled ? profile : { ...profile, permissions: profile.tool === "codex" ? "read-only" : "dontAsk" },
           status: "Running", createdAt: new Date().toISOString(), startedAt: null, finishedAt: null,
           summary: null, ownerPid: null, runnerPid: null },
+        userName: tasks.getUserName(),
         task, workspace, signal, onStart: () => {},
         privateChat: { toolsEnabled, messages: chats.get(session.id).messages, ...(classify ? { candidates } : {}) },
       };

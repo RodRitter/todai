@@ -1,3 +1,4 @@
+import { isHumanComment } from "./comment-author.ts";
 import type { TaskComment } from "./task";
 import type { AgentProfile } from "./column-agent";
 import { agentMentionPath } from "./agent-mentions.ts";
@@ -24,7 +25,7 @@ export function referencedCommentIds(body: string, taskId: string) {
 }
 
 export function commentChatDraft(comment: TaskComment, agents: Pick<AgentProfile, "id" | "name">[]) {
-  const authors = agents.filter((agent) => agent.name === comment.authorName);
+  const authors = (isHumanComment(comment) ? [] : agents).filter((agent) => agent.name === comment.authorName);
   const tag = authors.length === 1 ? `[@${label(authors[0].name)}](${agentMentionPath(authors[0].id)}) ` : "";
   return `${tag}${commentReference(comment)} `;
 }

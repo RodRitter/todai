@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { workspaceApi } from "@/lib/workspace-api";
 import { statuses } from "@/domain/task";
 import { parseWorkspaceSetup, starterAgents } from "@/domain/workspace-setup";
+import { UserNameField } from "./user-name-field";
 import { ColumnEditor } from "./column-editor";
 
 export function CreateWorkspace({ firstRun = false, onBusyChange }: { firstRun?: boolean; onBusyChange?: (busy: boolean) => void }) {
@@ -17,6 +18,7 @@ export function CreateWorkspace({ firstRun = false, onBusyChange }: { firstRun?:
   const [columns, setColumns] = useState<string[]>([...statuses]);
   const [editingColumns, setEditingColumns] = useState(false);
   const [starterAgentIds, setStarterAgentIds] = useState<string[]>([]);
+  const [userName, setUserName] = useState("");
   const [name, setName] = useState("");
   const [path, setPath] = useState("");
   const { suggestions, directoryError, clearSuggestions } = useDirectorySuggestions(path);
@@ -40,7 +42,7 @@ export function CreateWorkspace({ firstRun = false, onBusyChange }: { firstRun?:
       onBusyChange?.(true);
       setError("");
       try {
-        const workspace = await workspaceApi.create(name, path, parseWorkspaceSetup({ columns, starterAgentIds }));
+        const workspace = await workspaceApi.create(name, path, parseWorkspaceSetup({ columns, starterAgentIds, ...(firstRun ? { userName } : {}) }));
         window.location.assign(`/?workspace=${encodeURIComponent(workspace.id)}`);
       } catch (error) {
         setError(error instanceof Error ? error.message : "Could not create workspace.");
@@ -49,6 +51,7 @@ export function CreateWorkspace({ firstRun = false, onBusyChange }: { firstRun?:
         onBusyChange?.(false);
       }
     }}>
+      {firstRun && <div className="sm:col-span-2"><UserNameField id={`${id}-user-name`} value={userName} onChange={setUserName} disabled={busy} /></div>}
       <div className="space-y-2">
         <Label htmlFor={`${id}-name`}>Workspace name</Label>
         <Input id={`${id}-name`} value={name} onChange={(event) => setName(event.target.value)} required disabled={busy} placeholder="My project" />
@@ -93,6 +96,6 @@ export function CreateWorkspace({ firstRun = false, onBusyChange }: { firstRun?:
       </div>
     </fieldset>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-    <Button type="submit" form={`${id}-form`} className="w-full" disabled={busy || editingColumns || !name.trim() || !path.trim()}>{busy ? "Creating workspace…" : "Create workspace"}</Button>
+    <Button type="submit" form={`${id}-form`} className="w-full" disabled={busy || editingColumns || (firstRun && !userName.trim()) || !name.trim() || !path.trim()}>{busy ? "Creating workspace…" : "Create workspace"}</Button>
   </section>;
 }

@@ -800,3 +800,11 @@ export const InputCollapseKeepsScroll: Story = {
     }
   },
 };
+
+export const NamedHuman: Story = {
+  args: { comments: [{ id: "named", taskId: "task", authorName: "Roderick", authorRole: "human", body: "Please review the changes.", createdAt: "2026-11-17T10:00:00Z" }] },
+  play: async ({ canvasElement }) => {
+    const root = canvasElement.querySelector('[data-slot="message-group"][data-variant="comment"]');
+    await expect(root).toHaveClass("bg-transparent");
+  },
+};

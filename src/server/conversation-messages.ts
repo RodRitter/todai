@@ -1,3 +1,4 @@
+import { isHumanComment } from "../domain/comment-author.ts";
 import type { DatabaseSync } from "node:sqlite";
 import type { TaskComment } from "../domain/task.ts";
 
@@ -15,7 +16,7 @@ export function conversationDeletion(messages: TaskComment[], messageId?: string
     for (const message of messages) {
       if (ids.has(message.id)) continue;
       if ((message.parentCommentId && ids.has(message.parentCommentId)) ||
-          (!message.parentCommentId && message.authorName === "Human" && !message.feedbackStatus && message.runId && feedbackRuns.has(message.runId))) {
+          (!message.parentCommentId && isHumanComment(message) && !message.feedbackStatus && message.runId && feedbackRuns.has(message.runId))) {
         ids.add(message.id);
         changed = true;
       }
