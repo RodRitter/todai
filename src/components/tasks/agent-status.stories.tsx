@@ -14,6 +14,11 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Running: Story = {};
+export const RunningBadge: Story = { args: { variant: "badge" } };
+export const RunningBadgeDark: Story = {
+  args: { variant: "badge" },
+  globals: { theme: "dark" },
+};
 export const Paused: Story = { args: { status: "Paused" } };
 export const Review: Story = { args: { status: "Review" } };
 export const Blocked: Story = { args: { status: "Blocked" } };
