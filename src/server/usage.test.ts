@@ -185,3 +185,35 @@ test("header credits total all boards in the workspace and exclude other workspa
     finally { otherStore.close(); }
   } finally { f.close(); }
 });
+
+test("credit limits are global; manual tracking is persistent and isolated from task history", async () => {
+  const f = fixture();
+  try {
+    assert.equal(f.store.getCreditLimit(), 0);
+    f.store.setCreditLimit(100);
+    for (const value of [-1, Infinity, NaN, "100", null]) {
+      assert.throws(() => f.store.setCreditLimit(value));
+      assert.throws(() => f.store.usage().setTrackedCredits(value));
+    }
+    const runner = async (request: RunRequest) => { request.onUsage?.(tokens); return "Done"; };
+    await runWithUsage(f.store, runner, f.request);
+    assert.equal(f.store.usage().setTrackedCredits(50).trackedCredits, 50);
+    assert.equal(f.store.usage().read("task").totals.credits, 3.7);
+    const reopened = new TaskStore(f.path, f.store.workspaceId);
+    try { assert.equal(reopened.usage().trackedCredits().trackedCredits, 50); }
+    finally { reopened.close(); }
+    await runWithUsage(f.store, runner, { ...f.request, run: { ...f.request.run, id: "next" } });
+    assert.ok(Math.abs(f.store.usage().trackedCredits().trackedCredits - 53.7) < 1e-10);
+    assert.equal(f.store.usage().setTrackedCredits(0).trackedCredits, 0);
+    assert.equal(f.store.usage().read("task").totals.calls, 2);
+    await runWithUsage(f.store, runner, { ...f.request, run: { ...f.request.run, id: "after-reset" } });
+    assert.ok(Math.abs(f.store.usage().trackedCredits().trackedCredits - 3.7) < 1e-10);
+    const other = new TaskStore(f.path, f.store.createWorkspace("Other", f.directory).id);
+    try {
+      assert.equal(other.getCreditLimit(), 100);
+      assert.equal(other.usage().trackedCredits().trackedCredits, 0);
+      other.setCreditLimit(0);
+      assert.equal(f.store.getCreditLimit(), 0);
+    } finally { other.close(); }
+  } finally { f.close(); }
+});

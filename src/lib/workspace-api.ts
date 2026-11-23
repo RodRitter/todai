@@ -150,6 +150,7 @@ export function boardSettingsApi(boardId: string) {
 }
 
 export const generalSettingsApi = {
-  get: () => request<{ userName: string }>("/api/general-settings"),
-  save: (userName: string) => request<{ userName: string }>("/api/general-settings", { method: "PUT", body: { userName } }),
+  get: () => request<{ userName: string; creditLimit: number }>("/api/general-settings"),
+  setCreditLimit: (creditLimit: number) => request<{ creditLimit: number }>("/api/general-settings", { method: "PUT", body: { creditLimit } }),
+  save: (userName: string) => request<{ userName: string; creditLimit: number }>("/api/general-settings", { method: "PUT", body: { userName } }),
 };

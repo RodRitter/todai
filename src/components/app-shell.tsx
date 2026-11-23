@@ -115,8 +115,8 @@ export function AppShell({
                     ? "Artifacts"
                     : boardName ?? "Task board"}
           </h1>
+          <TrackedCredits />
           <div className="ml-auto flex items-center gap-2">
-            <TrackedCredits />
             {headerActions}
             <ExecutionActivity />
             <ServerNotifications />

@@ -14,7 +14,7 @@ export const Partial: Story = { args: { load: async () => ({ credits: 3.7, calls
 export const Unavailable: Story = { args: { load: async () => { throw new Error("Offline"); } } };
 export const Dark: Story = { globals: { theme: "dark" } };
 
-export const Open: Story = { play: async ({ canvasElement }) => {
+export const Open: Story = { name: "Open compact table", play: async ({ canvasElement }) => {
   const canvas = within(canvasElement);
   const trigger = await canvas.findByRole("button", { name: "3.7 tracked credits" });
   await userEvent.click(trigger);
@@ -27,3 +27,19 @@ export const Open: Story = { play: async ({ canvasElement }) => {
   await expect(trigger).toHaveFocus();
 } };
 export const OpenDark: Story = { ...Open, globals: { theme: "dark" } };
+
+export const AtThreshold: Story = { args: { load: async () => ({ credits: 80, creditLimit: 100, calls: 12, priced: 12, measured: 12, breakdown }) }, play: async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  await expect(await canvas.findByText("80%")).toHaveClass("bg-muted");
+} };
+export const AboveThreshold: Story = { args: { load: async () => ({ credits: 81, creditLimit: 100, calls: 12, priced: 12, measured: 12, breakdown }) }, play: async ({ canvasElement }) => {
+  await expect(await within(canvasElement).findByText("81%")).toHaveClass("bg-destructive");
+} };
+export const AboveThresholdDark: Story = { ...AboveThreshold, globals: { theme: "dark" } };
+export const OverLimit: Story = { args: { load: async () => ({ credits: 120, creditLimit: 100, calls: 12, priced: 12, measured: 12, breakdown }) } };
+export const Reset: Story = { args: { reset: async () => ({ credits: 3.7, trackedCredits: 0, creditLimit: 100, calls: 12, priced: 12, measured: 12, breakdown }) }, play: async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  await userEvent.click(await canvas.findByRole("button", { name: "3.7 tracked credits" }));
+  await userEvent.click(await within(document.body).findByRole("button", { name: "Reset tracking" }));
+  await expect(await canvas.findByRole("button", { name: "0 / 100 tracked credits, 0% used" })).toBeVisible();
+} };

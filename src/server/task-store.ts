@@ -1,3 +1,4 @@
+import { parseCredits } from "../domain/credit-settings.ts";
 import { UsageStore } from "./usage-store.ts";
 import { conversationDeletion, removeConversationMessages } from "./conversation-messages.ts";
 import { groupActivity } from "../domain/activity.ts";
@@ -139,6 +140,16 @@ export class TaskStore {
   private assertInputOwnership(input: unknown) {
     if (input && typeof input === "object" && "workspaceId" in input && input.workspaceId !== this.workspaceId)
       throw new WorkspaceOwnershipError("This data belongs to another workspace.");
+  }
+
+  getCreditLimit(): number {
+    return Number(this.db.prepare("SELECT value FROM general_settings WHERE key = 'creditLimit'").get()?.value ?? 0);
+  }
+
+  setCreditLimit(value: unknown): number {
+    const limit = parseCredits(value);
+    this.db.prepare("INSERT INTO general_settings (key, value) VALUES ('creditLimit', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(limit));
+    return limit;
   }
 
   getUserName(): string {

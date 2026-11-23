@@ -1,3 +1,4 @@
+import { parseCredits } from "../domain/credit-settings.ts";
 import type { DatabaseSync } from "node:sqlite";
 import type { TaskStore } from "./task-store.ts";
 import type { Runner, RunRequest } from "./execution-service.ts";
@@ -61,6 +62,17 @@ export class UsageStore {
         cachedInput: { tokens: Number(row.cachedInput), credits: Number(row.cachedCredits) },
         output: { tokens: Number(row.output), credits: Number(row.outputCredits) },
       } };
+  }
+  trackedCredits() {
+    const usage = this.workspaceCredits();
+    const offset = Number(this.db.prepare("SELECT value FROM settings WHERE key = 'creditOffset' AND workspaceId = ?").get(this.workspaceId)?.value ?? 0);
+    return { ...usage, trackedCredits: Math.max(0, usage.credits + offset) };
+  }
+  setTrackedCredits(value: unknown) {
+    const current = parseCredits(value);
+    const offset = current - this.workspaceCredits().credits;
+    this.db.prepare("INSERT INTO settings (key, value, workspaceId) VALUES ('creditOffset', ?, ?) ON CONFLICT(workspaceId, key) DO UPDATE SET value = excluded.value").run(String(offset), this.workspaceId);
+    return this.trackedCredits();
   }
   read(taskId: string): TaskUsage {
     if (!this.db.prepare("SELECT id FROM tasks WHERE id = ? AND workspaceId = ?").get(taskId, this.workspaceId)) throw new Error("Task not found.");

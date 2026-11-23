@@ -8,7 +8,8 @@ const meta = {
   beforeEach: () => {
     const original = globalThis.fetch;
     globalThis.fetch = async (input, options) => {
-      if (String(input) === "/api/general-settings") return Response.json({ userName: options?.method === "PUT" ? JSON.parse(String(options.body)).userName.trim() : "Roderick" });
+      if (String(input) === "/api/general-settings") return Response.json({ creditLimit: options?.method === "PUT" ? JSON.parse(String(options.body)).creditLimit ?? 100 : 100, userName: options?.method === "PUT" ? (JSON.parse(String(options.body)).userName ?? "Roderick").trim() : "Roderick" });
+      if (String(input) === "/api/usage") return Response.json({ credits: 25, trackedCredits: options?.method === "PUT" ? JSON.parse(String(options.body)).credits : 25 });
       return original(input, options);
     };
     return () => { globalThis.fetch = original; };
@@ -48,3 +49,20 @@ export const SaveError: Story = {
     await expect(canvas.getByRole("button", { name: "Save name" })).toBeEnabled();
   },
 };
+
+export const SetCredits: Story = { play: async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  const field = await canvas.findByLabelText("Current tracked credits");
+  await expect(field).toHaveValue(25);
+  await userEvent.clear(field);
+  await userEvent.type(field, "50");
+  await userEvent.click(canvas.getByRole("button", { name: "Set tracked credits" }));
+  await expect(await canvas.findByRole("status")).toHaveTextContent("Credit settings saved.");
+  await userEvent.click(canvas.getByRole("button", { name: "Reset tracking" }));
+  await expect(field).toHaveValue(0);
+} };
+
+export const Narrow: Story = {
+  decorators: [(Story) => <div className="w-80"><Story /></div>],
+};
+export const NarrowDark: Story = { ...Narrow, globals: { theme: "dark" } };

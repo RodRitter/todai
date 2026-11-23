@@ -1,4 +1,5 @@
 "use client";
+import { cn } from "@/lib/utils";
 import { ScrollArea } from "./scroll-area";
 import { Info } from "lucide-react";
 import { Card, CardContent } from "./card";
@@ -21,13 +22,13 @@ export function UsageMetrics({ items }: { items: { label: string; value: string;
 export function UsageNote({ label, hint }: { label: string; hint?: string }) {
   return <div role="status" className="flex items-center gap-1 text-xs text-muted-foreground">{label}{hint && <Help label={label} hint={hint} />}</div>;
 }
-function UsageTable({ label, columns, rows, textColumns = 1 }: { label: string; columns: string[]; rows: string[][]; textColumns?: number }) {
+function UsageTable({ label, columns, rows, textColumns = 1, density = "default" }: { label: string; columns: string[]; rows: string[][]; textColumns?: number; density?: "default" | "compact" }) {
   return <ScrollArea orientation="both" className="max-h-96" viewportProps={{ "aria-label": label }}>
     <table aria-label={label} className="w-full text-left text-sm tabular-nums">
       <thead className="text-xs text-muted-foreground"><tr>{columns.map((column, index) => <th key={column} scope="col" className={index < textColumns ? "whitespace-nowrap px-2 pb-2 text-left font-normal first:pl-0" : "whitespace-nowrap px-2 pb-2 text-right font-normal last:pr-0"}>{column}</th>)}</tr></thead>
       <tbody>{rows.map(row => <tr key={JSON.stringify(row.slice(0, textColumns))} className="border-t border-border/40">{row.map((value, index) => index === 0
-        ? <th key={columns[index]} scope="row" className="whitespace-nowrap py-3 pr-2 font-normal">{value}</th>
-        : <td key={columns[index]} className={index < textColumns ? "whitespace-nowrap px-2 py-3 text-left" : "whitespace-nowrap px-2 py-3 text-right last:pr-0"}>{value}</td>)}</tr>)}</tbody>
+        ? <th key={columns[index]} scope="row" className={cn("whitespace-nowrap pr-2 font-normal", density === "compact" ? "py-1" : "py-3")}>{value}</th>
+        : <td key={columns[index]} className={cn("whitespace-nowrap px-2", density === "compact" ? "py-1" : "py-3", index < textColumns ? "text-left" : "text-right last:pr-0")}>{value}</td>)}</tr>)}</tbody>
     </table>
   </ScrollArea>;
 }
@@ -37,6 +38,12 @@ export function UsageBreakdown({ rows }: { rows: { label: string; calls: string;
 export function ModelUsageBreakdown({ rows }: { rows: { model: string; effort: string; input: string; cached: string; output: string; tokens: string; credits: string }[] }) {
   return <UsageTable label="Usage by model and effort" textColumns={2} columns={["Model", "Effort", "Uncached input", "Cached input", "Output", "Total tokens", "Est. credits"]} rows={rows.map(row => [row.model, row.effort, row.input, row.cached, row.output, row.tokens, row.credits])} />;
 }
-export function TokenCreditBreakdown({ rows }: { rows: { label: string; tokens: string; credits: string }[] }) {
-  return <UsageTable label="Workspace token and credit breakdown" columns={["Token type", "Tokens", "Est. credits"]} rows={rows.map(row => [row.label, row.tokens, row.credits])} />;
+export function TokenCreditBreakdown({ rows, density = "default" }: { rows: { label: string; tokens: string; credits: string }[]; density?: "default" | "compact" }) {
+  return <UsageTable density={density} label="Workspace token and credit breakdown" columns={["Token type", "Tokens", "Est. credits"]} rows={rows.map(row => [row.label, row.tokens, row.credits])} />;
+}
+
+export function CreditPercentageBadge({ percentage }: { percentage: number }) {
+  return <span data-slot="credit-percentage" className={`rounded-full px-2 py-0.5 text-xs font-medium tabular-nums ${percentage > 80 ? "bg-destructive text-white" : "bg-muted text-muted-foreground"}`}>
+    {Number(percentage.toFixed(2))}%
+  </span>;
 }

@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { notifyOperation } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { generalSettingsApi } from "@/lib/workspace-api";
+import { CreditSettings } from "./credit-settings";
 import { UserNameField } from "./user-name-field";
 
 export function GeneralSettings() {
@@ -33,10 +34,10 @@ export function GeneralSettings() {
       } catch { /* The toast reports the save error. Keep the name for retry. */ }
       finally { saving.current = false; setBusy(false); }
     }}>
-      <UserNameField id={`${id}-name`} value={name} onChange={(value) => { setName(value); }} disabled={busy || saved === null} />
-      <Button type="submit" disabled={busy || saved === null || !name.trim() || name.trim() === saved}>{busy ? "Saving…" : "Save name"}</Button>
+      <UserNameField id={`${id}-name`} value={name} onChange={(value) => { setName(value); }} disabled={busy || saved === null} actions={<Button type="submit" aria-label="Save name" disabled={busy || saved === null || !name.trim() || name.trim() === saved}>{busy ? "Saving…" : "Save"}</Button>} />
     </form>
     {error && <p role="alert">{error}</p>}
     {error && saved === null && <Button onClick={() => { setError(""); setAttempt((value) => value + 1); }}>Retry loading name</Button>}
+    <CreditSettings />
   </section>;
 }
