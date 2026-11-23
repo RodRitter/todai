@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { notifyOperation } from "@/components/ui/toast";
+import { notifyOperation, toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { generalSettingsApi } from "@/lib/workspace-api";
 import { CreditSettings } from "./credit-settings";
@@ -19,7 +19,7 @@ export function GeneralSettings() {
     let active = true;
     generalSettingsApi.get().then((data) => {
       if (active) { setName(data.userName); setSaved(data.userName); setError(""); }
-    }).catch(() => { if (active) setError("Could not load your name."); });
+    }).catch(() => { if (active) { setError("Could not load your name."); toast.error("Could not load your name."); } });
     return () => { active = false; };
   }, [attempt]);
   return <section className="space-y-4" aria-label="Personal settings">
@@ -36,7 +36,6 @@ export function GeneralSettings() {
     }}>
       <UserNameField id={`${id}-name`} value={name} onChange={(value) => { setName(value); }} disabled={busy || saved === null} actions={<Button type="submit" aria-label="Save name" disabled={busy || saved === null || !name.trim() || name.trim() === saved}>{busy ? "Saving…" : "Save"}</Button>} />
     </form>
-    {error && <p role="alert">{error}</p>}
     {error && saved === null && <Button onClick={() => { setError(""); setAttempt((value) => value + 1); }}>Retry loading name</Button>}
     <CreditSettings />
   </section>;

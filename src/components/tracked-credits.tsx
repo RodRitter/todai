@@ -1,8 +1,11 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Coins } from "lucide-react";
+import { Coins, Settings } from "lucide-react";
 import type { WorkspaceCredits } from "@/domain/usage";
 import { workspaceFetch } from "@/lib/workspace-fetch";
+import { WorkspaceLink } from "@/components/workspace-selection";
+import { ResetCreditTrackingDialog } from "@/components/reset-credit-tracking-dialog";
+import { notifyOperation } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger, PopoverHeader, PopoverBody } from "@/components/ui/popover";
 import { CreditPercentageBadge, TokenCreditBreakdown, UsageNote } from "@/components/ui/usage-metrics";
@@ -12,15 +15,16 @@ async function loadCredits(signal: AbortSignal): Promise<WorkspaceCredits> {
   if (!response.ok) throw new Error("Could not load tracked credits.");
   return response.json();
 }
-async function resetCredits(): Promise<WorkspaceCredits> {
-  const response = await workspaceFetch("/api/usage", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ credits: 0 }) });
-  if (!response.ok) throw new Error("Could not reset tracked credits.");
+async function setCredits(credits: number): Promise<WorkspaceCredits> {
+  const response = await workspaceFetch("/api/usage", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ credits }) });
+  if (!response.ok) throw new Error("Could not update tracked credits.");
   return response.json();
 }
-export function TrackedCredits({ load = loadCredits, reset = resetCredits }: { load?: typeof loadCredits; reset?: typeof resetCredits }) {
+const resetCredits = () => setCredits(0);
+export function TrackedCredits({ load = loadCredits, reset = resetCredits, sync = setCredits }: { load?: typeof loadCredits; reset?: typeof resetCredits; sync?: typeof setCredits }) {
+  const [confirmReset, setConfirmReset] = useState(false);
   const revision = useRef(0);
   const [resetting, setResetting] = useState(false);
-  const [resetError, setResetError] = useState("");
   const [data, setData] = useState<WorkspaceCredits | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -37,6 +41,22 @@ export function TrackedCredits({ load = loadCredits, reset = resetCredits }: { l
     void refresh();
     return () => { controller.abort(); clearTimeout(timer); };
   }, [load]);
+  async function updateTracking(action: "reset" | "sync") {
+    if (resetting || !data) return;
+    revision.current += 1;
+    setResetting(true);
+    try {
+      const next = await notifyOperation(() => action === "reset" ? reset() : sync(data.credits), {
+        loading: action === "reset" ? "Resetting tracked credits…" : "Syncing tracked credits…",
+        success: action === "reset" ? "Tracking reset to zero." : "Tracked credits synced with task total.",
+        error: "Could not update tracked credits.",
+      });
+      revision.current += 1;
+      setData(next);
+      if (action === "reset") setConfirmReset(false);
+    } catch { /* The toast reports the error. */ }
+    finally { setResetting(false); }
+  }
   const value = data && (!data.calls || data.priced) ? formatCredits(data.credits) : "—";
   const current = data?.trackedCredits ?? data?.credits;
   const display = current === undefined ? "—" : formatCredits(current);
@@ -44,7 +64,7 @@ export function TrackedCredits({ load = loadCredits, reset = resetCredits }: { l
   const headerValue = limit > 0 ? `${display} / ${formatCredits(limit)}` : display;
   const percentage = current !== undefined && limit > 0 ? current / limit * 100 : null;
   const tokens = data ? Object.values(data.breakdown).reduce((sum, row) => sum + row.tokens, 0) : 0;
-  return <Popover><PopoverTrigger asChild>
+  return <><Popover><PopoverTrigger asChild>
     <Button type="button" variant="ghost-muted" size="sm" aria-label={`${headerValue} tracked credits${percentage !== null ? `, ${Number(percentage.toFixed(2))}% used` : ""}${failed ? ", refresh unavailable" : ""}`}>
       <Coins aria-hidden="true" />{headerValue}
       {percentage !== null && <CreditPercentageBadge percentage={percentage} />}
@@ -64,13 +84,13 @@ export function TrackedCredits({ load = loadCredits, reset = resetCredits }: { l
       ]} />
       {(data.priced < data.calls || data.measured < data.calls) && <UsageNote label="Partial totals" />}
     </>}
-    {resetError && <p role="alert">{resetError}</p>}
-    <Button type="button" variant="outline" size="sm" disabled={!data || resetting} onClick={async () => {
-      revision.current += 1;
-      setResetting(true); setResetError("");
-      try { const next = await reset(); revision.current += 1; setData(next); } catch { setResetError("Could not reset tracked credits."); }
-      finally { setResetting(false); }
-    }}>{resetting ? "Resetting…" : "Reset tracking"}</Button>
+    <div className="flex items-center gap-2">
+      <Button type="button" variant="outline" size="sm" disabled={!data || resetting} onClick={() => setConfirmReset(true)}>Reset tracking</Button>
+      <Button type="button" variant="ghost" size="sm" disabled={!data || resetting} onClick={() => void updateTracking("sync")} title={data ? `Use task total: ${formatCredits(data.credits)} credits` : undefined}>Sync</Button>
+      <Button variant="ghost" size="icon-sm" className="ml-auto" asChild><WorkspaceLink href="/settings" aria-label="Settings"><Settings aria-hidden="true" /></WorkspaceLink></Button>
+    </div>
     </PopoverBody>
-  </PopoverContent></Popover>;
+  </PopoverContent></Popover>
+    <ResetCreditTrackingDialog open={confirmReset} busy={resetting} onOpenChange={setConfirmReset} onConfirm={() => void updateTracking("reset")} />
+  </>;
 }

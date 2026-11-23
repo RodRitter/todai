@@ -57,8 +57,9 @@ export const SetCredits: Story = { play: async ({ canvasElement }) => {
   await userEvent.clear(field);
   await userEvent.type(field, "50");
   await userEvent.click(canvas.getByRole("button", { name: "Set tracked credits" }));
-  await expect(await canvas.findByRole("status")).toHaveTextContent("Credit settings saved.");
+  await expect(field).toHaveValue(50);
   await userEvent.click(canvas.getByRole("button", { name: "Reset tracking" }));
+  await userEvent.click(await within(document.body).findByRole("button", { name: "Reset to zero" }));
   await expect(field).toHaveValue(0);
 } };
 
@@ -66,3 +67,28 @@ export const Narrow: Story = {
   decorators: [(Story) => <div className="w-80"><Story /></div>],
 };
 export const NarrowDark: Story = { ...Narrow, globals: { theme: "dark" } };
+
+export const SyncTaskCredits: Story = { play: async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  const field = await canvas.findByLabelText("Current tracked credits");
+  await expect(field).toHaveValue(25);
+  await userEvent.click(canvas.getByRole("button", { name: "Reset tracking" }));
+  await userEvent.click(await within(document.body).findByRole("button", { name: "Reset to zero" }));
+  await expect(field).toHaveValue(0);
+  await userEvent.click(canvas.getByRole("button", { name: "Use task total: 25 credits" }));
+  await expect(field).toHaveValue(25);
+  await expect(canvas.queryByRole("status")).not.toBeInTheDocument();
+} };
+
+export const UnchangedValues: Story = { play: async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  const limit = await canvas.findByLabelText("Maximum credits");
+  await expect(limit).toHaveValue(100);
+  await expect(canvas.getByRole("button", { name: "Save credit limit" })).toBeDisabled();
+  await expect(canvas.getByRole("button", { name: "Set tracked credits" })).toBeDisabled();
+  await userEvent.clear(limit);
+  await userEvent.type(limit, "200");
+  await expect(canvas.getByRole("button", { name: "Save credit limit" })).toBeEnabled();
+  await userEvent.click(canvas.getByRole("button", { name: "Save credit limit" }));
+  await expect(canvas.getByRole("button", { name: "Save credit limit" })).toBeDisabled();
+} };

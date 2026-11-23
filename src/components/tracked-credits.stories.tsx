@@ -23,6 +23,7 @@ export const Open: Story = { name: "Open compact table", play: async ({ canvasEl
   await expect(within(dialog).queryByRole("button", { name: /About/ })).not.toBeInTheDocument();
   await expect(within(dialog).getByText("110,000")).toBeVisible();
   await expect(within(dialog).getByText("Cached input")).toBeVisible();
+  await expect(within(dialog).getByRole("link", { name: "Settings" })).toHaveAttribute("href", expect.stringContaining("/settings"));
   await userEvent.keyboard("{Escape}");
   await expect(trigger).toHaveFocus();
 } };
@@ -41,5 +42,13 @@ export const Reset: Story = { args: { reset: async () => ({ credits: 3.7, tracke
   const canvas = within(canvasElement);
   await userEvent.click(await canvas.findByRole("button", { name: "3.7 tracked credits" }));
   await userEvent.click(await within(document.body).findByRole("button", { name: "Reset tracking" }));
+  await userEvent.click(await within(document.body).findByRole("button", { name: "Reset to zero" }));
   await expect(await canvas.findByRole("button", { name: "0 / 100 tracked credits, 0% used" })).toBeVisible();
+} };
+
+export const Sync: Story = { args: { sync: async (credits) => ({ credits, trackedCredits: credits, creditLimit: 100, calls: 12, priced: 12, measured: 12, breakdown }) }, play: async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  await userEvent.click(await canvas.findByRole("button", { name: "3.7 tracked credits" }));
+  await userEvent.click(await within(document.body).findByRole("button", { name: "Sync" }));
+  await expect(await canvas.findByRole("button", { name: "3.7 / 100 tracked credits, 3.7% used" })).toBeVisible();
 } };
