@@ -24,7 +24,7 @@ function TabsTrigger({ className, ...props }: ComponentProps<typeof TabsPrimitiv
   );
 }
 
-function TabsCount({ count }: { count: number }) {
+function TabsCount({ count }: { count: number | string }) {
   return <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-secondary px-1.5 text-xs font-medium text-secondary-foreground tabular-nums">{count}</span>;
 }
 

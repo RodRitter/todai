@@ -33,7 +33,7 @@ function Card({
         tone === "muted" && "bg-muted/50 text-foreground",
         variant === "comment-header" && "rounded-lg",
         variant === "comment-header" || variant === "flush" ? "gap-0 overflow-hidden py-0" : variant === "compact"
-          ? "gap-3 py-3 [&>[data-slot=card-header]]:px-3 [&>[data-slot=card-footer]]:px-3"
+          ? "gap-3 py-3 [&>[data-slot=card-header]]:px-3 [&>[data-slot=card-footer]]:px-3 [&>[data-slot=card-content]]:px-3"
           : variant === "task"
             ? "gap-3 py-4 [&>[data-slot=card-header]]:gap-1.5 [&>[data-slot=card-header]]:px-4 [&>[data-slot=card-footer]]:justify-between [&>[data-slot=card-footer]]:px-4 [&_[data-slot=card-title]]:line-clamp-3 [&_[data-slot=card-title]]:text-sm [&_[data-slot=card-title]]:leading-5 [&_[data-slot=card-title]]:font-semibold [&_[data-slot=card-description]]:line-clamp-2 [&_[data-slot=card-description]]:max-h-10 [&_[data-slot=card-description]]:leading-5"
             : "gap-6 py-6",
@@ -77,6 +77,10 @@ function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
+function CardContent({ className, ...props }: React.ComponentProps<"div">) {
+  return <div data-slot="card-content" className={cn("px-5", className)} {...props} />;
+}
+
 function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -87,4 +91,4 @@ function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-export { Card, CardHeader, CardTitle, CardDescription, CardFooter };
+export { CardContent, Card, CardHeader, CardTitle, CardDescription, CardFooter };

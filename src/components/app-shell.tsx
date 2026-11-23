@@ -9,6 +9,7 @@ import { WorkspaceSwitcher } from "@/components/workspace-selection";
 import { ExecutionActivity } from "@/components/execution-activity";
 import { ServerNotifications } from "@/components/server-notifications";
 
+import { TrackedCredits } from "./tracked-credits";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 
 export function AppShell({
@@ -115,6 +116,7 @@ export function AppShell({
                     : boardName ?? "Task board"}
           </h1>
           <div className="ml-auto flex items-center gap-2">
+            <TrackedCredits />
             {headerActions}
             <ExecutionActivity />
             <ServerNotifications />

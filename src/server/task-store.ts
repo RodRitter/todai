@@ -1,3 +1,4 @@
+import { UsageStore } from "./usage-store.ts";
 import { conversationDeletion, removeConversationMessages } from "./conversation-messages.ts";
 import { groupActivity } from "../domain/activity.ts";
 import { parseUserName } from "../domain/user-name.ts";
@@ -627,6 +628,8 @@ export class TaskStore {
       throw error;
     }
   }
+
+  usage() { return new UsageStore(this.db, this.workspaceId); }
 
   history(taskId?: string): AgentRun[] {
     if (taskId !== undefined) this.assertOwnership("tasks", taskId);

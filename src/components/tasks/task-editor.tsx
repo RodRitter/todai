@@ -8,6 +8,7 @@ import type { ArtifactReference } from "@/domain/artifact";
 import { useId, useRef, useState, type ComponentProps, type FormEvent } from "react";
 import { Bot, Ellipsis, Trash2, Maximize2, Minimize2, LayoutGrid, CircleDot, CirclePlay, CircleStop, Workflow, Zap } from "lucide-react";
 import { Tabs, TabsContent, TabsCount, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TaskUsage } from "./task-usage";
 import { ActivityTabTrigger } from "./activity-tab-trigger";
 import { TaskComments } from "./task-comments";
 import { AgentStatus } from "./agent-status";
@@ -97,6 +98,7 @@ function TaskEditorSession({
   const [chatDraft, setChatDraft] = useState("");
   const [chatDraftVersion, setChatDraftVersion] = useState(0);
   const [chatCount, setChatCount] = useState(0);
+  const [usageCredits, setUsageCredits] = useState<string | null>(null);
   const [artifactCount, setArtifactCount] = useState(0);
   const draftId = useRef<string | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(!editing);
@@ -347,6 +349,7 @@ function TaskEditorSession({
                 <ActivityTabTrigger value="activity" disabled={busy} agentStatus={editing.agentStatus} comments={editing.comments} />
                 <TabsTrigger value="artifacts" disabled={busy} aria-label="Artifacts" aria-description={`${artifactCount} artifacts`}>Artifacts<TabsCount count={artifactCount} /></TabsTrigger>
                 <TabsTrigger value="chat" disabled={busy} aria-label="Chat" aria-description={`${chatCount} messages`}>Chat<TabsCount count={chatCount} /></TabsTrigger>
+                <TabsTrigger value="usage" disabled={busy} aria-label="Usage" aria-description={usageCredits === null ? "Credit estimate unavailable" : `${usageCredits} estimated credits`}>Usage{usageCredits !== null && <TabsCount count={usageCredits} />}</TabsTrigger>
               </TabsList>
               {editing && ((onRun && !pendingRun) || (pendingRun && onStop)) && (
               <div className="ml-auto flex min-w-0 max-w-full items-center gap-2">
@@ -537,6 +540,7 @@ function TaskEditorSession({
               </TabsContent>
 
 
+              {editing && <TabsContent value="usage" forceMount><TaskUsage key={editing.id} taskId={editing.id} active={tab === "usage"} onCreditsChange={setUsageCredits} /></TabsContent>}
               {editing && <TabsContent value="artifacts" forceMount>
                 <TaskArtifacts
                   taskId={editing.id}

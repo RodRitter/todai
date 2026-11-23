@@ -1,3 +1,4 @@
+import { runWithUsage } from "./usage-store.ts";
 import { openRunArtifacts } from "./run-artifacts.ts";
 import { randomUUID } from "node:crypto";
 import type { TaskStore } from "./task-store.ts";
@@ -37,7 +38,7 @@ export async function sendChat(tasks: TaskStore, chats: ChatStore, taskId: strin
       const artifacts = toolsEnabled ? await openRunArtifacts(tasks, request.run, signal, {
         sessionId: session.id, lease, taskId, creator: profile.name,
       }) : undefined;
-      try { return await runner({ ...request, artifacts: artifacts?.connection }); }
+      try { return await runWithUsage(tasks, runner, { ...request, artifacts: artifacts?.connection }); }
       finally { artifacts?.close(); }
     };
     const classifier = { ...intentProfile(tasks.getDefaultExecutor()), instructions: [

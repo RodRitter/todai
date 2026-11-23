@@ -1,5 +1,6 @@
 "use client";
 
+import { PopoverHeader } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { workspaceFetch } from "@/lib/workspace-fetch";
 
@@ -97,9 +98,7 @@ export function ServerNotifications({ load = loadServers }: { load?: () => Promi
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content align="end" sideOffset={8} aria-label="Running workspace servers" className="z-50 w-[30rem] max-w-[calc(100vw-2rem)] rounded-md border bg-popover text-popover-foreground shadow-md outline-none">
-          <div className="px-4 pt-4 pb-2">
-            <h2 className="text-sm font-semibold">Running servers</h2>
-          </div>
+          <PopoverHeader>Running servers</PopoverHeader>
           <ScrollArea className="max-h-80"><div className="p-2" aria-live="polite">
             {stopError && <p role="alert" className="p-2 text-sm text-destructive">{stopError}</p>}
             {error ? <p role="alert" className="p-2 text-sm text-destructive">{error}</p>

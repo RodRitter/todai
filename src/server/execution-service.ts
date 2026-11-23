@@ -1,3 +1,5 @@
+import { runWithUsage } from "./usage-store.ts";
+import type { TokenUsage } from "../domain/usage.ts";
 import { openRunArtifacts, type RunArtifactConnection } from "./run-artifacts.ts";
 import { executionWorkspacePath } from "./workspace-settings.ts";
 import { orderedReplies } from "./comment-intent.ts";
@@ -8,6 +10,7 @@ import type { TaskStore, AgentRun } from "./task-store.ts";
 import type { Task } from "../domain/task.ts";
 
 export type RunRequest = {
+  onUsage?: (usage: TokenUsage) => void;
   userName?: string;
   run: AgentRun;
   task: Task;
@@ -90,7 +93,7 @@ export class ExecutionService {
         if (run.kind !== "intent") artifacts = await openRunArtifacts(this.store, run, controller.signal);
         if (this.store.interruptionRequested(run.id)) controller.abort();
         controller.signal.throwIfAborted();
-        summary = await this.runner({
+        summary = await runWithUsage(this.store, this.runner, {
           userName: this.store.getUserName(),
           artifacts: artifacts?.connection,
           run,

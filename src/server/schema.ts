@@ -1,3 +1,4 @@
+import { initializeUsageSchema } from "./usage-store.ts";
 import { initializeChatSchema } from "./chat-schema.ts";
 import { migrateBoards } from "./board-schema.ts";
 import { initializeArtifactSchema } from "./artifact-schema.ts";
@@ -136,6 +137,7 @@ export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
       db.exec("ALTER TABLE runs ADD COLUMN columnInstructions TEXT NOT NULL DEFAULT ''");
     initializeArtifactSchema(db);
     initializeChatSchema(db);
+    initializeUsageSchema(db);
     db.exec("CREATE TABLE IF NOT EXISTS general_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
     for (const table of ["comments", "chat_messages"]) {
       if (!db.prepare(`PRAGMA table_info(${table})`).all().some((field) => field.name === "authorRole")) {

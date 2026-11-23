@@ -2,7 +2,8 @@ import { spawn } from "node:child_process";
 import { setTimeout } from "node:timers/promises";
 
 // Both executors must own a process group so cancellation also stops their commands.
-export async function runCli({ executable, label, args, cwd, input = "", signal, onStart = () => {}, timeout = 0 }: {
+export async function runCli({ executable, label, args, cwd, input = "", signal, onStart = () => {}, timeout = 0, onStdoutLine }: {
+  onStdoutLine?: (line: string) => void;
   executable: string; label: string; args: string[]; cwd: string; input?: string;
   signal?: AbortSignal; onStart?: (pid: number) => void; timeout?: number;
 }): Promise<string> {
@@ -21,6 +22,8 @@ export async function runCli({ executable, label, args, cwd, input = "", signal,
       const child = spawn(executable, args, { cwd, detached: true, stdio: ["pipe", "pipe", "pipe"] });
       pid = child.pid;
       let stdout = "";
+      let lineBuffer = "";
+      let droppingLine = false;
       let stderr = "";
       signal?.addEventListener("abort", stop, { once: true });
       if (signal?.aborted) stop();
@@ -30,6 +33,17 @@ export async function runCli({ executable, label, args, cwd, input = "", signal,
       }, timeout);
       child.stdout.on("data", (chunk) => {
         if (failure) return;
+        if (onStdoutLine) {
+          for (const part of chunk.toString().split(/(?<=\n)/)) {
+            if (!droppingLine) lineBuffer += part;
+            if (lineBuffer.length > 1_000_000) { lineBuffer = ""; droppingLine = true; }
+            if (part.endsWith("\n")) {
+              if (!droppingLine) onStdoutLine(lineBuffer);
+              lineBuffer = ""; droppingLine = false;
+            }
+          }
+          return;
+        }
         stdout += chunk.toString();
         if (stdout.length > 4_000_000) {
           failure = new Error(`${label} returned too much output.`);
@@ -42,6 +56,7 @@ export async function runCli({ executable, label, args, cwd, input = "", signal,
       )));
       child.stdin.on("error", () => { /* close/error reports broken input pipes */ });
       child.on("close", (code, exitSignal) => {
+        if (lineBuffer && !droppingLine) onStdoutLine?.(lineBuffer);
         if (failure) reject(failure);
         else if (signal?.aborted) reject(new Error(`${label} was interrupted.`));
         else if (code === 0) resolve(stdout);
