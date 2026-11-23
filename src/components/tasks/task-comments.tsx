@@ -18,7 +18,7 @@ import { ArrowUp, Copy, MessageCircle, Link, Ellipsis, LoaderCircle, Reply, Tras
 import { ConversationMessageBody } from "@/components/conversation/conversation-message";
 import { useMessageDeletion } from "@/components/conversation/use-message-deletion";
 import { MessageDisclosure, MessageThread, MessageReplyComposer, MessageAgentStatus } from "@/components/ui/message";
-import { ConfirmationActions } from "@/components/ui/confirmation";
+import { ConfirmationActions, ConfirmationStatus } from "@/components/ui/confirmation";
 import { PromptSend } from "@/components/ui/prompt-send";
 import { toast } from "@/components/ui/toast";
 import { DescriptionEditor } from "./description-editor";
@@ -102,31 +102,33 @@ function ActivityMessage({ agents, attentionId, onChat, comment, replies = [], a
   const disabled = agentStatus === "Running" || agentStatus === "Queued";
   const feedback = comment.feedbackStatus === "pending" ? <FeedbackInput responseType={comment.responseType} commentId={comment.id} onAnswer={onAnswerFeedback} /> : undefined;
   const actions = <>
-    {onPostComment && <Button ref={replyButton} type="button" size="xs" variant="ghost-muted" disabled={disabled}
+    {onPostComment && <Button ref={replyButton} type="button" size="xs" variant="comment-header" disabled={disabled}
       aria-expanded={threadOpen} aria-controls={`comment-content-${comment.id}`} onClick={() => { setThreadOpen(true); setReplying(true); requestAnimationFrame(() => replyInput.current?.querySelector<HTMLElement>('[role="textbox"]')?.focus()); }}><Reply aria-hidden="true" />Reply</Button>}
-    {onChat && <Button type="button" size="xs" variant="ghost-muted" onClick={() => onChat(comment)}><MessageCircle aria-hidden="true" />Chat</Button>}
+    {onChat && <Button type="button" size="xs" variant="comment-header" onClick={() => onChat(comment)}><MessageCircle aria-hidden="true" />Chat</Button>}
     <CommentActions comment={comment} replyCount={replies.length} onDelete={onDeleteComment} disabled={disabled} />
   </>;
   return (
     <MessageDisclosure nested={nested} open={threadOpen} onOpenChange={setThreadOpen}
-      label={label || comment.authorName || "Agent"} avatarName={comment.authorName || "Agent"}
-      createdAt={comment.createdAt} actions={actions} replyCount={replies.length}
-      attention={attentionId === comment.id} id={nested ? `comment-${comment.id}` : undefined}>
-      <div id={`comment-content-${comment.id}`}>
-        <ConversationMessageBody message={comment} feedback={feedback} embedded />
-      </div>
-      {replies.length > 0 && <MessageThread id={`thread-${comment.id}`} aria-label="Reply thread">
-        {groupActivity(replies).toReversed().map(({ message, replies: children }) => <ActivityMessage key={message.id} nested
-          agents={agents} attentionId={attentionId} onChat={onChat} comment={message} replies={children} agentStatus={agentStatus}
-          label={comment.feedbackStatus && message.runId === comment.runId && isHumanComment(message) ? "Your answer" : undefined}
-          onDeleteComment={onDeleteComment} onAnswerFeedback={onAnswerFeedback} />)}
-      </MessageThread>}
-      {(replies.length > 0 || replying) && onPostComment && <MessageReplyComposer ref={replyInput}>
+      label={label || comment.authorName || "Agent"}
+      createdAt={comment.createdAt} actions={actions}
+      status={comment.feedbackStatus && <ConfirmationStatus state={comment.feedbackStatus} />} replyCount={replies.length}
+      composer={(replies.length > 0 || replying) && onPostComment && <MessageReplyComposer ref={replyInput} connected={!nested && replies.length > 0}>
         <CommentInput variant="reply" id={`reply-${comment.id}`} agents={agents} agentStatus={agentStatus} autoFocus={replying}
           onPost={(body, artifacts) => onPostComment(body, artifacts, comment.id)}
           onSent={() => setReplying(false)}
           onCancel={replies.length ? undefined : () => { setReplying(false); replyButton.current?.focus(); }} />
       </MessageReplyComposer>}
+      attention={attentionId === comment.id} id={nested ? `comment-${comment.id}` : undefined}>
+      <div id={`comment-content-${comment.id}`}>
+        <ConversationMessageBody message={comment} feedback={feedback} embedded />
+      </div>
+      {replies.length > 0 && <MessageThread gutter={!nested} id={`thread-${comment.id}`} aria-label="Reply thread">
+        {groupActivity(replies).toReversed().map(({ message, replies: children }) => <ActivityMessage key={message.id} nested
+          agents={agents} attentionId={attentionId} onChat={onChat} comment={message} replies={children} agentStatus={agentStatus}
+          label={comment.feedbackStatus && message.runId === comment.runId && isHumanComment(message) ? "Your answer" : undefined}
+          onDeleteComment={onDeleteComment} onAnswerFeedback={onAnswerFeedback} />)}
+      </MessageThread>}
+
     </MessageDisclosure>
   );
 }
@@ -145,7 +147,7 @@ function CommentActions({ comment, replyCount = 0, onDelete, disabled }: {
   }
   return <>
     <DropdownMenu>
-      <DropdownMenuTrigger asChild><Button ref={trigger} type="button" size="icon-xs" variant="ghost-muted" aria-label="Message actions" title="Message actions"><Ellipsis aria-hidden="true" /></Button></DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild><Button ref={trigger} type="button" size="icon-xs" variant="comment-header" aria-label="Message actions" title="Message actions"><Ellipsis aria-hidden="true" /></Button></DropdownMenuTrigger>
       <DropdownMenuContent align="end" onCloseAutoFocus={(event) => { if (deletion.confirmation.open) event.preventDefault(); }}>
         <DropdownMenuItem onSelect={() => void copy()}><Copy aria-hidden="true" />Copy message</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => void copy(true)}><Link aria-hidden="true" />Copy comment reference</DropdownMenuItem>

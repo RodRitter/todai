@@ -359,7 +359,7 @@ export const DarkReplyThread: Story = {
   decorators: [(Story) => <div className="dark bg-background text-foreground p-4"><Story /></div>],
 };
 
-export const ConnectedAvatars: Story = {
+export const CommentHeaderCards: Story = {
   args: {
     comments: [
       { id: "parent", taskId: "task", authorName: "Reviewer", body: "The implementation is ready for review.", createdAt: "2026-11-20T10:00:00Z" },
@@ -383,8 +383,8 @@ export const ConnectedAvatars: Story = {
     await expect(newer).toBeVisible();
   },
 };
-export const NarrowConnectedAvatars: Story = { ...ConnectedAvatars, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
-export const DarkConnectedAvatars: Story = { ...ConnectedAvatars, decorators: [(Story) => <div className="dark bg-background text-foreground p-4"><Story /></div>] };
+export const NarrowCommentHeaderCards: Story = { ...CommentHeaderCards, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
+export const DarkCommentHeaderCards: Story = { ...CommentHeaderCards, globals: { theme: "dark" } };
 
 export const PrivateChatActions: Story = {
   args: {
@@ -749,22 +749,42 @@ export const BusyDiscussionDark: Story = { ...BusyDiscussion, globals: { theme: 
 export const BusyDiscussionNarrow: Story = { ...BusyDiscussion, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
 
 
-export const ReplyInputBelowCard: Story = {
+export const ReplyGutter: Story = {
   render: () => <ThreadExample />,
   play: async ({ canvasElement }) => {
     const input = within(canvasElement).getByRole("textbox", { name: "Your reply" });
-    const card = canvasElement.querySelector('[data-slot="message-thread-card"]')!;
+    const thread = canvasElement.querySelector('[data-slot="message-replies"]')!;
     const header = canvasElement.querySelector('[data-slot="message-header"]')!;
     const content = canvasElement.querySelector('[data-slot="message-content"]')!;
-    await expect(header.querySelector('[data-slot="message-avatar"]')).not.toBeNull();
-    await expect(card.getBoundingClientRect().left).toBe(content.getBoundingClientRect().left);
-    await expect(input.closest('[data-slot="message-reply-composer"]')!.getBoundingClientRect().left).toBe(card.getBoundingClientRect().left);
-    await expect(card.contains(input)).toBe(false);
-    await expect(input.getBoundingClientRect().top).toBeGreaterThanOrEqual(card.getBoundingClientRect().bottom);
+    await expect(header.querySelector('[data-slot="message-avatar"]')).toBeNull();
+    await expect(canvasElement.querySelector('[data-slot="message-thread-card"]')).toBeNull();
+    const comments = content.querySelector('[data-slot="message-comments"]')!;
+    const gutter = getComputedStyle(thread, "::before");
+    await expect(gutter.top).toBe("16px");
+    await expect(gutter.bottom).toBe("0px");
+    await expect(getComputedStyle(comments, "::before").content).toBe("none");
+    await expect(gutter.borderLeftWidth).toBe("1px");
+    await expect(gutter.borderTopWidth).toBe("1px");
+    await expect(gutter.borderTopLeftRadius).toBe("8px");
+    await expect(comments.contains(input)).toBe(false);
+    await expect(comments.getBoundingClientRect().bottom).toBeLessThanOrEqual(input.getBoundingClientRect().top);
+    await expect(gutter.borderLeftColor).toBe(getComputedStyle(header.parentElement!).backgroundColor);
+    await expect(getComputedStyle(thread).borderLeftWidth).toBe("0px");
+    await expect(thread.getBoundingClientRect().left).toBe(content.getBoundingClientRect().left + parseFloat(getComputedStyle(content).paddingLeft));
+    await expect(input.closest('[data-slot="message-reply-composer"]')!.getBoundingClientRect().left).toBe(thread.getBoundingClientRect().left);
+    await expect(thread.contains(input)).toBe(false);
+    await expect(input.getBoundingClientRect().top).toBeGreaterThanOrEqual(thread.getBoundingClientRect().bottom);
+    const composer = input.closest('[data-slot="message-reply-composer"]')!;
+    const curve = getComputedStyle(composer, "::before");
+    await expect(curve.borderLeftWidth).toBe("1px");
+    await expect(curve.borderBottomWidth).toBe("1px");
+    await expect(curve.borderBottomLeftRadius).toBe("8px");
+    await expect(curve.borderLeftColor).toBe(gutter.borderLeftColor);
+    await expect(composer.getBoundingClientRect().top + parseFloat(curve.top)).toBe(thread.getBoundingClientRect().bottom);
   },
 };
-export const ReplyInputBelowCardDark: Story = { ...ReplyInputBelowCard, globals: { theme: "dark" } };
-export const ReplyInputBelowCardNarrow: Story = { ...ReplyInputBelowCard, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
+export const ReplyGutterDark: Story = { ...ReplyGutter, globals: { theme: "dark" } };
+export const ReplyGutterNarrow: Story = { ...ReplyGutter, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
 
 
 export const CollapsedDiscussion: Story = {
@@ -849,3 +869,55 @@ export const ApprovalError: Story = {
 };
 export const ApprovalDark: Story = { args: ApproveFeedback.args, globals: { theme: "dark" } };
 export const ApprovalNarrow: Story = { args: ApproveFeedback.args, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
+
+export const HeaderCardActions: Story = {
+  args: { comments: [request], onPostComment: fn(), onChat: fn() },
+  play: async ({ canvasElement }) => {
+    const header = canvasElement.querySelector<HTMLElement>('[data-slot="message-header"]')!;
+    const toggle = within(header).getByRole("button", { name: /Collapse comment by/ });
+    await expect(within(header).getByText("Feedback")).toBeVisible();
+    await expect(header.querySelector('[data-slot="message-avatar"]')).toBeNull();
+    await userEvent.click(within(header).getByRole("button", { name: "Message actions" }));
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(toggle);
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(within(header).getByText("Feedback")).toBeVisible();
+    toggle.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    const bounds = header.getBoundingClientRect();
+    const triggerBounds = toggle.getBoundingClientRect();
+    await expect(triggerBounds.width).toBe(bounds.width);
+    await expect(triggerBounds.height).toBe(bounds.height);
+  },
+};
+export const HeaderCardActionsNarrow: Story = { ...HeaderCardActions, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
+export const HeaderCardActionsDark: Story = { ...HeaderCardActions, globals: { theme: "dark" } };
+
+export const ReplyGutterJunctions: Story = {
+  ...BusyDiscussion,
+  play: async ({ canvasElement }) => {
+    const thread = canvasElement.querySelector('[data-slot="message-replies"]')!;
+    const replies = thread.querySelectorAll(':scope > [data-variant="reply"]');
+    await expect(replies.length).toBeGreaterThan(1);
+    const rootHeader = canvasElement.querySelector('[data-slot="message-header"]')!;
+    const replyHeader = replies[0].querySelector('[data-slot="message-header"]')!;
+    await expect(parseFloat(getComputedStyle(replyHeader).paddingTop)).toBeLessThan(parseFloat(getComputedStyle(rootHeader).paddingTop));
+    await expect(replyHeader.getBoundingClientRect().height).toBeLessThan(rootHeader.getBoundingClientRect().height);
+    await expect(getComputedStyle(replies[0], "::before").content).toBe("none");
+    for (const reply of Array.from(replies).slice(1)) {
+      const branch = getComputedStyle(reply, "::before");
+      const header = reply.querySelector('[data-slot="card"]')!;
+      await expect(branch.height).toBe("1px");
+      await expect(branch.width).toBe("8px");
+      await expect(branch.left).toBe("-8px");
+      await expect(branch.backgroundColor).toBe(getComputedStyle(header).backgroundColor);
+      const branchTop = reply.getBoundingClientRect().top + parseFloat(branch.top);
+      await expect(branchTop).toBeGreaterThan(header.getBoundingClientRect().top);
+      await expect(branchTop).toBeLessThan(header.getBoundingClientRect().bottom);
+    }
+  },
+};
+export const ReplyGutterJunctionsDark: Story = { ...ReplyGutterJunctions, globals: { theme: "dark" } };
+export const ReplyGutterJunctionsNarrow: Story = { ...ReplyGutterJunctions, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };

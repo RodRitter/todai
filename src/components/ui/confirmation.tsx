@@ -2,11 +2,12 @@ import type { ReactNode } from "react";
 import { Item, ItemActions, ItemContent } from "./item";
 
 // The shadcn Confirmation composition, with free-text answers for open questions.
-export function Confirmation({ state, question, recommendation, children, layout = "default" }: {
+export function Confirmation({ state, question, recommendation, children, layout = "default", statusPlacement = "body" }: {
   state: "pending" | "answered" | "cancelled";
   question: ReactNode;
   recommendation?: ReactNode;
   children?: ReactNode;
+  statusPlacement?: "body" | "header";
   layout?: "default" | "embedded";
 }) {
   const body = <div className="space-y-3">
@@ -18,9 +19,7 @@ export function Confirmation({ state, question, recommendation, children, layout
   </div>;
   return <Item variant="default" size={layout === "embedded" ? "flush" : "sm"} role="group" aria-label="Feedback request">
     <ItemContent>
-      <span className="mb-2 w-fit rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:border-amber-700 dark:bg-amber-900/50 dark:text-amber-200">
-        {state === "pending" ? "Feedback" : state === "answered" ? "Feedback received" : "Feedback cancelled"}
-      </span>
+      {statusPlacement === "body" && <ConfirmationStatus state={state} />}
       <div className="space-y-3">
         {body}
         {children}
@@ -31,4 +30,12 @@ export function Confirmation({ state, question, recommendation, children, layout
 
 export function ConfirmationActions({ children }: { children: ReactNode }) {
   return <ItemActions className="flex-wrap justify-end">{children}</ItemActions>;
+}
+
+export function ConfirmationStatus({ state }: { state: "pending" | "answered" | "cancelled" }) {
+  return (
+      <span className="w-fit rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:border-amber-700 dark:bg-amber-900/50 dark:text-amber-200">
+        {state === "pending" ? "Feedback" : state === "answered" ? "Feedback received" : "Feedback cancelled"}
+      </span>
+  );
 }

@@ -11,9 +11,9 @@ function Card({
   attention = false,
   ...props
 }: React.ComponentProps<"div"> & {
-  variant?: "default" | "compact" | "task" | "flush";
+  variant?: "default" | "compact" | "task" | "flush" | "comment-header";
   elevation?: "default" | "flat";
-  tone?: "default" | "muted";
+  tone?: "default" | "muted" | "contrast";
   interactive?: boolean;
   dragging?: boolean;
   attention?: boolean;
@@ -29,8 +29,10 @@ function Card({
         dragging && "opacity-40",
         attention && "relative before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-destructive",
         elevation === "flat" && "shadow-none",
+        tone === "contrast" && "border-secondary-foreground/20 bg-secondary-foreground text-background dark:border-border/60 dark:bg-muted dark:text-foreground",
         tone === "muted" && "bg-muted/50 text-foreground",
-        variant === "flush" ? "gap-0 overflow-hidden py-0" : variant === "compact"
+        variant === "comment-header" && "rounded-lg",
+        variant === "comment-header" || variant === "flush" ? "gap-0 overflow-hidden py-0" : variant === "compact"
           ? "gap-3 py-3 [&>[data-slot=card-header]]:px-3 [&>[data-slot=card-footer]]:px-3"
           : variant === "task"
             ? "gap-3 py-4 [&>[data-slot=card-header]]:gap-1.5 [&>[data-slot=card-header]]:px-4 [&>[data-slot=card-footer]]:justify-between [&>[data-slot=card-footer]]:px-4 [&_[data-slot=card-title]]:line-clamp-3 [&_[data-slot=card-title]]:text-sm [&_[data-slot=card-title]]:leading-5 [&_[data-slot=card-title]]:font-semibold [&_[data-slot=card-description]]:line-clamp-2 [&_[data-slot=card-description]]:max-h-10 [&_[data-slot=card-description]]:leading-5"

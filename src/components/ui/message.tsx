@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react"
+import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { ChevronDown, LoaderCircle } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -31,7 +32,7 @@ function MessageGroup({ className, variant = "default", ...props }: React.Compon
     <div
       data-slot="message-group"
       data-variant={variant}
-      className={cn("flex min-w-0 flex-col gap-2", variant === "comment" && "rounded-2xl bg-transparent text-card-foreground", variant === "reply" && "border-b border-border/60 py-3 first:pt-0 last:border-b-0 last:pb-0", className)}
+      className={cn("flex min-w-0 flex-col gap-2", variant === "comment" && "rounded-2xl bg-transparent text-card-foreground", variant === "reply" && "py-3 first:pt-0 last:pb-0", className)}
       {...props}
     />
   )
@@ -94,12 +95,14 @@ export function MessageBubbleRow({ className, ...props }: React.ComponentProps<"
   )} {...props} />;
 }
 
-function MessageHeader({ className, ...props }: React.ComponentProps<"div">) {
+function MessageHeader({ className, variant = "default", ...props }: React.ComponentProps<"div"> & { variant?: "default" | "disclosure" | "reply" }) {
   return (
     <div
       data-slot="message-header"
       className={cn(
         "flex min-h-8 max-w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-muted-foreground",
+        variant !== "default" && "relative min-h-0 gap-y-1 px-2 py-1.5 text-inherit",
+        variant === "reply" && "gap-x-1.5 px-1.5 py-0.5 [&>[data-slot=message-author]]:text-xs",
         className
       )}
       {...props}
@@ -137,13 +140,14 @@ export function MessageReplies({ className, variant = "default", ...props }: Rea
   )} {...props} />;
 }
 
-export function MessageDisclosure({ open, onOpenChange, label, avatarName = label, createdAt, actions, replyCount, attention = false, nested = false, children, ...props }: React.ComponentProps<"div"> & {
+export function MessageDisclosure({ open, onOpenChange, label, createdAt, actions, status, composer, replyCount, attention = false, nested = false, children, ...props }: React.ComponentProps<"div"> & {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   label: string;
-  avatarName?: string;
   createdAt?: string;
   actions?: React.ReactNode;
+  status?: React.ReactNode;
+  composer?: React.ReactNode;
   replyCount: number;
   attention?: boolean;
   nested?: boolean;
@@ -151,33 +155,40 @@ export function MessageDisclosure({ open, onOpenChange, label, avatarName = labe
   const attentionRef = useMessageAttention(attention);
   const trigger = <CollapsibleTrigger asChild>
     <button type="button" aria-label={`${open ? "Collapse" : "Expand"} comment by ${label}`}
-      className="flex min-w-0 cursor-pointer items-center gap-2 rounded-sm text-left text-sm font-semibold text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring">
-      <MessageAvatar name={avatarName} />
-      <span className="min-w-0 wrap-anywhere">{label}</span>
-      <ChevronDown aria-hidden="true" className={cn("size-4 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none", !open && "-rotate-90")} />
-    </button>
+      className="absolute inset-0 z-0 cursor-pointer rounded-lg outline-none transition-colors hover:bg-background/10 dark:hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-background dark:focus-visible:ring-ring motion-reduce:transition-none" />
   </CollapsibleTrigger>;
   return <Collapsible open={open} onOpenChange={onOpenChange} asChild>
     <MessageGroup ref={attentionRef} variant={nested ? "reply" : "comment"} data-attention={attention || undefined} {...props}>
       <div data-slot={nested ? "message-reply" : "message"}>
-        <MessageHeader>
-          {createdAt ? <TooltipProvider><Tooltip><TooltipTrigger asChild>{trigger}</TooltipTrigger><TooltipContent><time dateTime={createdAt}>{new Date(createdAt).toLocaleString()}</time></TooltipContent></Tooltip></TooltipProvider> : trigger}
-          {actions}
-          {!open && !nested && <span data-slot="message-reply-summary" className="ml-auto shrink-0 text-xs text-muted-foreground">{replyCount} {replyCount === 1 ? "reply" : "replies"}</span>}
-        </MessageHeader>
+        <Card variant="comment-header" elevation="flat" tone="contrast">
+          <MessageHeader variant={nested ? "reply" : "disclosure"}>
+            {createdAt ? <TooltipProvider><Tooltip><TooltipTrigger asChild>{trigger}</TooltipTrigger><TooltipContent><time dateTime={createdAt}>{new Date(createdAt).toLocaleString()}</time></TooltipContent></Tooltip></TooltipProvider> : trigger}
+            <span data-slot="message-author" className="pointer-events-none relative min-w-0 text-sm font-semibold wrap-anywhere">{label}</span>
+            {actions && <div className="pointer-events-none relative flex flex-wrap items-center gap-1 [&>button]:pointer-events-auto">{actions}</div>}
+            <span className="pointer-events-none relative ml-auto flex flex-wrap items-center justify-end gap-2">
+              {!open && !nested && <span data-slot="message-reply-summary">{replyCount} {replyCount === 1 ? "reply" : "replies"}</span>}
+              {status}
+              <ChevronDown aria-hidden="true" className={cn("size-4 shrink-0 transition-transform motion-reduce:transition-none", !open && "-rotate-90")} />
+            </span>
+          </MessageHeader>
+        </Card>
       </div>
       <CollapsibleContent forceMount>
-        <div data-slot="message-content" className="min-w-0 space-y-3 text-sm">
-          {children}
+        <div data-slot="message-content" className="min-w-0 space-y-3 p-2 text-sm">
+          <div data-slot="message-comments" className="min-w-0 space-y-3">
+            {children}
+          </div>
+          {composer}
         </div>
       </CollapsibleContent>
     </MessageGroup>
   </Collapsible>;
 }
 
-export function MessageReplyComposer({ className, ...props }: React.ComponentProps<"div">) {
+export function MessageReplyComposer({ className, connected = false, ...props }: React.ComponentProps<"div"> & { connected?: boolean }) {
   return <div data-slot="message-reply-composer" className={cn(
     "relative min-w-0",
+    connected && "before:pointer-events-none before:absolute before:-top-3 before:-left-2 before:h-7 before:w-2 before:rounded-bl-lg before:border-b before:border-l before:border-secondary-foreground dark:before:border-muted",
     className,
   )} {...props} />;
 }
@@ -191,10 +202,13 @@ export function MessageAuthor({ className, createdAt, ...props }: React.Componen
   </Tooltip></TooltipProvider>;
 }
 
-export function MessageThread({ children, className, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="message-replies" className={cn("min-w-0", className)} {...props}>
-    <div data-slot="message-thread-card" className="rounded-2xl border border-border/60 bg-muted/25 p-3 dark:bg-muted">{children}</div>
-  </div>;
+export function MessageThread({ children, className, gutter = true, ...props }: React.ComponentProps<"div"> & { gutter?: boolean }) {
+  return <div data-slot="message-replies" className={cn(
+    "relative min-w-0",
+    gutter && "before:pointer-events-none before:absolute before:top-4 before:bottom-0 before:-left-2 before:w-2 before:rounded-tl-lg before:border-t before:border-l before:border-secondary-foreground dark:before:border-muted",
+    gutter && "[&>[data-variant=reply]]:relative [&>[data-variant=reply]:not(:first-child)]:before:pointer-events-none [&>[data-variant=reply]:not(:first-child)]:before:absolute [&>[data-variant=reply]:not(:first-child)]:before:top-7 [&>[data-variant=reply]:not(:first-child)]:before:-left-2 [&>[data-variant=reply]:not(:first-child)]:before:h-px [&>[data-variant=reply]:not(:first-child)]:before:w-2 [&>[data-variant=reply]:not(:first-child)]:before:bg-secondary-foreground dark:[&>[data-variant=reply]:not(:first-child)]:before:bg-muted",
+    className,
+  )} {...props}>{children}</div>;
 }
 
 export function MessageAgentStatus({ status }: { status: "Running" | "Queued" }) {

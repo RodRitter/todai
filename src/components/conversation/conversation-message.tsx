@@ -2,15 +2,15 @@
 import { isHumanComment } from "@/domain/comment-author";
 
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { TaskComment } from "@/domain/task";
 import { Markdown } from "@/components/ui/markdown";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
-import { Message, MessageAvatar, MessageContent, MessageHeader, MessageAuthor, MessageBubbleRow } from "@/components/ui/message";
-import { Confirmation } from "@/components/ui/confirmation";
+import { Message, MessageAvatar, MessageContent, MessageHeader, MessageAuthor, MessageBubbleRow, MessageDisclosure } from "@/components/ui/message";
+import { Confirmation, ConfirmationStatus } from "@/components/ui/confirmation";
 
 export function ConversationMessageBody({ message, feedback, embedded = false }: { message: TaskComment; feedback?: ReactNode; embedded?: boolean }) {
-  return message.feedbackStatus ? <Confirmation layout={embedded ? "embedded" : "default"} state={message.feedbackStatus} question={<Markdown>{message.body}</Markdown>}
+  return message.feedbackStatus ? <Confirmation layout={embedded ? "embedded" : "default"} state={message.feedbackStatus} statusPlacement={embedded ? "header" : "body"} question={<Markdown>{message.body}</Markdown>}
     recommendation={message.recommendation && <Markdown>{message.recommendation}</Markdown>}>
     {feedback}
   </Confirmation> : <Markdown>{message.body}</Markdown>;
@@ -25,13 +25,19 @@ export function ConversationMessage({ message, variant, actions, feedback, atten
   attention?: boolean;
   connected?: boolean;
 }) {
+  const [open, setOpen] = useState(true);
   const personal = variant === "chat" && isHumanComment(message);
   const body = <ConversationMessageBody message={message} feedback={feedback} embedded={variant === "comment"} />;
+  if (variant === "comment") return <MessageDisclosure open={open} onOpenChange={setOpen}
+    label={message.authorName || "Agent"} createdAt={message.createdAt} actions={actions}
+    status={message.feedbackStatus && <ConfirmationStatus state={message.feedbackStatus} />} replyCount={0} attention={attention}>
+    {body}
+  </MessageDisclosure>;
   return <Message className="group" attention={attention} align={personal ? "end" : "start"}>
     {variant === "chat" && !personal && <MessageAvatar name={message.authorName || "Agent"} />}
     <MessageContent connected={connected}>
       {personal ? <MessageBubbleRow>{actions}<Bubble align="end" variant="muted"><BubbleContent>{body}</BubbleContent></Bubble></MessageBubbleRow> : <>
-        <MessageHeader>{variant === "comment" && <MessageAvatar name={message.authorName || "Agent"} />}<MessageAuthor createdAt={message.createdAt}>{message.authorName || "Agent"}</MessageAuthor>{actions}</MessageHeader>
+        <MessageHeader><MessageAuthor createdAt={message.createdAt}>{message.authorName || "Agent"}</MessageAuthor>{actions}</MessageHeader>
         {body}
       </>}
     </MessageContent>
