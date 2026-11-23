@@ -24,6 +24,49 @@ Use **Archive this workspace** in Settings when it has no running or queued jobs
 
 Agents run one at a time. Keep the server running while they work. Todai is designed for a persistent local Node.js process on macOS or Linux.
 
+## Task statuses
+
+A task has two separate status fields:
+
+- **Board status** (`status`) selects the workflow column. Default columns are **To do**, **In progress**, **In review**, and **Done**.
+- **Agent status** (`agentStatus`) supplies the task badge. Todai sets this field from execution events.
+
+Column names are configurable. Moving a task into **In review** does not create a separate agent status.
+
+### Active agent statuses
+
+| Badge | When Todai sets it | What to do next |
+| :--- | :--- | :--- |
+| **Not started** | A task is created, or its execution state is reset without a queued run. | Assign a column agent, then select **Run** when ready. |
+| **Queued** | A run is requested and has not started. | Keep the server running. Resume the queue if it is paused. |
+| **Running** | The executor claims a queued run. | Follow the task, or stop the run if necessary. |
+| **Complete** | A run finishes successfully, with no pending feedback or queued follow-up run for the task. | Read the result and decide whether to continue the workflow. |
+| **Waiting** | An agent requests feedback, or the task still has a pending feedback request. | Answer the request in **Activity** to queue the continuation. |
+| **Failed** | A run fails, with no pending feedback or queued follow-up run taking precedence. | Read the error, correct the cause, and retry when ready. |
+| **Interrupted** | A run is interrupted, such as after a column move or an app shutdown. | Check the saved work before starting another run. |
+| **Stopped** | You stop a running task or cancel its queued run. Removing a pending feedback request can also set this badge. | Select **Run again** when ready to continue the task. |
+
+**Complete describes a run, not the whole task.** A successful build can move a task to **In review** while its badge remains **Complete**.
+The next agent starts only when you select **Run**, unless **Auto-run** is enabled.
+Moving a task can preserve its previous completion or failure badge.
+
+**Queue pause is a separate control.** Pausing the queue does not assign a new task badge.
+Queued tasks remain queued until execution can continue.
+The header shows the queue state across workspaces; each card shows its own agent status.
+
+### Screenshot example
+
+The README screenshot shows a sample release board with no active run:
+
+- Planned tasks have not started.
+- One implementation task needs feedback; another was stopped before execution.
+- Completed builds are in **In review**, ready for the reviewer.
+- Reviewed tasks are in **Done** with completed runs.
+
+For documentation screenshots, use a separate sample database and the normal task execution transitions.
+Use only the active badges listed above. Keep the header, task badges, run records, and feedback requests consistent.
+Do not assign badge values directly in SQLite to create a screenshot.
+
 ## Data and configuration
 
 Data is stored in `.todai/tasks.sqlite`. Set `TODAI_DB_PATH` to use another database file. Preserve the database to keep your tasks, profiles, settings, and run history across restarts.

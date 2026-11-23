@@ -15,7 +15,7 @@ Plan work, run Codex CLI or Claude Code, and review the results in one place.
 
 ![Todai in light mode, with a four-column task board, assigned agents, and task status badges.](docs/images/todai-board.png)
 
-<p align="center"><sub>The Todai board in light mode, shown with sample tasks.</sub></p>
+<p align="center"><sub>A sample release board in light mode: planned work, a feedback request, completed builds awaiting review, and finished tasks.</sub></p>
 
 ## ✨ Built for your workflow
 
@@ -96,6 +96,10 @@ Keep the Todai server running while agents work. Agents run one at a time.
 
 Columns and assignments are configurable. Each agent can use Codex CLI or Claude Code.
 Task comments and artifacts keep the context with the work.
+
+**Columns show workflow stages. Badges show agent execution.** A task in **In review** can show **Complete** after its build finishes.
+That badge does not mean the review or the whole task is complete.
+See the [status reference](docs/user-guide.md#task-statuses) for all active badges and their meanings.
 
 - **Ask an agent:** Type `@` in a comment to select agents. Requested replies run in order.
 - **Inspect a run:** Open the saved task’s **Activity** tab to read the agent’s comments and results.
