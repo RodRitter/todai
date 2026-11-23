@@ -458,7 +458,7 @@ export class TaskStore {
   list(): Task[] {
     return (
       this.db
-        .prepare("SELECT * FROM tasks WHERE tasks.workspaceId = workspace_id() ORDER BY rowid")
+        .prepare("SELECT tasks.*, task_numbers.number AS taskNumber FROM tasks JOIN task_numbers ON task_numbers.taskId = tasks.id WHERE tasks.workspaceId = workspace_id() ORDER BY tasks.rowid")
         .all() as unknown as Task[]
     ).map((task) => ({
       ...task,

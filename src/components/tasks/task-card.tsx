@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { TaskId } from "./task-id";
 import { AgentStatus } from "./agent-status";
 import type { Task } from "@/domain/task";
 
@@ -65,6 +66,7 @@ export function TaskCard({
       onDragEnd={onDragEnd}
     >
       <CardHeader>
+        <TaskId number={task.taskNumber} />
         <CardTitle title={task.title}>{task.title}</CardTitle>
       </CardHeader>
       <CardFooter className="text-xs">

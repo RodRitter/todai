@@ -25,6 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { TaskId } from "./task-id";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -261,6 +262,7 @@ function TaskEditorSession({
       <DialogContent closeDisabled={busy} aria-describedby={undefined} size={expanded ? "expanded" : "large"} layout="workspace">
         <DialogHeader variant="task" className="w-[calc(100%+3rem)] max-w-5xl justify-self-center">
           <div className="col-start-1 row-start-1 min-w-0 space-y-2">
+            <TaskId number={editing?.taskNumber} />
             {isEditingTitle ? <>
             <DialogTitle className="sr-only">{title.trim() || "Create task"}</DialogTitle>
             <Label htmlFor="task-title" className="sr-only">Title</Label>

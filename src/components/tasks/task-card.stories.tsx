@@ -25,7 +25,12 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
+export const Default: Story = {
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText("TASK-1")).toBeVisible();
+  },
+};
+export const Dark: Story = { globals: { theme: "dark" } };
 export const Blocked: Story = { args: { task: exampleTasks[0] } };
 export const LongTitle: Story = {
   args: {

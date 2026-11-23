@@ -49,10 +49,12 @@ export const OpenCreate: Story = {
   },
   parameters: { docs: { disable: true } },
 };
+export const DarkEdit: Story = { args: { open: true, task: exampleTasks[2] }, globals: { theme: "dark" } };
 export const OpenEdit: Story = {
   args: { open: true, task: exampleTasks[2] },
   play: async ({ canvasElement }) => {
     const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await expect(dialog.getByText("TASK-3")).toBeVisible();
     await expect(dialog.getByRole("tab", { name: "Activity" })).toBeVisible();
     await expect(dialog.queryByRole("tab", { name: "Import JIRA Ticket" })).not.toBeInTheDocument();
   },

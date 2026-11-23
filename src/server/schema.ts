@@ -131,6 +131,21 @@ export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
     }
     migrateWorkspaceOwnership(db, !fresh || seedWorkspace);
     migrateBoards(db);
+    // Keep the sequence after deletion so public task numbers are never reused.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS task_numbers (
+        number INTEGER PRIMARY KEY AUTOINCREMENT,
+        taskId TEXT UNIQUE REFERENCES tasks(id) ON DELETE SET NULL
+      );
+      INSERT INTO task_numbers (taskId)
+        SELECT id FROM tasks WHERE id NOT IN (
+          SELECT taskId FROM task_numbers WHERE taskId IS NOT NULL
+        ) ORDER BY rowid;
+      CREATE TRIGGER IF NOT EXISTS assign_task_number AFTER INSERT ON tasks
+      BEGIN
+        INSERT INTO task_numbers (taskId) VALUES (NEW.id);
+      END;
+    `);
     if (!db.prepare("PRAGMA table_info(board_columns)").all().some((field) => field.name === "instructions"))
       db.exec("ALTER TABLE board_columns ADD COLUMN instructions TEXT NOT NULL DEFAULT ''");
     if (!db.prepare("PRAGMA table_info(runs)").all().some((field) => field.name === "columnInstructions"))

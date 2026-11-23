@@ -1,3 +1,4 @@
+import { DatabaseSync } from "node:sqlite";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -120,6 +121,57 @@ test("existing tasks and comments survive removing legacy task assignees", async
       store.list().map((task) => task.title),
       ["Updated task", "New task"],
     );
+  } finally {
+    store.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+
+test("task numbers survive edits, board moves and reopen, and are never reused", () => {
+  const directory = mkdtempSync(join(tmpdir(), "todai-numbers-"));
+  const path = join(directory, "tasks.sqlite");
+  let store = new TaskStore(path);
+  try {
+    const first = store.save({ id: "first", title: "First", description: "", status: "To do", taskNumber: 900 });
+    const second = store.save({ id: "second", title: "Second", description: "", status: "To do" });
+    assert.equal(first.taskNumber, 1);
+    assert.equal(second.taskNumber, 2);
+    const board = store.saveBoard("Another board");
+    assert.equal(store.save({ ...first, boardId: board.id, title: "Changed", status: "Done", taskNumber: 999 }).taskNumber, 1);
+    store.delete(second.id);
+    store.close();
+    store = new TaskStore(path);
+    assert.equal(store.list()[0].taskNumber, 1);
+    assert.equal(store.save({ ...second }).taskNumber, 3);
+    const workspace = store.createWorkspace("Another workspace", directory);
+    const other = new TaskStore(path, workspace.id);
+    try {
+      assert.equal(other.save({ id: "other", title: "Other", description: "", status: "To do" }).taskNumber, 4);
+    } finally { other.close(); }
+  } finally {
+    store.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("existing tasks receive stable numbers during migration", () => {
+  const directory = mkdtempSync(join(tmpdir(), "todai-number-migration-"));
+  const path = join(directory, "tasks.sqlite");
+  let store = new TaskStore(path);
+  try {
+    for (const id of ["older", "newer"])
+      store.save({ id, title: id, description: "", status: "To do" });
+    store.close();
+    const db = new DatabaseSync(path);
+    db.exec("DROP TRIGGER assign_task_number; DROP TABLE task_numbers;");
+    db.close();
+    store = new TaskStore(path);
+    assert.deepEqual(store.list().map((task) => [task.id, task.taskNumber]), [["older", 1], ["newer", 2]]);
+    store.close();
+    store = new TaskStore(path);
+    assert.deepEqual(store.list().map((task) => task.taskNumber), [1, 2]);
+    assert.equal(store.save({ id: "latest", title: "Latest", description: "", status: "To do" }).taskNumber, 3);
   } finally {
     store.close();
     rmSync(directory, { recursive: true, force: true });
