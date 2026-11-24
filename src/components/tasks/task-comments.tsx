@@ -2,6 +2,7 @@
 import { RunActivity } from "./run-activity";
 import { useRunHistory, loadRunHistory } from "./use-run-history";
 import type { RunHistoryEntry } from "@/domain/execution";
+import { agentMentionPath, mentionedAgentIds } from "@/domain/agent-mentions";
 import { isHumanComment } from "@/domain/comment-author";
 
 
@@ -101,6 +102,10 @@ function ActivityMessage({ runsById, agents, attentionId, onChat, comment, repli
   onAnswerFeedback?: (id: string, body: string) => Promise<void>;
 }) {
   const [replying, setReplying] = useState(false);
+  const [replyRequest, setReplyRequest] = useState(0);
+  const authorId = comment.runId ? runsById.get(comment.runId)?.agentId : undefined;
+  const authors = agents.filter((agent) => authorId ? agent.id === authorId : agent.name === comment.authorName);
+  const replyAgent = !isHumanComment(comment) && authors.length === 1 ? authors[0] : undefined;
   const [threadOpen, setThreadOpen] = useState(true);
   const [observedAttention, setObservedAttention] = useState(attentionId);
   if (observedAttention !== attentionId) {
@@ -113,7 +118,7 @@ function ActivityMessage({ runsById, agents, attentionId, onChat, comment, repli
   const feedback = comment.feedbackStatus === "pending" ? <FeedbackInput responseType={comment.responseType} commentId={comment.id} onAnswer={onAnswerFeedback} /> : undefined;
   const actions = <>
     {onPostComment && <Button ref={replyButton} type="button" size="xs" variant="comment-header" disabled={disabled}
-      aria-expanded={threadOpen} aria-controls={`comment-content-${comment.id}`} onClick={() => { setThreadOpen(true); setReplying(true); requestAnimationFrame(() => replyInput.current?.querySelector<HTMLElement>('[role="textbox"]')?.focus()); }}><Reply aria-hidden="true" />Reply</Button>}
+      aria-expanded={threadOpen} aria-controls={`comment-content-${comment.id}`} onClick={() => { setThreadOpen(true); setReplying(true); setReplyRequest((value) => value + 1); requestAnimationFrame(() => replyInput.current?.querySelector<HTMLElement>('[role="textbox"]')?.focus()); }}><Reply aria-hidden="true" />Reply</Button>}
     {onChat && <Button type="button" size="xs" variant="comment-header" onClick={() => onChat(comment)}><MessageCircle aria-hidden="true" />Chat</Button>}
     <CommentActions comment={comment} replyCount={replies.length} onDelete={onDeleteComment} disabled={disabled} />
   </>;
@@ -123,7 +128,7 @@ function ActivityMessage({ runsById, agents, attentionId, onChat, comment, repli
       createdAt={comment.createdAt} actions={actions}
       status={comment.feedbackStatus && <ConfirmationStatus state={comment.feedbackStatus} />} replyCount={replies.length}
       composer={(replies.length > 0 || replying) && onPostComment && <MessageReplyComposer ref={replyInput} connected={!nested && replies.length > 0}>
-        <CommentInput variant="reply" id={`reply-${comment.id}`} agents={agents} agentStatus={agentStatus} autoFocus={replying}
+        <CommentInput replyAgent={replyAgent} replyRequest={replyRequest} variant="reply" id={`reply-${comment.id}`} agents={agents} agentStatus={agentStatus} autoFocus={replying}
           onPost={(body, artifacts) => onPostComment(body, artifacts, comment.id)}
           onSent={() => setReplying(false)}
           onCancel={replies.length ? undefined : () => { setReplying(false); replyButton.current?.focus(); }} />
@@ -216,7 +221,9 @@ function FeedbackInput({ commentId, responseType, onAnswer }: {
   );
 }
 
-function CommentInput({ agents, onPost, agentStatus, variant = "default", id = "task-comment", autoFocus = false, onSent, onCancel }: {
+function CommentInput({ agents, onPost, agentStatus, variant = "default", id = "task-comment", autoFocus = false, onSent, onCancel, replyAgent, replyRequest = 0 }: {
+  replyAgent?: AgentProfile;
+  replyRequest?: number;
   agents: AgentProfile[];
   onPost: (body: string, artifacts?: ArtifactReference[], parentCommentId?: string) => Promise<void>;
   agentStatus?: AgentStatus;
@@ -234,6 +241,15 @@ function CommentInput({ agents, onPost, agentStatus, variant = "default", id = "
   const [busy, setBusy] = useState(false);
   const submitting = useRef(false);
   const [error, setError] = useState("");
+  const [handledReplyRequest, setHandledReplyRequest] = useState(0);
+  if (handledReplyRequest !== replyRequest) {
+    setHandledReplyRequest(replyRequest);
+    if (replyAgent && !mentionedAgentIds(body, agents).includes(replyAgent.id)) {
+      const label = replyAgent.name.replace(/[\\[\]]/g, "\\$&");
+      setBody(`[@${label}](${agentMentionPath(replyAgent.id)}) ${body}`);
+      setVersion((value) => value + 1);
+    }
+  }
   async function submit() {
     if (!body.trim() || submitting.current || pendingRun) return;
     submitting.current = true;

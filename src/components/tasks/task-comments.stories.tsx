@@ -318,6 +318,46 @@ export const ReplyTagging: Story = {
     await expect(canvas.getByRole("textbox", { name: "Your reply" })).toHaveTextContent(/^$/);
   },
 };
+export const ReplyAddsAuthorTag: Story = {
+  render: () => <ThreadExample />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const editor = await canvas.findByRole("textbox", { name: "Your reply" });
+    await userEvent.type(editor, "Keep this draft.");
+    await userEvent.click(canvas.getByRole("button", { name: "Reply" }));
+    const tagged = canvas.getByRole("textbox", { name: "Your reply" });
+    await expect(tagged.querySelector('a[href="#agent/reviewer"]')).toHaveTextContent("@Reviewer");
+    await expect(tagged).toHaveTextContent("Keep this draft.");
+    await userEvent.click(canvas.getByRole("button", { name: "Reply" }));
+    await expect(tagged.querySelectorAll('a[href="#agent/reviewer"]')).toHaveLength(1);
+    await userEvent.click(canvas.getByRole("button", { name: "Send reply" }));
+    await expect(within(canvas.getByLabelText("Reply thread")).getByText("@Reviewer")).toBeVisible();
+  },
+};
+
+export const ReplyTagCanBeRemoved: Story = {
+  args: { agents: commentAgents, comments: [{ id: "agent", taskId: "task", authorName: "Reviewer", body: "Review result.", createdAt: "2026-11-20T10:00:00Z" }], onPostComment: fn() },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "Reply" }));
+    const editor = await canvas.findByRole("textbox", { name: "Your reply" });
+    await expect(editor.querySelector('a[href="#agent/reviewer"]')).toHaveTextContent("@Reviewer");
+    await userEvent.clear(editor);
+    await userEvent.type(editor, "Context only.");
+    await userEvent.click(canvas.getByRole("button", { name: "Send reply" }));
+    await expect(args.onPostComment).toHaveBeenCalledWith("Context only.", [], "agent");
+  },
+};
+
+export const ReplyToHumanHasNoTag: Story = {
+  args: { agents: commentAgents, comments: [{ id: "human", taskId: "task", authorRole: "human", authorName: "Reviewer", body: "Human context.", createdAt: "2026-11-20T10:00:00Z" }], onPostComment: fn() },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "Reply" }));
+    await expect(canvas.getByRole("textbox", { name: "Your reply" })).toHaveTextContent(/^$/);
+  },
+};
+
 export const ReplyError: Story = {
   render: () => <ThreadExample fail />,
   play: async ({ canvasElement }) => {

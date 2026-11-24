@@ -244,33 +244,21 @@ test("tagged agents respond inside the explicit reply thread", async () => {
   } finally { f.cleanup(); }
 });
 
-test("replies invoke the recorded author without a mention and stay in the thread", async () => {
-  const calls: string[] = [];
-  const f = fixture(async ({ run }) => {
-    calls.push(run.profile.name);
-    return run.kind === "intent" ? '["reviewer"]' : "Author response";
-  });
+test("untagged replies to agents persist without starting runs, including after reopening", async () => {
+  const f = fixture(async ({ run }) => run.kind === "intent" ? '["reviewer"]' : "Review");
   try {
     f.store.postComment("task", "@Reviewer");
     await f.service.drain();
     const parent = f.store.list()[0].comments!.at(-1)!;
-    f.store.saveAgent({ ...profiles[2], name: "Renamed", model: "changed-model" });
-    calls.length = 0;
+    const count = f.store.history().length;
     const saved = f.store.postComment("task", "Please explain your conclusion.", [], parent.id);
-    assert.equal(saved.agentStatus, "Queued");
-    const queued = f.store.history().at(-1)!;
-    assert.equal(queued.kind, "reply");
-    assert.equal(queued.profile.model, "test-model");
+    assert.equal(saved.agentStatus, "Complete");
+    assert.equal(saved.comments!.at(-1)!.parentCommentId, parent.id);
     const reopened = new TaskStore(join(f.directory, "tasks.sqlite"));
-    try { await new ExecutionService(reopened, async ({ run }) => { calls.push(run.profile.name); return "Explanation"; }).drain(); }
-    finally { reopened.close(); }
-    assert.deepEqual(calls, ["Reviewer"]);
-    const result = f.store.list()[0];
-    assert.equal(result.status, "To do");
-    assert.equal(result.comments!.at(-1)!.parentCommentId, parent.id);
-    assert.equal(result.comments!.at(-1)!.body, "Explanation");
-    await f.service.drain();
-    assert.equal(calls.length, 1);
+    try {
+      await new ExecutionService(reopened, async () => { assert.fail("Untagged replies must not execute"); }).drain();
+      assert.equal(reopened.history().length, count);
+    } finally { reopened.close(); }
   } finally { f.cleanup(); }
 });
 
@@ -279,8 +267,8 @@ test("replies deduplicate the author mention and still select other tagged agent
   const f = fixture(async ({ run }) => {
     calls.push(run.profile.name);
     if (run.kind === "intent") {
-      assert.deepEqual(run.replyPlan?.map((agent) => agent.id), ["refiner"]);
-      return '["refiner"]';
+      assert.deepEqual(run.replyPlan?.map((agent) => agent.id), ["reviewer", "refiner"]);
+      return '["reviewer","refiner"]';
     }
     return "Response";
   });
@@ -288,8 +276,26 @@ test("replies deduplicate the author mention and still select other tagged agent
     f.store.addComment({ id: "source", taskId: "task", authorName: "Reviewer", body: "Review", createdAt: new Date().toISOString() });
     f.store.postComment("task", "@Reviewer explain. @Refiner help clarify.", [], "source");
     await f.service.drain();
-    assert.deepEqual(calls, ["Reviewer", "Intent", "Refiner"]);
+    assert.deepEqual(calls, ["Intent", "Reviewer", "Refiner"]);
     assert.ok(f.store.list()[0].comments!.slice(1).every((comment) => comment.parentCommentId === "source"));
+  } finally { f.cleanup(); }
+});
+
+test("a reply invokes only the tagged agent, not the untagged author", async () => {
+  const calls: string[] = [];
+  const f = fixture(async ({ run }) => {
+    if (run.kind === "intent") {
+      assert.deepEqual(run.replyPlan?.map((agent) => agent.id), ["refiner"]);
+      return '["refiner"]';
+    }
+    calls.push(run.profile.id);
+    return "Clarification";
+  });
+  try {
+    f.store.addComment({ id: "source", taskId: "task", authorName: "Reviewer", body: "Review", createdAt: new Date().toISOString() });
+    f.store.postComment("task", "@Refiner please clarify.", [], "source");
+    await f.service.drain();
+    assert.deepEqual(calls, ["refiner"]);
   } finally { f.cleanup(); }
 });
 
@@ -310,13 +316,13 @@ test("replies to human comments do not invoke the agent from a feedback run", as
 
 test("feedback requested from a reply stays nested and resumes after its answer", async () => {
   let calls = 0;
-  const f = fixture(async () => ++calls === 1
+  const f = fixture(async ({ run }) => run.kind === "intent" ? '["reviewer"]' : ++calls === 1
     ? '{"type":"feedback_request","question":"Approve the change?","recommendation":"Proceed."}'
     : "Change complete.");
   try {
     f.store.addComment({ id: "root", taskId: "task", authorName: "Reviewer", body: "Review result", createdAt: "2026-11-20T10:00:00Z" });
-    const posted = f.store.postComment("task", "Please make the change", [], "root");
-    const triggeringReply = posted.comments!.find((comment) => comment.body === "Please make the change")!;
+    const posted = f.store.postComment("task", "@Reviewer Please make the change", [], "root");
+    const triggeringReply = posted.comments!.find((comment) => comment.body === "@Reviewer Please make the change")!;
     await f.service.drain();
     const feedback = f.store.list()[0].comments!.find((comment) => comment.feedbackStatus === "pending")!;
     assert.equal(feedback.parentCommentId, triggeringReply.id);

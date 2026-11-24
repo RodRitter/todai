@@ -14,7 +14,7 @@ export function GET(request: Request) {
       .filter((run) => run.kind !== "intent")
       .reverse()
       .map((run): RunHistoryEntry => ({
-        id: run.id, agentName: run.profile.name, status: run.status,
+        id: run.id, agentId: run.profile.id, agentName: run.profile.name, status: run.status,
         createdAt: run.createdAt, startedAt: run.startedAt,
         finishedAt: run.finishedAt, summary: run.summary, activity: store.runActivity(run.id),
       })));

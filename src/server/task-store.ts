@@ -7,7 +7,6 @@ import { UsageStore } from "./usage-store.ts";
 import { conversationDeletion, removeConversationMessages } from "./conversation-messages.ts";
 import { groupActivity } from "../domain/activity.ts";
 import { parseUserName } from "../domain/user-name.ts";
-import { isHumanComment } from "../domain/comment-author.ts";
 import { parseWorkspaceSetup, starterAgentProfile } from "../domain/workspace-setup.ts";
 import type { ArtifactReference } from "../domain/artifact.ts";
 import { artifactMentions } from "./artifact-mentions.ts";
@@ -1086,26 +1085,17 @@ export class TaskStore {
         throw new CommentValidationError("This message no longer exists. Reload the task.");
       const threadId = parent && groupActivity(task.comments ?? []).find(({ message, replies }) => message.id === parent.id || replies.some((reply) => reply.id === parent.id))?.message.id;
       const agents = this.listAgents();
-      // Use the recorded profile so renaming or removing an agent does not change authorship.
-      const matchingAuthors = agents.filter((agent) => agent.name === parent?.authorName);
-      const author = parent && !isHumanComment(parent)
-        ? this.history(taskId).find((run) => run.id === parent.runId)?.profile
-          ?? (matchingAuthors.length === 1 ? matchingAuthors[0] : undefined)
-        : undefined;
       const ids = mentionedAgentIds(body, agents);
       const profiles = ids.map((id) => {
         const agent = agents.find((item) => item.id === id);
         if (!agent) throw new CommentValidationError("A tagged agent no longer exists. Remove the mention and try again.");
         return agent;
-      }).filter((agent) => agent.id !== author?.id);
+      });
       const commentId = randomUUID();
       this.addComment({ id: commentId, taskId, body: body.trim(), createdAt: new Date().toISOString(), authorName: this.getUserName() || "Human", authorRole: "human", parentCommentId: threadId });
       this.attachCommentArtifacts(commentId, attachments);
-      if (author) this.queueCommentRun(taskId, task.status, author, "reply", commentId, []);
       if (profiles.length) {
         this.queueCommentRun(taskId, task.status, intentProfile(this.getDefaultExecutor()), "intent", commentId, profiles);
-      }
-      if (author || profiles.length) {
         if (task.agentStatus !== "Running" && task.agentStatus !== "Waiting")
           this.db.prepare("UPDATE tasks SET agentStatus = 'Queued' WHERE tasks.workspaceId = workspace_id() AND id = ?").run(taskId);
       }

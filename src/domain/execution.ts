@@ -14,6 +14,7 @@ export type QueuedDirectoryChange = { runId: string; workspaceName: string; prev
 
 export type RunHistoryEntry = {
   id: string;
+  agentId?: string;
   agentName: string;
   status: "Queued" | "Running" | "Complete" | "Failed" | "Interrupted" | "Stopped" | "Waiting";
   createdAt: string;
