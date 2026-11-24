@@ -54,6 +54,18 @@ Moving a task can preserve its previous completion or failure badge.
 Queued tasks remain queued until execution can continue.
 The header shows the queue state across workspaces; each card shows its own agent status.
 
+### Review task changes
+
+Git tasks use a separate worktree. Agents receive instructions to leave their changes unstaged unless you explicitly request a Git operation.
+Automatic workflow stops before the completion column for these tasks. Review the changes, then move the task to that column yourself.
+Todai commits the changes, removes the worktree, and retains the local branch. Archiving a task preserves its worktree and uncommitted changes.
+
+Select **Open in VS Code** beside the task branch to open an active worktree. Use Source Control to inspect the changes.
+Select **Copy path** to use the worktree in another tool. VS Code must be installed on the same computer as Todai.
+Your browser can ask permission to open VS Code. The action uses the [VS Code project URL format](https://code.visualstudio.com/docs/configure/command-line#_opening-vs-code-with-urls).
+
+The [Works best with](../README.md#works-best-with) section in the README explains the supported local tools.
+
 ### Screenshot example
 
 The README screenshot shows a sample release board with no active run:

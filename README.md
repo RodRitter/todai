@@ -36,6 +36,14 @@ Build a repeatable workflow from planning through review.
 - **Reuse your setup.** Import and export agent and board configurations.
 - **Store data locally.** Keep board data on your machine while agents connect to your AI provider.
 
+## Works best with
+
+- **[VS Code](https://code.visualstudio.com/).** Open task worktrees from Todai and review unstaged changes in Source Control. Use its terminal to run checks.
+- **[Git](https://git-scm.com/).** Keep each task in a separate worktree. Move the task to the completion column after review to commit its changes.
+- **Codex CLI or Claude Code.** Run your agents with your installed tool. Configure it in Executor settings.
+
+Install VS Code on the computer that runs Todai. Allow your browser to open VS Code links when prompted.
+
 ---
 
 ## Try Todai

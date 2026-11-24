@@ -581,7 +581,7 @@ export class TaskStore {
       this.transaction(() => {
         const task = this.readTask(candidate.id);
         if (!task?.worktree || task.worktree.status === "removed" || (task.worktree.status === "error" && !retryTaskId)) return;
-        if (!task.archivedAt && task.status !== this.completionColumn(task.boardId)) return;
+        if (task.archivedAt || task.status !== this.completionColumn(task.boardId)) return;
         if (this.history(task.id).some((run) => run.status === "Running")) return;
         if (this.db.prepare("SELECT id FROM chat_sessions WHERE workspaceId = workspace_id() AND taskId = ? AND lease > ?")
           .get(task.id, new Date().toISOString())) return;
@@ -980,7 +980,8 @@ export class TaskStore {
         const columns = this.listColumns(task.boardId);
         const index = columns.indexOf(task.status);
         const nextColumn = index >= 0 ? columns[index + 1] : undefined;
-        if (nextColumn) {
+        // Managed code changes wait for an explicit Human move to completion.
+        if (nextColumn && !(task.worktree && nextColumn === this.completionColumn(task.boardId))) {
           this.db
             .prepare(
               "UPDATE tasks SET status = ? WHERE tasks.workspaceId = workspace_id() AND id = ?",

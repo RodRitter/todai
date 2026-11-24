@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { GitBranch } from "lucide-react";
+import { Code, Copy, GitBranch } from "lucide-react";
 import type { TaskWorktree } from "@/domain/task";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -30,6 +30,22 @@ export function TaskBranch({ worktree, onRetry }: { worktree?: TaskWorktree | nu
         <TaskMetadataText>{state}</TaskMetadataText>
       </PopoverContent>
     </Popover>
+    {worktree.status === "active" && <>
+      <Button asChild variant="outline" size="xs">
+        <a href={`vscode://file/${worktree.path.split("/").map(encodeURIComponent).join("/").replace(/^\//, "")}/`}>
+          <Code aria-hidden="true" />Open in VS Code
+        </a>
+      </Button>
+      <Button type="button" variant="ghost-muted" size="xs" disabled={pending} onClick={async () => {
+        setPending(true);
+        try {
+          await notifyOperation(() => navigator.clipboard.writeText(worktree.path), {
+            loading: "Copying worktree path…", success: "Worktree path copied.", error: "Could not copy the worktree path.",
+          });
+        } catch { /* The toast reports the failure. */ }
+        finally { setPending(false); }
+      }}><Copy aria-hidden="true" />Copy path</Button>
+    </>}
     <TaskMetadataText>{state}</TaskMetadataText>
     {worktree.error && <TaskMetadataText role="status">{worktree.error}</TaskMetadataText>}
     {worktree.status === "error" && onRetry && <Button type="button" variant="ghost" size="xs" disabled={pending} onClick={async () => {

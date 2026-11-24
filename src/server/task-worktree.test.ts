@@ -237,3 +237,45 @@ test("managed runs stop child processes even when they inherit output pipes", { 
   assert.ok(pid > 0);
   assert.throws(() => process.kill(pid, 0));
 });
+
+test("automatic workflow keeps managed changes unstaged until an explicit move to Done", async () => {
+  const f = fixture();
+  try {
+    f.store.saveAgent({ id: "builder", name: "Builder", tool: "codex", model: "test", effort: "high", instructions: "Build", permissions: "workspace-write" });
+    f.store.assignColumnAgent({ column: "In review", agentId: "builder" });
+    f.store.save({ ...f.task, status: "In review", autoRun: true, autoWorkflow: true });
+    let path = "";
+    const service = new ExecutionService(f.store, async (request) => {
+      path = request.workspace;
+      const { agentPrompt } = await import("./agent-prompt.ts");
+      assert.match(agentPrompt(request), /Leave your file changes unstaged/);
+      writeFileSync(join(path, "source.txt"), "review this\n");
+      return "Finished";
+    });
+    await service.drain();
+    const task = f.store.readTask(f.task.id)!;
+    assert.equal(task.status, "In review");
+    assert.equal(task.worktree?.status, "active");
+    assert.equal(execFileSync("git", ["-C", path, "diff", "--cached"], { encoding: "utf8" }), "");
+    assert.match(execFileSync("git", ["-C", path, "diff"], { encoding: "utf8" }), /review this/);
+    assert.equal(f.git("rev-parse", task.worktree!.branch), task.worktree!.baseCommit);
+    f.store.save({ ...task, status: "Done" });
+    assert.equal(existsSync(path), false);
+    assert.equal(f.git("show", `${task.worktree!.branch}:src/app/source.txt`), "review this");
+  } finally { f.close(); }
+});
+
+test("archiving keeps the worktree and uncommitted files", () => {
+  const f = fixture();
+  try {
+    const path = f.store.taskWorkspace(f.task.id, f.workspace);
+    writeFileSync(join(path, "source.txt"), "keep for review\n");
+    f.store.delete(f.task.id);
+    f.store.cleanupWorktrees();
+    assert.ok(existsSync(path));
+    const record = f.store.readTask(f.task.id)!.worktree!;
+    assert.equal(f.git("rev-parse", record.branch), record.baseCommit);
+    assert.equal(readFileSync(join(path, "source.txt"), "utf8"), "keep for review\n");
+    assert.equal(execFileSync("git", ["-C", path, "diff", "--cached"], { encoding: "utf8" }), "");
+  } finally { f.close(); }
+});
