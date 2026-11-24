@@ -69,7 +69,7 @@ Do not assign badge values directly in SQLite to create a screenshot.
 
 ## Data and configuration
 
-Data is stored in `.todai/tasks.sqlite`. Set `TODAI_DB_PATH` to use another database file. Preserve the database to keep your tasks, profiles, settings, and run history across restarts.
+Data is stored in `.todai/tasks.sqlite`. Set `TODAI_DB_PATH` to use another database file. Preserve the database to keep your tasks, profiles, settings, and task history across restarts.
 
 The agent workspace is configured separately in Settings. Configuration exports include selected agents, columns, and assignments; they do not include tasks or workspace paths.
 
@@ -96,11 +96,6 @@ Open an artifact to preview its content. Text and Markdown are readable, raster 
 During a run, Codex and Claude receive workspace-scoped artifact tools. Agents can create and edit documents, upload files, save external links, search artifacts, and manage task links. The starting prompt includes artifact metadata for the current task. Saved artifacts record their task and run and appear in the library immediately.
 
 Agents can nominate documents for their final handover or feedback request. The system saves attachments with the comment and removes duplicate references. Tools expire when execution ends or is interrupted. Saved work survives failure or interruption. Nominations do not attach to failure or interruption notices. The tools cannot archive artifacts or choose a different workspace, task, creator, or run.
-
-
-## Jira import
-
-Task dialogs separate **Detail** (ticket fields) from **Activity** (comments and artifacts). New tasks also offer **Import JIRA Ticket**: select an existing agent and paste an HTTPS `/browse/KEY-123` link. The importer uses that agent's executor/model with dedicated instructions to read only the specified ticket and never edit, comment, transition, or otherwise change Jira. Browser/Jira access must already be configured; this prompt is not a Jira permission boundary. Successful imports fill an unsaved draft with a source link, turn off automatic execution, and return to Detail for review. Creating the task is a separate action; failed imports preserve the draft.
 
 ## Column instructions
 
@@ -144,6 +139,6 @@ Old pending memory approvals are cancelled and replaced with fresh automatic rev
 
 ## Archived tasks and references
 
-Select **Archive task** from the task actions menu to remove a task from its board. Its ID, comments, chats, artifacts, usage, and run history remain stored. Tasks with queued or running work must finish or stop before archiving.
+Select **Archive task** from the task actions menu to remove a task from its board. Its ID, comments, chats, artifacts, usage, and task history remain stored. Tasks with queued or running work must finish or stop before archiving.
 
 Select **Copy task reference** to copy a reference based on the task ID. References use `[Task ID](#task/ID)`. They open a read-only task page, including archived tasks. Existing local task links continue to resolve. Archived tasks cannot be edited or reused as new tasks.
