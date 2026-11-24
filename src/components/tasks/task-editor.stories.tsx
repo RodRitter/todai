@@ -747,7 +747,7 @@ const taskWorktree = {
   baseCommit: "1234567890abcdef", headCommit: "abcdef1234567890", status: "active" as const,
 };
 export const TaskBranchActive: Story = {
-  args: { open: true, task: { ...exampleTasks[2], worktree: taskWorktree } },
+  args: { worktreesEnabled: true, open: true, task: { ...exampleTasks[2], worktree: taskWorktree } },
   play: async ({ canvasElement }) => {
     const page = within(canvasElement.ownerDocument.body);
     await expect(page.getByText("TASK-3")).toBeVisible();
@@ -762,7 +762,7 @@ export const TaskBranchActive: Story = {
   },
 };
 export const TaskBranchRetained: Story = {
-  args: { open: true, task: { ...exampleTasks[2], status: "Done", worktree: { ...taskWorktree, status: "removed" } } },
+  args: { worktreesEnabled: true, open: true, task: { ...exampleTasks[2], status: "Done", worktree: { ...taskWorktree, status: "removed" } } },
   play: async ({ canvasElement }) => {
     const page = within(canvasElement.ownerDocument.body);
     await userEvent.click(page.getByRole("button", { name: "Branch and worktree actions" }));
@@ -772,7 +772,7 @@ export const TaskBranchRetained: Story = {
   },
 };
 export const TaskBranchCleanupFailed: Story = {
-  args: { open: true, completionColumn: "Done", onRetryWorktree: fn().mockResolvedValue(undefined), task: { ...exampleTasks[2], status: "Done", worktree: { ...taskWorktree, status: "error", error: "The commit hook failed. Correct the files, then retry cleanup." } } },
+  args: { worktreesEnabled: true, open: true, completionColumn: "Done", onRetryWorktree: fn().mockResolvedValue(undefined), task: { ...exampleTasks[2], status: "Done", worktree: { ...taskWorktree, status: "error", error: "The commit hook failed. Correct the files, then retry cleanup." } } },
   play: async ({ canvasElement, args }) => {
     const page = within(canvasElement.ownerDocument.body);
     await userEvent.click(page.getByRole("button", { name: "Branch and worktree actions" }));
@@ -782,12 +782,12 @@ export const TaskBranchCleanupFailed: Story = {
   },
 };
 export const TaskBranchLongDark: Story = {
-  args: { open: true, task: { ...exampleTasks[2], worktree: { ...taskWorktree, branch: "todai/task-3-a-long-branch-name-that-must-fit-without-hiding-the-task-controls" } } },
+  args: { worktreesEnabled: true, open: true, task: { ...exampleTasks[2], worktree: { ...taskWorktree, branch: "todai/task-3-a-long-branch-name-that-must-fit-without-hiding-the-task-controls" } } },
   globals: { theme: "dark" },
 };
 
 export const TaskBranchCreating: Story = {
-  args: { open: true, task: { ...exampleTasks[2], worktree: { ...taskWorktree, status: "creating" } } },
+  args: { worktreesEnabled: true, open: true, task: { ...exampleTasks[2], worktree: { ...taskWorktree, status: "creating" } } },
 };
 
 export const TaskBranchLongLight: Story = {
@@ -796,7 +796,7 @@ export const TaskBranchLongLight: Story = {
 };
 
 export const CustomBranch: Story = {
-  args: { open: true },
+  args: { open: true, worktreesEnabled: true },
   play: async ({ canvasElement, args }) => {
     const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
     await userEvent.type(dialog.getByLabelText("Title"), "Create a custom branch");
@@ -808,3 +808,12 @@ export const CustomBranch: Story = {
   },
 };
 export const DarkCreate: Story = { args: { open: true }, globals: { theme: "dark" } };
+
+export const WorktreesDisabled: Story = {
+  args: { open: true, worktreesEnabled: false, task: { ...exampleTasks[2], worktree: taskWorktree } },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    await expect(page.queryByRole("button", { name: /Copy branch name/ })).not.toBeInTheDocument();
+    await expect(page.queryByRole("button", { name: "Branch and worktree actions" })).not.toBeInTheDocument();
+  },
+};

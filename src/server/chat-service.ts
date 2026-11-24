@@ -34,7 +34,7 @@ export async function sendChat(tasks: TaskStore, chats: ChatStore, taskId: strin
           summary: null, ownerPid: null, runnerPid: null },
         userName: tasks.getUserName(),
         workspaceMemory: tasks.memoryContext(`${task.title} ${body}`),
-        task: tasks.readTask(task.id)!, workspace: agentWorkspace, signal, onStart: () => {},
+        task: tasks.executionTask(task.id), workspace: agentWorkspace, signal, onStart: () => {},
         privateChat: { toolsEnabled, messages: chats.get(session.id).messages, ...(classify ? { candidates } : {}) },
       };
       const artifacts = toolsEnabled ? await openRunArtifacts(tasks, request.run, signal, {

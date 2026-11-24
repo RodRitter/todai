@@ -184,6 +184,29 @@ export class TaskStore {
     return this.getWorkspace().path;
   }
 
+  getWorktreesEnabled(): boolean {
+    return this.db.prepare("SELECT value FROM settings WHERE key = 'worktreesEnabled' AND workspaceId = workspace_id()").get()?.value === "true";
+  }
+
+  setWorktreesEnabled(value: unknown): boolean {
+    if (typeof value !== "boolean") throw new RunValidationError("Choose whether to use task worktrees.");
+    return this.transaction(() => {
+      this.assertWorkspaceActive();
+      if (value === this.getWorktreesEnabled()) return value;
+      if (this.db.prepare("SELECT id FROM runs WHERE workspaceId = workspace_id() AND status = 'Running' LIMIT 1").get() ||
+          this.db.prepare("SELECT id FROM chat_sessions WHERE workspaceId = workspace_id() AND lease > ? LIMIT 1").get(new Date().toISOString()))
+        throw new RunValidationError("Stop running agents and wait for chats to finish before changing task worktrees.");
+      this.db.prepare("INSERT INTO settings (key, value, workspaceId) VALUES ('worktreesEnabled', ?, workspace_id()) ON CONFLICT(workspaceId, key) DO UPDATE SET value = excluded.value").run(String(value));
+      return value;
+    });
+  }
+
+  executionTask(taskId: string): Task {
+    const task = this.readTask(taskId);
+    if (!task) throw new Error("This task no longer exists.");
+    return this.getWorktreesEnabled() ? task : { ...task, worktree: null };
+  }
+
   setWorkspacePath(path: string) {
     return this.transaction(() => {
       this.assertWorkspaceActive();
@@ -244,6 +267,7 @@ export class TaskStore {
       columns: this.listColumns(),
       columnInstructions: this.columnInstructions(),
       completionColumn: this.completionColumn(),
+      worktreesEnabled: this.getWorktreesEnabled(),
       assignments: this.listColumnAgents(),
     }));
   }
@@ -556,6 +580,7 @@ export class TaskStore {
     if (!task) throw new Error("This task no longer exists.");
     if (task.status === this.completionColumn(task.boardId))
       throw new Error("Reopen the task before running an agent with code access.");
+    if (!this.getWorktreesEnabled()) return workspace;
     const record = task.worktree ?? planWorktree(workspace, task, `${this.databasePath}:${this.workspaceId}:${task.id}`);
     if (!record) return workspace;
     if (realpathSync(workspace) !== realpathSync(resolve(record.repository, record.subdirectory)))
@@ -577,6 +602,7 @@ export class TaskStore {
   }
 
   cleanupWorktrees(retryTaskId?: string) {
+    if (!this.getWorktreesEnabled()) return;
     for (const candidate of this.list(true)) {
       if (retryTaskId && candidate.id !== retryTaskId) continue;
       if (!candidate.worktree || candidate.worktree.status === "removed") continue;
@@ -1007,7 +1033,7 @@ export class TaskStore {
         const index = columns.indexOf(task.status);
         const nextColumn = index >= 0 ? columns[index + 1] : undefined;
         // Managed code changes wait for an explicit Human move to completion.
-        if (nextColumn && !(task.worktree && nextColumn === this.completionColumn(task.boardId))) {
+        if (nextColumn && !(this.getWorktreesEnabled() && task.worktree && nextColumn === this.completionColumn(task.boardId))) {
           this.db
             .prepare(
               "UPDATE tasks SET status = ? WHERE tasks.workspaceId = workspace_id() AND id = ?",

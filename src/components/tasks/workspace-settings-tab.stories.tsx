@@ -11,6 +11,7 @@ const meta = {
   beforeEach: () => {
     const original = globalThis.fetch;
     finishCreation = undefined;
+    let worktreesEnabled = false;
     globalThis.fetch = async (input, options) => {
       const url = String(input);
       if (url === "/api/workspaces" && options?.method === "POST") {
@@ -18,7 +19,10 @@ const meta = {
         return Response.json({ error: "A workspace already uses this folder." }, { status: 409 });
       }
       if (url.startsWith("/api/workspaces?")) return Response.json([]);
-      if (url === "/api/workspace") return Response.json({ path: "/projects/todai" });
+      if (url === "/api/workspace") {
+        if (options?.method === "PATCH") worktreesEnabled = JSON.parse(String(options.body)).worktreesEnabled;
+        return Response.json({ path: "/projects/todai", worktreesEnabled });
+      }
       if (url.startsWith("/api/directories?")) return Response.json([]);
       return original(input, options);
     };
@@ -77,5 +81,18 @@ export const CreationFailure: Story = {
     await expect(await canvas.findByRole("alert")).toHaveTextContent("already uses this folder");
     await expect(canvas.getByLabelText("Workspace name")).toHaveValue("New project");
     await expect(canvas.getByRole("button", { name: "Current workspace" })).toBeEnabled();
+  },
+};
+
+export const WorktreeSetting: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggle = await canvas.findByRole("switch", { name: "Use task worktrees" });
+    await expect(toggle).toBeEnabled();
+    await expect(toggle).not.toBeChecked();
+    await userEvent.click(toggle);
+    await expect(toggle).toBeChecked();
+    await userEvent.click(toggle);
+    await expect(toggle).not.toBeChecked();
   },
 };

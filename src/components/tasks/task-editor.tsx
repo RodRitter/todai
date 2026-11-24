@@ -44,6 +44,7 @@ export type TaskEditorProps = {
   columns?: readonly string[];
   assignedColumns?: readonly string[];
   completionColumn?: string | null;
+  worktreesEnabled?: boolean;
   assignments?: readonly ColumnAssignment[];
   onRun?: () => Promise<void>;
   onStop?: () => Promise<void>;
@@ -76,6 +77,7 @@ function TaskEditorSession({
   columns: initialColumns = statuses,
   assignedColumns = [],
   completionColumn,
+  worktreesEnabled = false,
   assignments = [],
   onRun,
   onStop,
@@ -293,7 +295,7 @@ function TaskEditorSession({
           <div className="col-start-1 row-start-1 min-w-0 space-y-2">
             <div className="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-2">
               <TaskId number={editing?.taskNumber} />
-              <TaskBranch worktree={editing?.worktree} onRetry={editing?.status === completionColumn ? onRetryWorktree : undefined} />
+              <TaskBranch worktree={worktreesEnabled ? editing?.worktree : null} onRetry={editing?.status === completionColumn ? onRetryWorktree : undefined} />
             </div>
             {isEditingTitle ? <>
             <DialogTitle className="sr-only">{title.trim() || "Create task"}</DialogTitle>
@@ -469,7 +471,7 @@ function TaskEditorSession({
               >
                 <TooltipProvider>
                   <div className="flex flex-col gap-4">
-                    {!editing && <div className="space-y-2">
+                    {!editing && worktreesEnabled && <div className="space-y-2">
                       <Label htmlFor={`${formId}-branch`}>Branch name (optional)</Label>
                       <Input id={`${formId}-branch`} name="branchName" placeholder="Automatic branch name" aria-describedby={`${formId}-branch-help`} />
                       <Label variant="metadata" asChild>

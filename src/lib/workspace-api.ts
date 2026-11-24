@@ -5,6 +5,7 @@ import type { AgentProfile, ColumnAssignment, ExecutionTool, ExecutorSettingsDat
 import type { Task } from "@/domain/task";
 
 export type BoardSnapshot = {
+  worktreesEnabled?: boolean;
   tasks: Task[];
   columns: string[];
   columnInstructions?: Record<string, string>;
@@ -110,7 +111,8 @@ export const workspaceApi = {
   archived: () => request<Workspace[]>("/api/workspaces?archived=true"),
   setArchived: (id: string, archived: boolean) => request<{ workspaces: Workspace[]; archived: Workspace[] }>("/api/workspaces", { method: "PATCH", body: { id, archived } }),
   create: (name: string, path: string, setup?: import("@/domain/workspace-setup").WorkspaceSetup) => request<Workspace>("/api/workspaces", { method: "POST", body: { name, path, ...setup } }),
-  get: () => request<{ path: string }>("/api/workspace", {}, settingsError),
+  get: () => request<{ path: string; worktreesEnabled: boolean }>("/api/workspace", {}, settingsError),
+  saveWorktrees: (worktreesEnabled: boolean) => request<{ worktreesEnabled: boolean }>("/api/workspace", { method: "PATCH", body: { worktreesEnabled } }),
   save: (path: string) =>
     request<{ path: string }>(
       "/api/workspace",

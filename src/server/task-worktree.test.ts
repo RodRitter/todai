@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -22,6 +22,7 @@ function fixture() {
   git("add", "."); git("commit", "-m", "Initial");
   const store = new TaskStore(join(root, "tasks.sqlite"));
   store.setWorkspacePath(workspace);
+  store.setWorktreesEnabled(true);
   store.renameColumn("Done", "Done", undefined, true);
   const task = store.save({ id: "one", title: "Change source", description: "", status: "In progress" });
   return { root, repository, workspace, git, store, task, close() { store.close(); rmSync(root, { recursive: true, force: true }); } };
@@ -371,3 +372,63 @@ test("invalid branch names are rejected before task creation", () => {
     }
   } finally { f.close(); }
 });
+
+test("worktree setting persists per workspace and defaults to off", () => {
+  const f = fixture();
+  try {
+    const other = f.store.createWorkspace("Other", f.root);
+    const scoped = new TaskStore(f.store.databasePath, other.id);
+    try {
+      assert.equal(scoped.getWorktreesEnabled(), false);
+      f.store.setWorktreesEnabled(false);
+      scoped.setWorktreesEnabled(true);
+      assert.equal(f.store.getWorktreesEnabled(), false);
+      assert.throws(() => scoped.setWorktreesEnabled("false"), /Choose whether/);
+      const reopened = new TaskStore(f.store.databasePath, other.id);
+      try { assert.equal(reopened.getWorktreesEnabled(), true); } finally { reopened.close(); }
+    } finally { scoped.close(); }
+  } finally { f.close(); }
+});
+
+for (const existing of [false, true]) {
+  test(`disabled worktrees use the existing directory without commits (existing worktree: ${existing})`, async () => {
+    const f = fixture();
+    try {
+      const oldPath = existing ? f.store.taskWorkspace(f.task.id, f.workspace) : undefined;
+      if (oldPath) writeFileSync(join(oldPath, "source.txt"), "preserved worktree edit\n");
+      f.store.setWorktreesEnabled(false);
+      const base = f.git("rev-parse", "HEAD");
+      const { ChatStore } = await import("./chat-store.ts");
+      const { sendChat } = await import("./chat-service.ts");
+      const { agentPrompt } = await import("./agent-prompt.ts");
+      const chats = new ChatStore(f.store);
+      try {
+        const result = await sendChat(f.store, chats, f.task.id, "Edit source", async request => {
+          assert.equal(request.workspace, realpathSync(f.workspace));
+          assert.equal(request.task.worktree, null);
+          assert.match(agentPrompt(request), /Use the existing workspace directory/);
+          assert.throws(() => f.store.setWorktreesEnabled(true), /wait for chats/);
+          writeFileSync(join(request.workspace, "source.txt"), "direct edit\n");
+          return "Changed source.";
+        });
+        assert.equal(result.error, null);
+      } finally { chats.close(); }
+      f.store.saveAgent({ id: "builder", name: "Builder", tool: "codex", model: "test", effort: "high", instructions: "Build", permissions: "workspace-write" });
+      f.store.assignColumnAgent({ column: "In progress", agentId: "builder" });
+      f.store.runTask(f.task.id);
+      await new ExecutionService(f.store, async request => {
+        assert.equal(request.workspace, realpathSync(f.workspace));
+        assert.equal(request.task.worktree, null);
+        assert.throws(() => f.store.setWorktreesEnabled(true), /Stop running agents/);
+        return "Complete";
+      }).drain();
+      f.store.save({ ...f.task, status: "Done" });
+      f.store.cleanupWorktrees(f.task.id);
+      assert.equal(f.git("rev-parse", "HEAD"), base);
+      assert.equal(f.git("diff", "--cached"), "");
+      assert.equal(readFileSync(join(f.workspace, "source.txt"), "utf8"), "direct edit\n");
+      if (oldPath) assert.equal(readFileSync(join(oldPath, "source.txt"), "utf8"), "preserved worktree edit\n");
+      else assert.equal(f.store.readTask(f.task.id)?.worktree, null);
+    } finally { f.close(); }
+  });
+}

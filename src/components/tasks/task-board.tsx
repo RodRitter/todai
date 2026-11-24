@@ -26,6 +26,7 @@ export function TaskBoard({
   initialAssignments = [],
   initialColumnInstructions = {},
   initialCompletionColumn = null,
+  initialWorktreesEnabled = false,
   initialTaskId,
   configureColumn,
   assignAgent,
@@ -39,6 +40,7 @@ export function TaskBoard({
   initialAssignments?: ColumnAssignment[];
   initialColumnInstructions?: Record<string, string>;
   initialCompletionColumn?: string | null;
+  initialWorktreesEnabled?: boolean;
   initialTaskId?: string;
   configureColumn?: (column: string, name: string, instructions: string, completion?: boolean) => Promise<string[]>;
   assignAgent?: (
@@ -60,6 +62,7 @@ export function TaskBoard({
 }) {
   const [agents] = useState(initialAgents);
   const [columns, setColumns] = useState(initialColumns);
+  const [worktreesEnabled, setWorktreesEnabled] = useState(initialWorktreesEnabled);
   const [completionColumn, setCompletionColumn] = useState(initialCompletionColumn);
   const [columnInstructions, setColumnInstructions] = useState(initialColumnInstructions);
   const columnFocus = useRef<string | null>(null);
@@ -94,6 +97,7 @@ export function TaskBoard({
             setAssignments(latest.assignments);
             setColumnInstructions(latest.columnInstructions ?? {});
             setCompletionColumn(latest.completionColumn ?? null);
+            setWorktreesEnabled(latest.worktreesEnabled ?? false);
           }
         }
         if (active && errorToast !== undefined) {
@@ -302,6 +306,7 @@ export function TaskBoard({
           }) : undefined}
           assignments={assignments}
           completionColumn={completionColumn}
+          worktreesEnabled={worktreesEnabled}
           assignedColumns={assignments.map((assignment) => assignment.column)}
           onRun={persistence?.run ? () => mutate(async () => {
             const saved = await persistence.run!(editing!.id);

@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 export function GET(request: Request) {
   try {
-    return Response.json({ path: withTaskStore(request, workspacePath) });
+    return Response.json(withTaskStore(request, (store) => ({ path: workspacePath(store), worktreesEnabled: store.getWorktreesEnabled() })));
   } catch {
     return Response.json(
       { error: "Could not load workspace settings." },
@@ -44,5 +44,17 @@ export async function PUT(request: Request) {
       },
       { status: error instanceof RunValidationError || error instanceof WorkspaceOwnershipError ? 409 : error instanceof WorkspaceValidationError ? 400 : 500 },
     );
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const input = await request.json();
+    const worktreesEnabled = withTaskStore(request, (store) => store.setWorktreesEnabled(input?.worktreesEnabled));
+    return Response.json({ worktreesEnabled });
+  } catch (error) {
+    const known = error instanceof RunValidationError || error instanceof WorkspaceOwnershipError;
+    return Response.json({ error: known ? error.message : "Could not save task worktree settings." },
+      { status: known ? 409 : error instanceof SyntaxError ? 400 : 500 });
   }
 }

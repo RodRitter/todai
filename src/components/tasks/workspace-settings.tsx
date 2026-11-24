@@ -6,11 +6,13 @@ import { workspaceApi } from "@/lib/workspace-api";
 import { useDirectorySuggestions } from "./use-directory-suggestions";
 import { FolderIcon } from "lucide-react";
 import { Combobox } from "@/components/ui/combobox";
+import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { notifyOperation, toast } from "@/components/ui/toast";
 
 export function WorkspaceSettings() {
   const [saved, setSaved] = useState<string | null>(null);
+  const [worktreesEnabled, setWorktreesEnabled] = useState(false);
   const [path, setPath] = useState("");
   const { suggestions, directoryError, clearSuggestions } = useDirectorySuggestions(path);
   const [attempt, setAttempt] = useState(0);
@@ -27,6 +29,7 @@ export function WorkspaceSettings() {
         if (active) {
           setSaved(data.path);
           setPath(data.path);
+          setWorktreesEnabled(data.worktreesEnabled ?? false);
           setFailed(false);
           toast.dismiss(id);
         }
@@ -56,6 +59,32 @@ export function WorkspaceSettings() {
           confirm the new directory for affected queued jobs.
         </p>
       </div>
+      {!failed && <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Switch id="workspace-worktrees" checked={worktreesEnabled} disabled={saved === null || busy}
+            aria-describedby="workspace-worktrees-hint"
+            onCheckedChange={async (enabled) => {
+              if (saving.current) return;
+              saving.current = true;
+              setBusy(true);
+              try {
+                const result = await notifyOperation(() => workspaceApi.saveWorktrees(enabled), {
+                  loading: "Saving task worktree setting…", success: "Task worktree setting saved.",
+                  error: (error) => error instanceof Error ? error.message : "Could not save task worktree setting.",
+                });
+                setWorktreesEnabled(result.worktreesEnabled);
+              } catch {
+                /* The toast reports the error. Keep the saved setting. */
+              } finally { saving.current = false; setBusy(false); }
+            }} />
+          <Label htmlFor="workspace-worktrees">Use task worktrees</Label>
+        </div>
+        <p id="workspace-worktrees-hint" className="text-sm text-muted-foreground">
+          Off by default. When off, agents edit this directory and leave changes uncommitted.
+          When on, tasks use separate Git worktrees. Moving a task to Done commits its changes and removes its worktree.
+          Existing worktrees remain intact while this setting is off. Stop agents and wait for chats before changing this setting.
+        </p>
+      </div>}
       {failed ? (
         <Button
           onClick={() => {

@@ -116,7 +116,7 @@ export class ExecutionService {
           workspaceMemory,
           artifacts: artifacts?.connection,
           run,
-          task: this.store.readTask(task.id)!,
+          task: this.store.executionTask(task.id),
           workspace,
           signal: controller.signal,
           onStart: (pid) => {

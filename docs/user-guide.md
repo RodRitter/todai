@@ -56,7 +56,11 @@ The header shows the queue state across workspaces; each card shows its own agen
 
 ### Review task changes
 
-Git tasks use a separate worktree. Agents receive instructions to leave their changes unstaged unless you explicitly request a Git operation.
+Task worktrees are off by default. In **Settings → Workspace**, enable **Use task worktrees** for each workspace that needs isolation.
+When off, agents edit the existing directory and leave changes uncommitted. Todai does not create worktrees or commit completed tasks.
+Existing worktrees remain intact, and cleanup stops while the setting is off. Stop agents and wait for chats before changing this setting.
+
+When enabled, Git tasks use a separate worktree. Agents receive instructions to leave their changes unstaged unless you explicitly request a Git operation.
 Automatic workflow stops before the completion column for these tasks. Review the changes, then move the task to that column yourself.
 Todai commits the changes, removes the worktree, and retains the local branch. Archiving or resetting a task removes its worktree and local task branch, including uncommitted changes.
 If cleanup fails, the operation stops and preserves the task history. Correct the reported problem, then retry.

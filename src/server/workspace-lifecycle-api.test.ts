@@ -58,3 +58,30 @@ test("HTTP directory changes require pause and current confirmation; archived wo
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("workspace API saves worktree mode only for the selected workspace", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "todai-worktree-api-"));
+  const previous = process.env.TODAI_DB_PATH;
+  process.env.TODAI_DB_PATH = join(directory, "tasks.sqlite");
+  const store = new TaskStore(process.env.TODAI_DB_PATH);
+  const { GET, PATCH } = await import("../app/api/workspace/route.ts");
+  const request = (workspaceId: string, body?: unknown) => new Request("http://localhost/api/workspace", {
+    method: body === undefined ? "GET" : "PATCH", headers: { "X-Todai-Workspace": workspaceId },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  try {
+    const other = store.createWorkspace("Other", directory);
+    assert.equal((await GET(request(store.workspaceId)).json()).worktreesEnabled, false);
+    assert.equal((await PATCH(request(store.workspaceId, { worktreesEnabled: true }))).status, 200);
+    assert.equal((await GET(request(store.workspaceId)).json()).worktreesEnabled, true);
+    assert.equal((await GET(request(other.id)).json()).worktreesEnabled, false);
+    assert.equal((await PATCH(request(store.workspaceId, { worktreesEnabled: "false" }))).status, 409);
+    assert.equal((await PATCH(request(store.workspaceId, { worktreesEnabled: false }))).status, 200);
+    assert.equal(store.boardSnapshot().worktreesEnabled, false);
+  } finally {
+    store.close();
+    if (previous === undefined) delete process.env.TODAI_DB_PATH;
+    else process.env.TODAI_DB_PATH = previous;
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
