@@ -6,7 +6,7 @@ export function TaskCardMetadata({ task }: { task: Task }) {
   const usage = task.creditUsage;
   const value = !usage || (usage.calls > 0 && !usage.priced)
     ? null
-    : formatCredits(usage.credits);
+    : formatCredits(Math.ceil(usage.credits));
   const partial = usage && usage.priced > 0 && usage.priced < usage.calls;
   return <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
     <TaskId number={task.taskNumber} />

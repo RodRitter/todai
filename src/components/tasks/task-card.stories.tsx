@@ -28,7 +28,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   play: async ({ canvasElement }) => {
     await expect(within(canvasElement).getByText("TASK-1")).toBeVisible();
-    await expect(within(canvasElement).getByText("12.34 credits")).toBeVisible();
+    await expect(within(canvasElement).getByText("13 credits")).toBeVisible();
   },
 };
 export const Dark: Story = { globals: { theme: "dark" } };
