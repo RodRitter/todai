@@ -392,7 +392,7 @@ function TaskEditorSession({
           <Tabs value={tab} onValueChange={setTab} asChild>
           <fieldset disabled={busy} className="flex h-full min-h-0 min-w-0 flex-col">
             <input type="hidden" name="title" value={title} />
-            {editing && <div className="flex flex-wrap items-center gap-2 px-6 pb-4">
+            {editing && <div className="flex flex-wrap items-center gap-2 px-6 pb-2">
               <TabsList layout="wrap" aria-label="Task sections">
                 <TabsTrigger value="detail" disabled={busy}>Detail</TabsTrigger>
                 <ActivityTabTrigger value="activity" disabled={busy} agentStatus={editing.agentStatus} comments={editing.comments} />

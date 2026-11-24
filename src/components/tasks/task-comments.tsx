@@ -18,7 +18,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowUp, Copy, MessageCircle, Link, Ellipsis, LoaderCircle, Reply, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, MessageCircle, Link, Ellipsis, LoaderCircle, Reply, Trash2 } from "lucide-react";
 import { ConversationMessageBody } from "@/components/conversation/conversation-message";
 import { useMessageDeletion } from "@/components/conversation/use-message-deletion";
 import { MessageDisclosure, MessageThread, MessageReplyComposer, MessageAgentStatus } from "@/components/ui/message";
@@ -49,6 +49,14 @@ export function TaskComments({ taskId, active = true, onChat, embedded = false, 
   const runsById = new Map(runs.map(run => [run.id, run]));
   const liveRuns = runs.filter(run => run.status === "Running" || run.status === "Queued");
   const { viewport, content } = useBottomScroll(active && embedded);
+  function scrollComments(edge: "top" | "bottom") {
+    const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth";
+    if (viewport.current) {
+      viewport.current.scrollTo({ top: edge === "top" ? 0 : viewport.current.scrollHeight, behavior });
+    } else {
+      content.current?.scrollIntoView({ block: edge === "top" ? "start" : "end", behavior });
+    }
+  }
   const [observed, setObserved] = useState({ taskId, comments, active });
   const [attentionId, setAttentionId] = useState<string>();
   if (observed.comments !== comments || observed.taskId !== taskId || observed.active !== active) {
@@ -80,16 +88,20 @@ export function TaskComments({ taskId, active = true, onChat, embedded = false, 
   return (
     <section aria-label="Task activity" className={embedded ? "flex min-h-0 flex-1 flex-col" : "mt-8 space-y-6"}>
       {embedded ? <ScrollArea fade="vertical" fadeSize="sm" className="min-h-0 flex-1" viewportProps={{ ref: viewport }}>{activity}</ScrollArea> : activity}
-      {onPostComment && <ConversationComposer variant={embedded ? "fixed" : "inline"}>
+      {onPostComment && <ConversationComposer variant={embedded ? "fixed" : "inline"} floatingActions={<>
+          <Button type="button" variant="ghost-muted" size="icon-xs" aria-label="Scroll to top" title="Scroll to top" onClick={() => scrollComments("top")}><ArrowUp aria-hidden="true" /></Button>
+          <Button type="button" variant="ghost-muted" size="icon-xs" aria-label="Scroll to bottom" title="Scroll to bottom" onClick={() => scrollComments("bottom")}><ArrowDown aria-hidden="true" /></Button>
+        </>}>
         <CommentInput agents={agents} onPost={onPostComment} agentStatus={agentStatus} />
       </ConversationComposer>}
     </section>
   );
 }
 
-function ActivityMessage({ runsById, agents, attentionId, onChat, comment, replies = [], agentStatus, onDeleteComment, onAnswerFeedback, onPostComment, nested = false, label }: {
+function ActivityMessage({ runsById, agents, attentionId, onChat, comment, replies = [], agentStatus, onDeleteComment, onAnswerFeedback, onPostComment, nested = false, label, onReply }: {
   runsById: Map<string, RunHistoryEntry>;
   nested?: boolean;
+  onReply?: (agent?: AgentProfile) => void;
   label?: string;
   agents: AgentProfile[];
   onChat?: (comment: TaskComment) => void;
@@ -103,6 +115,7 @@ function ActivityMessage({ runsById, agents, attentionId, onChat, comment, repli
 }) {
   const [replying, setReplying] = useState(false);
   const [replyRequest, setReplyRequest] = useState(0);
+  const [requestedAgent, setRequestedAgent] = useState<AgentProfile>();
   const authorId = comment.runId ? runsById.get(comment.runId)?.agentId : undefined;
   const authors = agents.filter((agent) => authorId ? agent.id === authorId : agent.name === comment.authorName);
   const replyAgent = !isHumanComment(comment) && authors.length === 1 ? authors[0] : undefined;
@@ -116,9 +129,20 @@ function ActivityMessage({ runsById, agents, attentionId, onChat, comment, repli
   const replyInput = useRef<HTMLDivElement>(null);
   const disabled = agentStatus === "Running" || agentStatus === "Queued";
   const feedback = comment.feedbackStatus === "pending" ? <FeedbackInput responseType={comment.responseType} commentId={comment.id} onAnswer={onAnswerFeedback} /> : undefined;
+  function requestReply(agent?: AgentProfile) {
+    setThreadOpen(true);
+    if (onReply) {
+      onReply(agent);
+      return;
+    }
+    setRequestedAgent(agent);
+    setReplying(true);
+    setReplyRequest((value) => value + 1);
+    requestAnimationFrame(() => replyInput.current?.querySelector<HTMLElement>('[role="textbox"]')?.focus());
+  }
   const actions = <>
-    {onPostComment && <Button ref={replyButton} type="button" size="xs" variant="comment-header" disabled={disabled}
-      aria-expanded={threadOpen} aria-controls={`comment-content-${comment.id}`} onClick={() => { setThreadOpen(true); setReplying(true); setReplyRequest((value) => value + 1); requestAnimationFrame(() => replyInput.current?.querySelector<HTMLElement>('[role="textbox"]')?.focus()); }}><Reply aria-hidden="true" />Reply</Button>}
+    {(onPostComment || onReply) && <Button ref={replyButton} type="button" size="xs" variant="comment-header" disabled={disabled}
+      onClick={() => requestReply(replyAgent)}><Reply aria-hidden="true" />Reply</Button>}
     {onChat && <Button type="button" size="xs" variant="comment-header" onClick={() => onChat(comment)}><MessageCircle aria-hidden="true" />Chat</Button>}
     <CommentActions comment={comment} replyCount={replies.length} onDelete={onDeleteComment} disabled={disabled} />
   </>;
@@ -128,7 +152,7 @@ function ActivityMessage({ runsById, agents, attentionId, onChat, comment, repli
       createdAt={comment.createdAt} actions={actions}
       status={comment.feedbackStatus && <ConfirmationStatus state={comment.feedbackStatus} />} replyCount={replies.length}
       composer={(replies.length > 0 || replying) && onPostComment && <MessageReplyComposer ref={replyInput} connected={!nested && replies.length > 0}>
-        <CommentInput replyAgent={replyAgent} replyRequest={replyRequest} variant="reply" id={`reply-${comment.id}`} agents={agents} agentStatus={agentStatus} autoFocus={replying}
+        <CommentInput replyAgent={requestedAgent} replyRequest={replyRequest} variant="reply" id={`reply-${comment.id}`} agents={agents} agentStatus={agentStatus} autoFocus={replying}
           onPost={(body, artifacts) => onPostComment(body, artifacts, comment.id)}
           onSent={() => setReplying(false)}
           onCancel={replies.length ? undefined : () => { setReplying(false); replyButton.current?.focus(); }} />
@@ -141,6 +165,7 @@ function ActivityMessage({ runsById, agents, attentionId, onChat, comment, repli
       </div>
       {replies.length > 0 && <MessageThread gutter={!nested} id={`thread-${comment.id}`} aria-label="Reply thread">
         {groupActivity(replies).toReversed().map(({ message, replies: children }) => <ActivityMessage runsById={runsById} key={message.id} nested
+          onReply={onPostComment || onReply ? requestReply : undefined}
           agents={agents} attentionId={attentionId} onChat={onChat} comment={message} replies={children} agentStatus={agentStatus}
           label={comment.feedbackStatus && message.runId === comment.runId && isHumanComment(message) ? "Your answer" : undefined}
           onDeleteComment={onDeleteComment} onAnswerFeedback={onAnswerFeedback} />)}

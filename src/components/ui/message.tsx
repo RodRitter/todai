@@ -188,7 +188,7 @@ export function MessageDisclosure({ open, onOpenChange, label, createdAt, action
 export function MessageReplyComposer({ className, connected = false, ...props }: React.ComponentProps<"div"> & { connected?: boolean }) {
   return <div data-slot="message-reply-composer" className={cn(
     "relative min-w-0",
-    connected && "before:pointer-events-none before:absolute before:-top-3 before:-left-2 before:h-7 before:w-2 before:rounded-bl-lg before:border-b before:border-l before:border-comment-header",
+    connected && "before:pointer-events-none before:absolute before:-top-3 before:-left-2 before:h-7 before:w-2 before:rounded-bl-lg before:border-b before:border-l before:border-border",
     className,
   )} {...props} />;
 }
@@ -205,8 +205,8 @@ export function MessageAuthor({ className, createdAt, ...props }: React.Componen
 export function MessageThread({ children, className, gutter = true, ...props }: React.ComponentProps<"div"> & { gutter?: boolean }) {
   return <div data-slot="message-replies" className={cn(
     "relative min-w-0",
-    gutter && "before:pointer-events-none before:absolute before:top-4 before:bottom-0 before:-left-2 before:w-2 before:rounded-tl-lg before:border-t before:border-l before:border-comment-header",
-    gutter && "[&>[data-variant=reply]]:relative [&>[data-variant=reply]:not(:first-child)]:before:pointer-events-none [&>[data-variant=reply]:not(:first-child)]:before:absolute [&>[data-variant=reply]:not(:first-child)]:before:top-7 [&>[data-variant=reply]:not(:first-child)]:before:-left-2 [&>[data-variant=reply]:not(:first-child)]:before:h-px [&>[data-variant=reply]:not(:first-child)]:before:w-2 [&>[data-variant=reply]:not(:first-child)]:before:bg-comment-header",
+    gutter && "before:pointer-events-none before:absolute before:top-4 before:bottom-0 before:-left-2 before:w-2 before:rounded-tl-lg before:border-t before:border-l before:border-border",
+    gutter && "[&>[data-variant=reply]]:relative [&>[data-variant=reply]:not(:first-child)]:before:pointer-events-none [&>[data-variant=reply]:not(:first-child)]:before:absolute [&>[data-variant=reply]:not(:first-child)]:before:top-7 [&>[data-variant=reply]:not(:first-child)]:before:-left-2 [&>[data-variant=reply]:not(:first-child)]:before:h-px [&>[data-variant=reply]:not(:first-child)]:before:w-2 [&>[data-variant=reply]:not(:first-child)]:before:bg-border",
     className,
   )} {...props}>{children}</div>;
 }

@@ -40,8 +40,8 @@ test("comment attachments attach documents atomically and retain provenance afte
     f.task("one"); f.task("two");
     const first = f.artifacts.create({ title: "Original", type: "text", content: "Original", creator: "Alice" });
     const ref = { artifactId: first.id };
-    const comment = f.tasks.postComment("one", "See evidence", [ref, ref]).comments![0];
-    f.tasks.postComment("two", "Reuse evidence", [ref]);
+    const comment = f.tasks.postComment("one", `See [evidence](#artifact/${first.id})`, [ref, ref]).comments![0];
+    f.tasks.postComment("two", `Reuse [evidence](#artifact/${first.id})`, [ref]);
     f.artifacts.linkTask("one", first.id);
     const latest = f.artifacts.update(first.id, { title: "Latest", type: "text", content: "Latest", creator: "Bob" });
     assert.deepEqual(f.artifacts.forTask("one"), [{ artifact: latest, explicit: true, comments: [{ commentId: comment.id, artifact: latest }] }]);
@@ -134,5 +134,22 @@ test("new and edited task descriptions attach cited artifacts on save", () => {
     assert.deepEqual(f.artifacts.forTask(task.id).map((link) => link.artifact.id).sort(), [first.id, second.id].sort());
     assert.throws(() => f.tasks.save({ ...task, title: "Invalid", description: "[Missing](#artifact/missing/revision)" }), /reference|not found/);
     assert.equal(f.tasks.list()[0].title, "Draft");
+  } finally { f.close(); }
+});
+
+test("comments and replies attach only artifacts tagged in their text", () => {
+  const f = fixture();
+  try {
+    f.task("one");
+    const tagged = f.artifacts.create({ title: "Tagged", type: "text", content: "Keep", creator: "Human" });
+    const removed = f.artifacts.create({ title: "Removed", type: "text", content: "Keep in library", creator: "Human" });
+    const attachments = [tagged, removed].map((artifact) => ({ artifactId: artifact.id }));
+    const parent = f.tasks.postComment("one", "The tag was removed.", attachments).comments![0];
+    assert.equal(parent.artifacts, undefined);
+    const body = `[Tagged](#artifact/${tagged.id}) and \`[Example](#artifact/${removed.id})\``;
+    const reply = f.tasks.postComment("one", body, attachments, parent.id).comments!.find((comment) => comment.parentCommentId === parent.id)!;
+    assert.deepEqual(reply.artifacts, [{ artifactId: tagged.id }]);
+    assert.deepEqual(f.artifacts.forTask("one").map((link) => link.artifact.id), [tagged.id]);
+    assert.equal(f.artifacts.read(removed.id).id, removed.id);
   } finally { f.close(); }
 });

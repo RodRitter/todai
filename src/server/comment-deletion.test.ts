@@ -20,7 +20,7 @@ test("comment deletion validates ownership and deletes artifacts linked only to 
   try {
     for (const id of ["one", "two"]) store.save({ id, title: id, description: "", status: "To do" });
     const artifact = library.create({ title: "Evidence", type: "text", creator: "Human", content: "Keep this" });
-    const comment = store.postComment("one", "Remove me", [{ artifactId: artifact.id }]).comments![0];
+    const comment = store.postComment("one", `[Remove me](#artifact/${artifact.id})`, [{ artifactId: artifact.id }]).comments![0];
     store.postComment("one", "Keep me");
     const data = { taskId: "one", commentId: comment.id };
     assert.equal((await remove(data, null)).status, 403);
@@ -96,10 +96,10 @@ test("deleting a parent removes reply artifacts but preserves artifacts linked e
     const sharedTask = create("Shared task");
     const unlinked = create("Unlinked library item");
     const ref = (artifact: typeof parentOnly) => ({ artifactId: artifact.id });
-    const parent = store.postComment("one", "Parent", [ref(parentOnly)]).comments![0];
-    store.postComment("one", "Reply", [replyOnly, sharedComment, sharedTask].map(ref), parent.id);
+    const parent = store.postComment("one", `[Parent](#artifact/${parentOnly.id})`, [ref(parentOnly)]).comments![0];
+    store.postComment("one", [replyOnly, sharedComment, sharedTask].map((artifact) => `[Reply](#artifact/${artifact.id})`).join(" "), [replyOnly, sharedComment, sharedTask].map(ref), parent.id);
     const revision = library.update(sharedComment.id, { title: "New revision", type: "text", creator: "Human", content: "New" });
-    store.postComment("two", "Other comment", [ref(revision)]);
+    store.postComment("two", `[Other comment](#artifact/${revision.id})`, [ref(revision)]);
     library.linkTask("one", sharedTask.id);
     library.update(replyOnly.id, { title: "New reply revision", type: "text", creator: "Human", content: "New" });
 

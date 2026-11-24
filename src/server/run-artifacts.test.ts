@@ -28,7 +28,7 @@ test("running agents publish visible artifacts with trusted provenance and pin t
       assert.equal(library.read(artifact.id).taskId, "task");
       assert.equal(library.read(artifact.id).creator, "Builder");
       await rpc(artifacts, "nominate_artifact", { artifactId: artifact.id });
-      return "Report is ready";
+      return `[Report](#artifact/${artifact.id}) is ready`;
     });
     await service.drain();
     assert.equal(store.history()[0].status, "Complete", store.history()[0].summary!);
@@ -108,7 +108,7 @@ test("live tools publish files, links and document edits, reuse task context, an
       assert.equal(revised.id, prior.id);
       assert.equal((await rpc(artifacts, "read_artifact", { artifactId: prior.id })).content, "# Updated");
       assert.equal((await rpc(artifacts, "search_artifacts", { search: "Updated" }))[0].id, prior.id);
-      return JSON.stringify({ type: "feedback_request", question: "Approve the report?", recommendation: "Use the original" });
+      return JSON.stringify({ type: "feedback_request", question: `Approve the [report](#artifact/${prior.id})?`, recommendation: "Use the original" });
     }).drain();
     assert.equal(f.store.history()[0].status, "Waiting", f.store.history()[0].summary!);
     const comment = f.store.list()[0].comments![0];
@@ -337,3 +337,23 @@ test("memory reviewers receive only read-only memory tools and bounded context",
     assert.equal(f.store.history().at(-1)!.status, "Complete");
   } finally { f.close(); }
 });
+
+for (const feedback of [false, true]) {
+  test(`agent ${feedback ? "feedback" : "completion"} omits nominated artifacts without tags`, async () => {
+    const f = fixture();
+    try {
+      await new ExecutionService(f.store, async ({ artifacts }) => {
+        assert.ok(artifacts);
+        const artifact = await rpc(artifacts, "publish_artifact", { title: "Saved", type: "text", content: "Keep in library" });
+        await rpc(artifacts, "nominate_artifact", { artifactId: artifact.id });
+        return feedback
+          ? JSON.stringify({ type: "feedback_request", question: "Continue?", recommendation: "Continue." })
+          : "Work is complete.";
+      }).drain();
+      assert.equal(f.store.history()[0].status, feedback ? "Waiting" : "Complete");
+      assert.equal(f.store.list()[0].comments![0].artifacts, undefined);
+      assert.deepEqual(f.library.forTask("task"), []);
+      assert.equal(f.library.list().length, 1);
+    } finally { f.close(); }
+  });
+}

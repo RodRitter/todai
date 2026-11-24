@@ -1133,11 +1133,14 @@ export class TaskStore {
 
   private attachCommentArtifacts(commentId: string, attachments: unknown) {
     if (!Array.isArray(attachments)) throw new CommentValidationError("Choose valid artifact attachments.");
+    const comment = this.db.prepare("SELECT body FROM comments WHERE id = ? AND workspaceId = workspace_id()").get(commentId);
+    const mentioned = new Set(artifactMentions(String(comment?.body ?? "")).map((ref) => ref.artifactId));
     for (const ref of attachments) {
       if (!ref || typeof ref.artifactId !== "string" ||
           !this.db.prepare("SELECT id FROM artifacts WHERE id = ? AND workspaceId = workspace_id()")
             .get(ref.artifactId))
         throw new CommentValidationError("Artifact not found in this workspace.");
+      if (!mentioned.has(ref.artifactId)) continue;
       this.db.prepare("INSERT OR IGNORE INTO comment_artifacts (commentId, artifactId) VALUES (?, ?)")
         .run(commentId, ref.artifactId);
     }

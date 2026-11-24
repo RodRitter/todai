@@ -19,7 +19,7 @@ test("reset clears task history and references while preserving task identity an
     store.save({ id: "two", title: "Other task", description: "", status: "To do" });
     const artifact = artifacts.create({ title: "Shared", type: "markdown", creator: "Human", description: "", content: "Saved content" });
     for (const taskId of ["one", "two"]) {
-      store.postComment(taskId, "Comment", [{ artifactId: artifact.id }]);
+      store.postComment(taskId, `[Comment](#artifact/${artifact.id})`, [{ artifactId: artifact.id }]);
       artifacts.linkTask(taskId, artifact.id);
       db.prepare("INSERT INTO chat_sessions (id, workspaceId, taskId, createdAt, updatedAt) VALUES (?, ?, ?, 'now', 'now')").run(taskId, store.workspaceId, taskId);
       db.prepare("INSERT INTO chat_messages (id, sessionId, authorName, body, createdAt) VALUES (?, ?, 'Human', 'Chat', 'now')").run(taskId, taskId);

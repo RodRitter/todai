@@ -324,11 +324,11 @@ export const ReplyAddsAuthorTag: Story = {
     const canvas = within(canvasElement);
     const editor = await canvas.findByRole("textbox", { name: "Your reply" });
     await userEvent.type(editor, "Keep this draft.");
-    await userEvent.click(canvas.getByRole("button", { name: "Reply" }));
+    await userEvent.click(canvas.getAllByRole("button", { name: "Reply" })[0]);
     const tagged = canvas.getByRole("textbox", { name: "Your reply" });
     await expect(tagged.querySelector('a[href="#agent/reviewer"]')).toHaveTextContent("@Reviewer");
     await expect(tagged).toHaveTextContent("Keep this draft.");
-    await userEvent.click(canvas.getByRole("button", { name: "Reply" }));
+    await userEvent.click(canvas.getAllByRole("button", { name: "Reply" })[0]);
     await expect(tagged.querySelectorAll('a[href="#agent/reviewer"]')).toHaveLength(1);
     await userEvent.click(canvas.getByRole("button", { name: "Send reply" }));
     await expect(within(canvas.getByLabelText("Reply thread")).getByText("@Reviewer")).toBeVisible();
@@ -339,7 +339,7 @@ export const ReplyTagCanBeRemoved: Story = {
   args: { agents: commentAgents, comments: [{ id: "agent", taskId: "task", authorName: "Reviewer", body: "Review result.", createdAt: "2026-11-20T10:00:00Z" }], onPostComment: fn() },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole("button", { name: "Reply" }));
+    await userEvent.click(canvas.getAllByRole("button", { name: "Reply" })[0]);
     const editor = await canvas.findByRole("textbox", { name: "Your reply" });
     await expect(editor.querySelector('a[href="#agent/reviewer"]')).toHaveTextContent("@Reviewer");
     await userEvent.clear(editor);
@@ -353,7 +353,7 @@ export const ReplyToHumanHasNoTag: Story = {
   args: { agents: commentAgents, comments: [{ id: "human", taskId: "task", authorRole: "human", authorName: "Reviewer", body: "Human context.", createdAt: "2026-11-20T10:00:00Z" }], onPostComment: fn() },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole("button", { name: "Reply" }));
+    await userEvent.click(canvas.getAllByRole("button", { name: "Reply" })[0]);
     await expect(canvas.getByRole("textbox", { name: "Your reply" })).toHaveTextContent(/^$/);
   },
 };
@@ -362,7 +362,7 @@ export const ReplyError: Story = {
   render: () => <ThreadExample fail />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole("button", { name: "Reply" }));
+    await userEvent.click(canvas.getAllByRole("button", { name: "Reply" })[0]);
     await userEvent.type(canvas.getByLabelText("Your reply"), "Keep this draft.");
     await userEvent.click(canvas.getByRole("button", { name: "Send reply" }));
     await expect(canvas.getByRole("alert")).toHaveTextContent("Connection lost");
@@ -375,7 +375,7 @@ export const CollapsibleReplyThread: Story = {
   render: () => <ThreadExample />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole("button", { name: "Reply" }));
+    await userEvent.click(canvas.getAllByRole("button", { name: "Reply" })[0]);
     await userEvent.type(canvas.getByLabelText("Your reply"), "Keep this draft while collapsed.");
     await userEvent.click(canvas.getByRole("button", { name: "Collapse comment by Reviewer" }));
     await expect(canvas.getByLabelText("Your reply")).not.toBeVisible();
@@ -386,7 +386,7 @@ export const CollapsibleReplyThread: Story = {
     await expect(canvas.getByLabelText("Your reply")).toBeVisible();
     await expect(canvas.getByLabelText("Your reply")).toHaveTextContent("Keep this draft while collapsed.");
     await userEvent.click(canvas.getByRole("button", { name: "Collapse comment by Reviewer" }));
-    await userEvent.click(canvas.getByRole("button", { name: "Reply" }));
+    await userEvent.click(canvas.getAllByRole("button", { name: "Reply" })[0]);
     await expect(canvas.getByLabelText("Your reply")).toBeVisible();
   },
 };
@@ -436,7 +436,7 @@ export const PrivateChatActions: Story = {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
     await expect(canvas.getAllByRole("button", { name: "Chat" })).toHaveLength(1);
-    const reply = canvas.getByRole("button", { name: "Reply" });
+    const reply = canvas.getAllByRole("button", { name: "Reply" })[0];
     await expect(reply.nextElementSibling).toBe(canvas.getByRole("button", { name: "Chat" }));
     await expect(canvas.queryByRole("button", { name: "Copy message" })).not.toBeInTheDocument();
     await userEvent.click(canvas.getAllByRole("button", { name: "Message actions" })[0]);
@@ -455,7 +455,7 @@ export const RunningCommentMenu: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
-    await expect(canvas.getByRole("button", { name: "Reply" })).toBeDisabled();
+    await expect(canvas.getAllByRole("button", { name: "Reply" })[0]).toBeDisabled();
     await expect(canvas.getByRole("button", { name: "Chat" })).toBeEnabled();
     await userEvent.click(canvas.getAllByRole("button", { name: "Message actions" })[0]);
     await expect(await body.findByRole("menuitem", { name: "Delete message" })).toHaveAttribute("data-disabled");
@@ -1111,3 +1111,62 @@ export const LiveExecutionTimer: Story = {
     await waitFor(() => expect(timer.textContent).not.toBe(first), { timeout: 2500 });
   },
 };
+
+export const ReplyToReply: Story = {
+  args: {
+    agents: commentAgents,
+    comments: [
+      { id: "root", taskId: "task", authorName: "Human", body: "Please review.", createdAt: "2026-11-20T10:00:00Z" },
+      { id: "child", taskId: "task", parentCommentId: "root", authorName: "Reviewer", body: "Review complete.", createdAt: "2026-11-20T10:01:00Z" },
+    ],
+    onPostComment: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(canvas.getByRole("textbox", { name: "Your reply" }), "Keep this draft.");
+    const reply = within(canvas.getByLabelText("Reply thread")).getByRole("button", { name: "Reply" });
+    await userEvent.click(reply);
+    const editor = canvas.getByRole("textbox", { name: "Your reply" });
+    await expect(editor).toHaveFocus();
+    await expect(editor).toHaveTextContent("Keep this draft.");
+    await expect(editor.querySelector('a[href="#agent/reviewer"]')).toHaveTextContent("@Reviewer");
+    await userEvent.click(reply);
+    await expect(editor.querySelectorAll('a[href="#agent/reviewer"]')).toHaveLength(1);
+    await expect(canvas.getAllByRole("textbox", { name: "Your reply" })).toHaveLength(1);
+    await userEvent.click(canvas.getByRole("button", { name: "Send reply" }));
+    await expect(args.onPostComment).toHaveBeenCalledWith(expect.stringContaining("Keep this draft."), [], "root");
+  },
+};
+
+export const ScrollControls: Story = {
+  args: {
+    embedded: true,
+    comments: Array.from({ length: 20 }, (_, index) => ({
+      id: `scroll-control-${index}`, taskId: "task", authorName: "Human",
+      body: `Comment ${index + 1}`, createdAt: new Date(2026, 10, 20, 10, index).toISOString(),
+    })),
+    onPostComment: fn(),
+  },
+  decorators: [(Story) => <div className="flex h-96 max-w-xl flex-col"><Story /></div>],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewport = canvasElement.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')!;
+    await waitFor(() => expect(viewport.scrollTop).toBeGreaterThan(0));
+    await userEvent.click(canvas.getByRole("button", { name: "Scroll to top" }));
+    await waitFor(() => expect(viewport.scrollTop).toBe(0));
+    const down = canvas.getByRole("button", { name: "Scroll to bottom" });
+    const controls = down.closest('[data-slot="conversation-scroll-controls"]')!;
+    const composer = down.closest('[data-slot="conversation-composer"]')!;
+    await expect(getComputedStyle(controls).position).toBe("absolute");
+    await expect(controls.getBoundingClientRect().bottom).toBeLessThanOrEqual(composer.getBoundingClientRect().top);
+    down.focus();
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() => expect(viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop).toBeLessThan(1));
+    await expect(down).toHaveFocus();
+  },
+};
+export const ScrollControlsNarrow: Story = {
+  ...ScrollControls,
+  decorators: [(Story) => <div className="flex h-96 w-80 flex-col"><Story /></div>],
+};
+export const ScrollControlsDark: Story = { ...ScrollControls, globals: { theme: "dark" } };

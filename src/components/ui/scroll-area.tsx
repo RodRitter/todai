@@ -27,7 +27,7 @@ function ScrollArea({ className, children, orientation = "vertical", fade = "non
         variant === "table" || variant === "code" ? "overscroll-auto" : "overscroll-contain",
         fade === "bottom" && "scroll-fade-b",
         fade === "vertical" && "scroll-fade-y",
-        fade !== "none" && (fadeSize === "sm" ? "scroll-fade-4" : "scroll-fade-12"),
+        fade !== "none" && (fadeSize === "sm" ? "scroll-fade-2" : "scroll-fade-12"),
         orientation === "vertical" && "overflow-x-hidden!",
         orientation === "horizontal" && "overflow-y-hidden!",
       )} {...viewportProps}>
