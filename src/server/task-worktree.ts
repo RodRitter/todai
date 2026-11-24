@@ -80,16 +80,33 @@ function removeMissingRegistration(record: TaskWorktree) {
     git(record.repository, "worktree", "remove", record.path);
 }
 
+function assertRemovableWorktree(record: TaskWorktree) {
+  verifyWorktree(record);
+  assertNoProcesses(record.path);
+  for (const state of ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply", "BISECT_LOG"]) {
+    if (existsSync(git(record.path, "rev-parse", "--path-format=absolute", "--git-path", state)))
+      throw new Error("Finish the current Git operation before removing the task worktree.");
+  }
+  if (git(record.path, "ls-files", "--unmerged")) throw new Error("Resolve Git conflicts before removing the task worktree.");
+  if (git(record.path, "submodule", "status")) throw new Error("This task has submodules. Preserve their changes before manual cleanup.");
+}
+
+// Archive and reset discard the task checkout, including unfinished changes.
+// Missing resources are allowed so a partially completed cleanup can be retried.
+export function discardWorktree(record: TaskWorktree) {
+  if (existsSync(record.path)) {
+    assertRemovableWorktree(record);
+    git(record.repository, "worktree", "remove", "--force", record.path);
+  } else {
+    removeMissingRegistration(record);
+  }
+  if (git(record.repository, "branch", "--list", record.branch))
+    git(record.repository, "branch", "-D", "--", record.branch);
+}
+
 export function closeWorktree(record: TaskWorktree, task: Task): TaskWorktree {
   if (existsSync(record.path)) {
-    verifyWorktree(record);
-    assertNoProcesses(record.path);
-    for (const state of ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply", "BISECT_LOG"]) {
-      if (existsSync(git(record.path, "rev-parse", "--path-format=absolute", "--git-path", state)))
-        throw new Error("Finish the current Git operation before removing the task worktree.");
-    }
-    if (git(record.path, "ls-files", "--unmerged")) throw new Error("Resolve Git conflicts before removing the task worktree.");
-    if (git(record.path, "submodule", "status")) throw new Error("This task has submodules. Preserve their changes before manual cleanup.");
+    assertRemovableWorktree(record);
     git(record.path, "add", "--all");
     if (git(record.path, "diff", "--cached", "--name-only"))
       git(record.path, "commit", "-m", `Complete TASK-${task.taskNumber ?? task.id}: ${task.title}`);

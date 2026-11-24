@@ -1,4 +1,4 @@
-import { closeWorktree, openWorktree, planWorktree, worktreeHead } from "./task-worktree.ts";
+import { discardWorktree, closeWorktree, openWorktree, planWorktree, worktreeHead } from "./task-worktree.ts";
 import type { TaskWorktree } from "../domain/task.ts";
 import { searchMemoryEntries, readMemoryEntries, memoryContext, prepareMemoryChanges, applyMemoryChanges, memoryDocument, memoryChangesSummary } from "./memory-entries.ts";
 import { readMemory, readMemorySnapshot, memoryProfile } from "./workspace-memory.ts";
@@ -1131,6 +1131,15 @@ export class TaskStore {
       .run(randomUUID(), taskId, column, JSON.stringify(profile), createdAt, kind, commentId, JSON.stringify(replyPlan));
   }
 
+  private discardTaskWorktree(task: Task) {
+    if (!task.worktree) return;
+    try { discardWorktree(task.worktree); }
+    catch (error) {
+      throw new PendingRunError(`Could not clean up the task worktree and branch. ${error instanceof Error ? error.message : String(error)}`);
+    }
+    this.db.prepare("UPDATE tasks SET worktree = NULL WHERE workspaceId = workspace_id() AND id = ?").run(task.id);
+  }
+
   reset(taskId: unknown): Task {
     this.assertWorkspaceActive();
     if (typeof taskId !== "string" || !taskId)
@@ -1145,6 +1154,7 @@ export class TaskStore {
         throw new PendingRunError("Wait for the chat response to finish before resetting the task.");
       const status = this.listColumns(task.boardId)[0];
       if (!status) throw new ColumnValidationError("Add a board column before resetting the task.");
+      this.discardTaskWorktree(task);
       this.db.prepare("DELETE FROM task_artifacts WHERE taskId = ?").run(taskId);
       this.db.prepare("UPDATE artifacts SET taskId = NULL, runId = NULL WHERE workspaceId = workspace_id() AND taskId = ?").run(taskId);
       for (const table of ["comments", "chat_sessions", "runs", "task_usage"])
@@ -1161,6 +1171,8 @@ export class TaskStore {
       this.assertIdle(id, "archiving the task");
       if (this.db.prepare("SELECT id FROM chat_sessions WHERE workspaceId = workspace_id() AND taskId = ? AND lease > ?").get(id, new Date().toISOString()))
         throw new PendingRunError("Wait for the chat response before archiving the task.");
+      const task = this.readTask(id);
+      if (task) this.discardTaskWorktree(task);
       this.db.prepare("UPDATE tasks SET archivedAt = COALESCE(archivedAt, ?), autoRun = 0, autoWorkflow = 0 WHERE workspaceId = workspace_id() AND id = ?").run(new Date().toISOString(), id);
       this.db.prepare("UPDATE comments SET feedbackStatus = 'cancelled' WHERE workspaceId = workspace_id() AND taskId = ? AND feedbackStatus = 'pending'").run(id);
       this.db.prepare("UPDATE runs SET status = 'Stopped', finishedAt = ? WHERE workspaceId = workspace_id() AND taskId = ? AND status = 'Waiting'").run(new Date().toISOString(), id);

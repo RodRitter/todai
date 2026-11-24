@@ -269,17 +269,65 @@ test("automatic workflow keeps managed changes unstaged until an explicit move t
   } finally { f.close(); }
 });
 
-test("archiving keeps the worktree and uncommitted files", () => {
-  const f = fixture();
-  try {
-    const path = f.store.taskWorkspace(f.task.id, f.workspace);
-    writeFileSync(join(path, "source.txt"), "keep for review\n");
-    f.store.delete(f.task.id);
-    f.store.cleanupWorktrees();
-    assert.ok(existsSync(path));
-    const record = f.store.readTask(f.task.id)!.worktree!;
-    assert.equal(f.git("rev-parse", record.branch), record.baseCommit);
-    assert.equal(readFileSync(join(path, "source.txt"), "utf8"), "keep for review\n");
-    assert.equal(execFileSync("git", ["-C", path, "diff", "--cached"], { encoding: "utf8" }), "");
-  } finally { f.close(); }
-});
+for (const action of ["archive", "reset"] as const) {
+  for (const completed of [false, true]) {
+    test(`${action} removes task worktrees and branches (${completed ? "completed" : "unfinished"})`, () => {
+      const f = fixture();
+      try {
+        const path = f.store.taskWorkspace(f.task.id, f.workspace);
+        const record = f.store.readTask(f.task.id)!.worktree!;
+        writeFileSync(join(path, "source.txt"), "task edit\n");
+        writeFileSync(join(path, "untracked.txt"), "new file\n");
+        if (completed) {
+          f.store.save({ ...f.task, status: "Done", autoRun: false, autoWorkflow: false });
+          f.store.stopTask(f.task.id);
+        }
+        if (action === "archive") f.store.delete(f.task.id);
+        else f.store.reset(f.task.id);
+        assert.equal(existsSync(record.path), false);
+        assert.equal(f.git("branch", "--list", record.branch), "");
+        assert.ok(!f.git("worktree", "list", "--porcelain").includes(record.path));
+        assert.equal(f.store.readTask(f.task.id)!.worktree, null);
+        assert.equal(readFileSync(join(f.workspace, "source.txt"), "utf8"), "base\n");
+        if (action === "reset") {
+          const fresh = f.store.taskWorkspace(f.task.id, f.workspace);
+          assert.equal(readFileSync(join(fresh, "source.txt"), "utf8"), "base\n");
+          assert.equal(existsSync(join(fresh, "untracked.txt")), false);
+        }
+      } finally { f.close(); }
+    });
+  }
+
+  test(`${action} recovers after Git resources were already removed`, () => {
+    const f = fixture();
+    try {
+      f.store.taskWorkspace(f.task.id, f.workspace);
+      const record = f.store.readTask(f.task.id)!.worktree!;
+      f.git("worktree", "remove", record.path);
+      f.git("branch", "-D", record.branch);
+      if (action === "archive") f.store.delete(f.task.id);
+      else f.store.reset(f.task.id);
+      assert.equal(f.store.readTask(f.task.id)!.worktree, null);
+    } finally { f.close(); }
+  });
+
+  test(`${action} preserves task history when cleanup fails and permits retry`, () => {
+    const f = fixture();
+    try {
+      const path = f.store.taskWorkspace(f.task.id, f.workspace);
+      const record = f.store.readTask(f.task.id)!.worktree!;
+      f.store.addComment({ id: "keep", taskId: f.task.id, authorName: "Human", body: "Keep history", createdAt: new Date().toISOString() });
+      execFileSync("git", ["-C", path, "checkout", "-b", "other-branch"], { stdio: "pipe" });
+      const perform = () => action === "archive" ? f.store.delete(f.task.id) : f.store.reset(f.task.id);
+      assert.throws(perform, /worktree changed/);
+      assert.ok(!f.store.readTask(f.task.id)!.archivedAt);
+      assert.equal(f.store.readTask(f.task.id)!.comments?.length, 1);
+      assert.ok(existsSync(path));
+      execFileSync("git", ["-C", path, "checkout", record.branch], { stdio: "pipe" });
+      perform();
+      assert.equal(existsSync(path), false);
+      assert.equal(f.git("branch", "--list", record.branch), "");
+      assert.ok(f.git("branch", "--list", "other-branch"));
+    } finally { f.close(); }
+  });
+}

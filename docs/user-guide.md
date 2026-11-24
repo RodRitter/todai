@@ -58,7 +58,8 @@ The header shows the queue state across workspaces; each card shows its own agen
 
 Git tasks use a separate worktree. Agents receive instructions to leave their changes unstaged unless you explicitly request a Git operation.
 Automatic workflow stops before the completion column for these tasks. Review the changes, then move the task to that column yourself.
-Todai commits the changes, removes the worktree, and retains the local branch. Archiving a task preserves its worktree and uncommitted changes.
+Todai commits the changes, removes the worktree, and retains the local branch. Archiving or resetting a task removes its worktree and local task branch, including uncommitted changes.
+If cleanup fails, the operation stops and preserves the task history. Correct the reported problem, then retry.
 
 Select **Open in VS Code** beside the task branch to open an active worktree. Use Source Control to inspect the changes.
 Select **Copy path** to use the worktree in another tool. VS Code must be installed on the same computer as Todai.
