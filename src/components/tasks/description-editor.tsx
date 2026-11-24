@@ -58,7 +58,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
   const pickerKeyboard = useRef<(event: KeyboardEvent) => boolean>(() => false);
   const keyboard = useRef<(event: KeyboardEvent) => boolean>(() => false);
   const editor = useEditor({
-    extensions: [StarterKit.configure({ link: { openOnClick: false } }), Markdown, TableKit, TaskList, TaskItem.configure({ nested: true }), Image],
+    extensions: [StarterKit.configure({ link: { openOnClick: false, markdownLinks: true } }), Markdown, TableKit, TaskList, TaskItem.configure({ nested: true }), Image],
     content: value,
     contentType: "markdown",
     immediatelyRender: false,

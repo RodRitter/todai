@@ -80,17 +80,23 @@ export const UntrustedContent: Story = {
 
 export const ReferencePills: Story = {
   args: {
-    children: "[@Reviewer](#agent/reviewer) [Comment by Reviewer](#comment/task/source) [Design evidence](#artifact/evidence/r1) [$Review](/workspace/skills/review/SKILL.md) [/src/app.tsx](/workspace/src/app.tsx)",
+    children: "Review [TASK-42](#task/42) with [@Reviewer](#agent/reviewer) [Comment by Reviewer](#comment/task/source) [Design evidence](#artifact/evidence/r1) [$Review](/workspace/skills/review/SKILL.md) [/src/app.tsx](/workspace/src/app.tsx)",
   },
   play: async ({ canvasElement }) => {
     const pills = Array.from(canvasElement.querySelectorAll<HTMLElement>('[data-slot="reference-chip"]'));
-    await expect(pills).toHaveLength(5);
+    await expect(pills).toHaveLength(6);
     const styles = pills.map((pill) => getComputedStyle(pill));
-    await expect(new Set(styles.map((style) => style.backgroundColor)).size).toBe(5);
+    await expect(new Set(styles.map((style) => style.backgroundColor)).size).toBe(1);
     await expect(new Set(styles.map((style) => style.color)).size).toBe(5);
-    for (const style of styles) {
+    for (const pill of pills) {
+      const style = getComputedStyle(pill);
+      await expect(style.fontSize).toBe(getComputedStyle(pill.parentElement!).fontSize);
+      await expect(getComputedStyle(pill, "::before").content).toBe(pill.dataset.referenceKind === "artifact" ? '"#"' : "none");
       await expect(style.fontWeight).toBe("400");
-      await expect(style.borderRadius).toBe("9999px");
+      await expect(style.backgroundColor).toBe("rgba(0, 0, 0, 0)");
+      await expect(style.padding).toBe("0px");
+      await expect(style.borderWidth).toBe("0px");
+      await expect(style.borderRadius).toBe("0px");
       for (const property of ["display", "padding", "lineHeight", "fontSize", "borderWidth"] as const) {
         await expect(style[property]).toBe(styles[0][property]);
       }
@@ -99,5 +105,10 @@ export const ReferencePills: Story = {
 };
 export const ReferencePillsDark: Story = {
   ...ReferencePills,
-  decorators: [(Story) => <div className="dark bg-background text-foreground"><Story /></div>],
+  globals: { theme: "dark" },
+};
+
+export const ReferencePillsNarrow: Story = {
+  ...ReferencePills,
+  decorators: [(Story) => <div className="max-w-64"><Story /></div>],
 };

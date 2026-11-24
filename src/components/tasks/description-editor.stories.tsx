@@ -305,10 +305,16 @@ export const ReferenceBadges: Story = {
       const references = Array.from(canvasElement.querySelectorAll<HTMLElement>(".tiptap a"));
       expect(references).toHaveLength(5);
       const styles = references.map((reference) => getComputedStyle(reference));
-      expect(new Set(styles.map((style) => style.backgroundColor)).size).toBe(5);
-      for (const style of styles) {
+      expect(new Set(styles.map((style) => style.backgroundColor)).size).toBe(1);
+      for (const reference of references) {
+        const style = getComputedStyle(reference);
+        expect(style.fontSize).toBe(getComputedStyle(reference.parentElement!).fontSize);
+        expect(getComputedStyle(reference, "::before").content).toBe(reference.getAttribute("href")?.startsWith("#artifact/") ? '"#"' : "none");
         expect(style.fontWeight).toBe("400");
-        expect(style.borderRadius).toBe("9999px");
+        expect(style.backgroundColor).toBe("rgba(0, 0, 0, 0)");
+        expect(style.padding).toBe("0px");
+        expect(style.borderWidth).toBe("0px");
+        expect(style.borderRadius).toBe("0px");
       }
     });
   },
@@ -319,7 +325,7 @@ export const ReferenceBadges: Story = {
 };
 export const ReferenceBadgesDark: Story = {
   ...ReferenceBadges,
-  decorators: [(Story) => <div className="dark bg-background text-foreground p-4"><Story /></div>],
+  globals: { theme: "dark" },
 };
 export const ReferenceBadgesNarrow: Story = {
   ...ReferenceBadges,
@@ -531,4 +537,34 @@ export const DisabledCompactReply: Story = {
 export const DisabledCompactMessage: Story = {
   ...DisabledCompactReply,
   args: { ...DisabledCompactReply.args, variant: "prompt" },
+};
+
+const markdownCommentHref = "#comment/5352fe07-43cc-475e-8133-6863f2c8a104/cd59f681-7dee-4be9-a719-0bde65e511ba";
+export const PastedCommentReference: Story = {
+  args: { variant: "prompt", label: "Your message", value: "" },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const editor = await canvas.findByRole("textbox", { name: args.label });
+    await userEvent.click(editor);
+    const clipboard = new DataTransfer();
+    clipboard.setData("text/plain", `[Comment by Rod](${markdownCommentHref})`);
+    editor.dispatchEvent(new ClipboardEvent("paste", { clipboardData: clipboard, bubbles: true, cancelable: true }));
+    await expect(await canvas.findByRole("link", { name: "Comment by Rod" })).toHaveAttribute("href", markdownCommentHref);
+    await expect(editor).toHaveTextContent("Comment by Rod");
+    await expect(args.onChange).toHaveBeenLastCalledWith(`[Comment by Rod](${markdownCommentHref})`);
+  },
+};
+export const PastedReplyReference: Story = {
+  ...PastedCommentReference,
+  args: { ...PastedCommentReference.args, variant: "reply", label: "Your reply" },
+};
+export const TypedCommentReference: Story = {
+  args: { ...PastedCommentReference.args },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const editor = await canvas.findByRole("textbox", { name: args.label });
+    await userEvent.type(editor, `[[Comment by Rod](${markdownCommentHref})`);
+    await expect(await canvas.findByRole("link", { name: "Comment by Rod" })).toHaveAttribute("href", markdownCommentHref);
+    await expect(args.onChange).toHaveBeenLastCalledWith(`[Comment by Rod](${markdownCommentHref})`);
+  },
 };

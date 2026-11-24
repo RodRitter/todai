@@ -118,78 +118,56 @@
   }
 }
 
-/* Reference badges share their format in the editor and rendered Markdown. */
+/* References share their text format in the editor and rendered Markdown. */
 :where([data-slot="reference-chip"], .tiptap a:is([href^="#agent/"], [href^="#artifact/"], [href^="#comment/"], [href^="/"]:not([href^="//"]))) {
-  --reference-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M14%202H6a2%202%200%200%200-2%202v16a2%202%200%200%200%202%202h12a2%202%200%200%200%202-2V8Z%22%2F%3E%3Cpath%20d%3D%22M14%202v6h6M8%2013h8M8%2017h6%22%2F%3E%3C%2Fsvg%3E");
   --reference-color: var(--color-slate-700);
-  --reference-background: var(--color-slate-100);
-  display: inline-block;
+  display: inline;
   max-width: 100%;
   vertical-align: baseline;
-  padding: 0.125rem 0.5rem;
-  border: 1px solid color-mix(in srgb, var(--reference-color) 20%, transparent);
-  border-radius: 9999px;
-  background: var(--reference-background);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--reference-color);
-  font-size: 0.875rem;
+  font-size: inherit;
   font-family: inherit;
   font-style: normal;
   font-weight: 400;
-  line-height: 1.25rem;
+  line-height: inherit;
   text-align: start;
   text-decoration: none;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
 }
-:where([data-slot="reference-chip"], .tiptap a:is([href^="#agent/"], [href^="#artifact/"], [href^="#comment/"], [href^="/"]:not([href^="//"])))::before {
-  content: "";
-  display: inline-block;
-  width: 0.875em;
-  height: 0.875em;
-  margin-right: 0.3em;
-  vertical-align: -0.1em;
-  background: currentColor;
-  mask: var(--reference-icon) center / contain no-repeat;
-}
 :is([data-reference-kind="agent"], .tiptap a[href^="#agent/"]) {
-  --reference-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%224%22%20y%3D%227%22%20width%3D%2216%22%20height%3D%2214%22%20rx%3D%222%22%2F%3E%3Cpath%20d%3D%22M12%203v4M2%2012h2M20%2012h2M8%2016h8M9%2011v1M15%2011v1%22%2F%3E%3C%2Fsvg%3E");
   --reference-color: var(--color-blue-700);
-  --reference-background: var(--color-blue-50);
 }
 :is([data-reference-kind="artifact"], .tiptap a[href^="#artifact/"]) {
-  --reference-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%227%22%20y%3D%227%22%20width%3D%2214%22%20height%3D%2214%22%20rx%3D%222%22%2F%3E%3Cpath%20d%3D%22M17%207V5a2%202%200%200%200-2-2H5a2%202%200%200%200-2%202v10a2%202%200%200%200%202%202h2%22%2F%3E%3C%2Fsvg%3E");
-  --reference-color: var(--color-violet-700);
-  --reference-background: var(--color-violet-50);
+  --reference-color: var(--color-orange-700);
+}
+:is([data-reference-kind="artifact"], .tiptap a[href^="#artifact/"])::before {
+  content: "#";
 }
 :is([data-reference-kind="comment"], .tiptap a[href^="#comment/"]) {
-  --reference-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M21%2011.5a8.4%208.4%200%200%201-.9%203.8%208.5%208.5%200%200%201-7.6%204.7%208.4%208.4%200%200%201-3.8-.9L3%2021l1.9-5.7a8.4%208.4%200%200%201-.9-3.8%208.5%208.5%200%200%201%204.7-7.6%208.4%208.4%200%200%201%203.8-.9H13a8.5%208.5%200%200%201%208%208v.5Z%22%2F%3E%3C%2Fsvg%3E");
   --reference-color: var(--color-amber-800);
-  --reference-background: var(--color-amber-50);
 }
 :is([data-reference-kind="skill"], .tiptap a[href$="/SKILL.md"]) {
-  --reference-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m12%203%202.5%206.5L21%2012l-6.5%202.5L12%2021l-2.5-6.5L3%2012l6.5-2.5Z%22%2F%3E%3C%2Fsvg%3E");
   --reference-color: var(--color-emerald-700);
-  --reference-background: var(--color-emerald-50);
 }
 .dark :where([data-slot="reference-chip"], .tiptap a:is([href^="#agent/"], [href^="#artifact/"], [href^="#comment/"], [href^="/"]:not([href^="//"]))) {
   --reference-color: var(--color-slate-300);
-  --reference-background: var(--color-slate-800);
 }
 .dark :is([data-reference-kind="agent"], .tiptap a[href^="#agent/"]) {
   --reference-color: var(--color-blue-300);
-  --reference-background: var(--color-blue-950);
 }
 .dark :is([data-reference-kind="artifact"], .tiptap a[href^="#artifact/"]) {
-  --reference-color: var(--color-violet-300);
-  --reference-background: var(--color-violet-950);
+  --reference-color: var(--color-orange-300);
 }
 .dark :is([data-reference-kind="comment"], .tiptap a[href^="#comment/"]) {
   --reference-color: var(--color-amber-300);
-  --reference-background: var(--color-amber-950);
 }
 .dark :is([data-reference-kind="skill"], .tiptap a[href$="/SKILL.md"]) {
   --reference-color: var(--color-emerald-300);
-  --reference-background: var(--color-emerald-950);
 }
 [data-slot="reference-chip"] strong,
 .tiptap a:is([href^="#agent/"], [href^="#artifact/"], [href^="#comment/"], [href^="/"]) strong {
