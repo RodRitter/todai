@@ -290,7 +290,7 @@ function TaskEditorSession({
       <DialogContent closeDisabled={busy} aria-describedby={undefined} size={expanded ? "expanded" : "large"} layout="workspace">
         <DialogHeader variant="task" className="w-[calc(100%+3rem)] max-w-5xl justify-self-center">
           <div className="col-start-1 row-start-1 min-w-0 space-y-2">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-2">
               <TaskId number={editing?.taskNumber} />
               <TaskBranch worktree={editing?.worktree} onRetry={editing?.status === completionColumn ? onRetryWorktree : undefined} />
             </div>

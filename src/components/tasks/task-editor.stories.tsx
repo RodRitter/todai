@@ -751,6 +751,7 @@ export const TaskBranchActive: Story = {
   play: async ({ canvasElement }) => {
     const page = within(canvasElement.ownerDocument.body);
     await expect(page.getByText("TASK-3")).toBeVisible();
+    await expect(page.getByRole("status", { name: "Worktree active" })).toHaveTextContent("Active");
     await expect(page.getByRole("link", { name: "Open in VS Code" })).toHaveAttribute("href", "vscode://file/projects/legacy/.git/todai/worktrees/example/");
     await expect(page.getByRole("button", { name: "Copy path" })).toBeVisible();
     await userEvent.click(page.getByRole("button", { name: "Branch details: todai/task-3-example" }));
@@ -771,4 +772,13 @@ export const TaskBranchCleanupFailed: Story = {
 export const TaskBranchLongDark: Story = {
   args: { open: true, task: { ...exampleTasks[2], worktree: { ...taskWorktree, branch: "todai/task-3-a-long-branch-name-that-must-fit-without-hiding-the-task-controls" } } },
   globals: { theme: "dark" },
+};
+
+export const TaskBranchCreating: Story = {
+  args: { open: true, task: { ...exampleTasks[2], worktree: { ...taskWorktree, status: "creating" } } },
+};
+
+export const TaskBranchLongLight: Story = {
+  ...TaskBranchLongDark,
+  globals: { theme: "light" },
 };
