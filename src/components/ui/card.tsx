@@ -29,7 +29,7 @@ function Card({
         dragging && "opacity-40",
         attention && "relative before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-destructive",
         elevation === "flat" && "shadow-none",
-        tone === "contrast" && "border-secondary-foreground/20 bg-secondary-foreground text-background dark:border-border/60 dark:bg-muted dark:text-foreground",
+        tone === "contrast" && "border-comment-header/20 bg-comment-header text-background dark:border-border/60 dark:text-foreground",
         tone === "muted" && "bg-muted/50 text-foreground",
         variant === "comment-header" && "rounded-lg",
         variant === "comment-header" || variant === "flush" ? "gap-0 overflow-hidden py-0" : variant === "compact"
