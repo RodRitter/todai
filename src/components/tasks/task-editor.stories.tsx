@@ -794,3 +794,17 @@ export const TaskBranchLongLight: Story = {
   ...TaskBranchLongDark,
   globals: { theme: "light" },
 };
+
+export const CustomBranch: Story = {
+  args: { open: true },
+  play: async ({ canvasElement, args }) => {
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await userEvent.type(dialog.getByLabelText("Title"), "Create a custom branch");
+    const branch = dialog.getByLabelText("Branch name (optional)");
+    await expect(branch).toHaveAccessibleDescription(/Leave blank/);
+    await userEvent.type(branch, "feature/custom");
+    await userEvent.click(dialog.getByRole("button", { name: "Create task" }));
+    await expect(args.onSave).toHaveBeenCalledWith(expect.objectContaining({ branchName: "feature/custom" }));
+  },
+};
+export const DarkCreate: Story = { args: { open: true }, globals: { theme: "dark" } };

@@ -186,6 +186,8 @@ export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
     }
     if (!db.prepare("PRAGMA table_info(tasks)").all().some((field) => field.name === "worktree"))
       db.exec("ALTER TABLE tasks ADD COLUMN worktree TEXT");
+    if (!db.prepare("PRAGMA table_info(tasks)").all().some((field) => field.name === "branchName"))
+      db.exec("ALTER TABLE tasks ADD COLUMN branchName TEXT");
     renameMemoryReviewer(db);
     db.exec("COMMIT");
   } catch (error) {

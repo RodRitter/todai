@@ -28,6 +28,7 @@ export type TaskWorktree = {
   error?: string;
 };
 export type Task = {
+  branchName?: string | null;
   worktree?: TaskWorktree | null;
   archivedAt?: string | null;
   creditUsage?: import("./usage.ts").TaskCreditUsage;

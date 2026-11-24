@@ -331,3 +331,43 @@ for (const action of ["archive", "reset"] as const) {
     } finally { f.close(); }
   });
 }
+
+for (const name of [undefined, "", "  ", "feature/custom"]) {
+  test(`new task branch name: ${JSON.stringify(name)}`, () => {
+    const f = fixture();
+    try {
+      const task = f.store.save({ ...f.task, id: "custom", branchName: name });
+      f.store.save({ ...task, title: "Updated", branchName: "ignored" });
+      const reopened = new TaskStore(join(f.root, "tasks.sqlite"));
+      try { reopened.taskWorkspace(task.id, f.workspace); } finally { reopened.close(); }
+      const record = f.store.readTask(task.id)!.worktree!;
+      if (name?.trim()) assert.equal(record.branch, name);
+      else assert.match(record.branch, /^todai\/task-/);
+      assert.equal(f.git("rev-parse", record.branch), record.baseCommit);
+    } finally { f.close(); }
+  });
+}
+
+test("existing branch names receive the next available numeric suffix", () => {
+  const f = fixture();
+  try {
+    f.git("branch", "feature/custom");
+    f.git("branch", "feature/custom-1");
+    for (const suffix of [2, 3]) {
+      const task = f.store.save({ ...f.task, id: `custom-${suffix}`, branchName: " feature/custom " });
+      const path = f.store.taskWorkspace(task.id, f.workspace);
+      assert.equal(f.store.readTask(task.id)!.worktree!.branch, `feature/custom-${suffix}`);
+      assert.equal(f.store.taskWorkspace(task.id, f.workspace), path);
+    }
+  } finally { f.close(); }
+});
+
+test("invalid branch names are rejected before task creation", () => {
+  const f = fixture();
+  try {
+    for (const branchName of ["bad name", "../bad", "-option", "HEAD", "@{-1}", "x.lock", 123]) {
+      assert.throws(() => f.store.save({ ...f.task, id: "invalid", branchName }), /valid Git branch name/);
+      assert.equal(f.store.readTask("invalid"), undefined);
+    }
+  } finally { f.close(); }
+});

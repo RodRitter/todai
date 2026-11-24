@@ -11,6 +11,20 @@ function git(cwd: string, ...args: string[]) {
   }).trim();
 }
 
+export function validateBranchName(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") throw new Error("Enter a valid Git branch name.");
+  const name = value.trim();
+  if (!name) return null;
+  try {
+    if (name.startsWith("-") || name === "HEAD") throw new Error();
+    execFileSync("git", ["check-ref-format", `refs/heads/${name}`], { stdio: "pipe" });
+  } catch {
+    throw new Error("Enter a valid Git branch name.");
+  }
+  return name;
+}
+
 export function planWorktree(workspace: string, task: Task, identity: string): TaskWorktree | undefined {
   let repository: string;
   try { repository = git(workspace, "rev-parse", "--show-toplevel"); }
@@ -23,10 +37,14 @@ export function planWorktree(workspace: string, task: Task, identity: string): T
   if (subdirectory && !git(repository, "ls-tree", "HEAD", "--", subdirectory)) return;
   const key = createHash("sha256").update(identity).digest("hex").slice(0, 16);
   const common = git(repository, "rev-parse", "--path-format=absolute", "--git-common-dir");
+  const requested = validateBranchName(task.branchName) ?? `todai/task-${task.taskNumber ?? "new"}-${key}`;
+  const branches = new Set(git(repository, "for-each-ref", "--format=%(refname:strip=2)", "refs/heads").split("\n"));
+  let branch = requested;
+  for (let suffix = 1; branches.has(branch); suffix += 1) branch = `${requested}-${suffix}`;
   return {
     repository, path: join(common, "todai", "worktrees", key),
     subdirectory,
-    branch: `todai/task-${task.taskNumber ?? "new"}-${key}`,
+    branch,
     baseBranch: git(repository, "rev-parse", "--abbrev-ref", "HEAD"),
     baseCommit: git(repository, "rev-parse", "HEAD"), status: "creating",
   };

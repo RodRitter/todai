@@ -264,6 +264,7 @@ function TaskEditorSession({
         agentStatus,
         autoWorkflow,
         autoRun,
+        branchName: String(data.get("branchName") ?? "").trim() || undefined,
         comments: [],
       });
       setSavedDescription(description);
@@ -468,6 +469,13 @@ function TaskEditorSession({
               >
                 <TooltipProvider>
                   <div className="flex flex-col gap-4">
+                    {!editing && <div className="space-y-2">
+                      <Label htmlFor={`${formId}-branch`}>Branch name (optional)</Label>
+                      <Input id={`${formId}-branch`} name="branchName" placeholder="Automatic branch name" aria-describedby={`${formId}-branch-help`} />
+                      <Label variant="metadata" asChild>
+                        <p id={`${formId}-branch-help`}>Leave blank to create a name automatically. If the name exists, add -1, -2, or the next available number.</p>
+                      </Label>
+                    </div>}
                     {boards && boards.length > 0 && <div className="grid min-h-9 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[14rem_minmax(0,1fr)]">
                       <Label htmlFor="task-board-select" variant="metadata"><LayoutGrid className="size-4 shrink-0" aria-hidden="true" />Board</Label>
                       <NativeSelect id="task-board-select" value={selectedBoard} disabled={busy || pendingRun} title={pendingRun ? "Stop or finish the agent run before moving boards." : undefined} variant="status" className="w-full max-w-48" onChange={(event) => {

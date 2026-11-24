@@ -1,4 +1,4 @@
-import { discardWorktree, closeWorktree, openWorktree, planWorktree, worktreeHead } from "./task-worktree.ts";
+import { discardWorktree, closeWorktree, openWorktree, planWorktree, validateBranchName, worktreeHead } from "./task-worktree.ts";
 import type { TaskWorktree } from "../domain/task.ts";
 import { searchMemoryEntries, readMemoryEntries, memoryContext, prepareMemoryChanges, applyMemoryChanges, memoryDocument, memoryChangesSummary } from "./memory-entries.ts";
 import { readMemory, readMemorySnapshot, memoryProfile } from "./workspace-memory.ts";
@@ -602,6 +602,7 @@ export class TaskStore {
     const task = input as Task;
     if (this.readTask(task.id)?.archivedAt) throw new Error("Archived tasks cannot be edited.");
     const existing = this.list().find((item) => item.id === task.id);
+    const branchName = existing?.branchName ?? (existing ? null : validateBranchName(task.branchName));
     const boardId = task.boardId ?? existing?.boardId ?? this.boardId;
     this.requireBoard(boardId);
     if (
@@ -652,7 +653,7 @@ export class TaskStore {
       }
       this.db
         .prepare(
-          `INSERT INTO tasks (workspaceId, boardId, id, title, description, status, autoWorkflow, autoRun) VALUES (workspace_id(), ?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO tasks (workspaceId, boardId, id, title, description, status, autoWorkflow, autoRun, branchName) VALUES (workspace_id(), ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET title=excluded.title, description=excluded.description,
         boardId=excluded.boardId, status=excluded.status, autoWorkflow=excluded.autoWorkflow, autoRun=excluded.autoRun
         WHERE tasks.workspaceId = excluded.workspaceId`,
@@ -665,6 +666,7 @@ export class TaskStore {
           task.status,
           Number(task.autoWorkflow ?? previous?.autoWorkflow ?? false),
           Number(task.autoRun ?? previous?.autoRun ?? false),
+          branchName,
         );
       // Description references become task attachments in the same transaction,
       // including artifacts created while composing a task that has no ID yet.
