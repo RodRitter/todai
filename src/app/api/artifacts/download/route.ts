@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export function GET(request: Request) {
   try {
     const params = new URL(request.url).searchParams;
-    const { artifact, bytes } = withArtifactStore(request, (store) => store.download(params.get("id") ?? "", params.get("revision") ?? undefined));
+    const { artifact, bytes } = withArtifactStore(request, (store) => store.download(params.get("id") ?? ""));
     const preview = params.get("preview") === "true";
     const kind = artifactPreviewKind(artifact);
     if (preview && kind === "unsupported") return Response.json({ error: "Preview unavailable for this file type. Download the stored file instead." }, { status: 415 });

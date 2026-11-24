@@ -378,8 +378,8 @@ function TaskEditorSession({
               <TabsList layout="wrap" aria-label="Task sections">
                 <TabsTrigger value="detail" disabled={busy}>Detail</TabsTrigger>
                 <ActivityTabTrigger value="activity" disabled={busy} agentStatus={editing.agentStatus} comments={editing.comments} />
-                <TabsTrigger value="artifacts" disabled={busy} aria-label="Artifacts" aria-description={`${artifactCount} artifacts`}>Artifacts<TabsCount count={artifactCount} /></TabsTrigger>
                 <TabsTrigger value="chat" disabled={busy} aria-label="Chat" aria-description={`${chatCount} messages`}>Chat<TabsCount count={chatCount} /></TabsTrigger>
+                <TabsTrigger value="artifacts" disabled={busy} aria-label="Artifacts" aria-description={`${artifactCount} artifacts`}>Artifacts<TabsCount count={artifactCount} /></TabsTrigger>
                 <TabsTrigger value="usage" disabled={busy} aria-label="Usage" aria-description={usageCredits === null ? "Credit estimate unavailable" : `${usageCredits} estimated credits`}>Usage{usageCredits !== null && <TabsCount count={usageCredits} />}</TabsTrigger>
               </TabsList>
               {editing && ((onRun && !pendingRun) || (pendingRun && onStop)) && (

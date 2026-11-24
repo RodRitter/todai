@@ -131,7 +131,7 @@ export const AllReferences: Story = {
     const original = globalThis.fetch;
     globalThis.fetch = async (input, options) => {
       const url = String(input);
-      if (url.startsWith("/api/artifacts?")) return Response.json([{ id: "notes", revisionId: "r1", revisionNumber: 1, title: "Notes", type: "markdown" }]);
+      if (url.startsWith("/api/artifacts?")) return Response.json([{ id: "notes", title: "Notes", type: "markdown" }]);
       if (url.startsWith("/api/references?")) {
         const skill = url.includes("kind=skill");
         return Response.json({ references: [{ kind: skill ? "skill" : "file", label: skill ? "$review" : "/src/app.ts", path: skill ? "/skills/review/SKILL.md" : "/src/app.ts", detail: skill ? "Review changes" : "Source file" }] });
@@ -144,7 +144,7 @@ export const AllReferences: Story = {
     const canvas = within(canvasElement);
     const page = within(canvasElement.ownerDocument.body);
     const editor = canvas.getByRole("textbox", { name: "Your chat message" });
-    for (const [trigger, name] of [["@Rev", /@Reviewer/], ["#Not", /Notes.*Revision/], ["$rev", /\$review/], ["/src", /\/src\/app.ts/]] as const) {
+    for (const [trigger, name] of [["@Rev", /@Reviewer/], ["#Not", /Notes.*markdown/], ["$rev", /\$review/], ["/src", /\/src\/app.ts/]] as const) {
       await userEvent.type(editor, trigger);
       await page.findByRole("option", { name });
       await userEvent.keyboard("{Enter}");
@@ -152,7 +152,7 @@ export const AllReferences: Story = {
     }
     await userEvent.click(canvas.getByRole("button", { name: "Send chat message" }));
     await expect(args.onSend).toHaveBeenCalledWith(expect.stringContaining("#agent/reviewer"));
-    await expect(args.onSend).toHaveBeenCalledWith(expect.stringContaining("#artifact/notes/r1"));
+    await expect(args.onSend).toHaveBeenCalledWith(expect.stringContaining("#artifact/notes"));
     await expect(args.onSend).toHaveBeenCalledWith(expect.stringContaining("/skills/review/SKILL.md"));
     await expect(args.onSend).toHaveBeenCalledWith(expect.stringContaining("/src/app.ts"));
   },

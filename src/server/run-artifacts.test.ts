@@ -27,7 +27,7 @@ test("running agents publish visible artifacts with trusted provenance and pin t
       assert.equal(library.read(artifact.id).runId, run.id);
       assert.equal(library.read(artifact.id).taskId, "task");
       assert.equal(library.read(artifact.id).creator, "Builder");
-      await rpc(artifacts, "nominate_artifact", { artifactId: artifact.id, revisionId: artifact.revisionId });
+      await rpc(artifacts, "nominate_artifact", { artifactId: artifact.id });
       return "Report is ready";
     });
     await service.drain();
@@ -69,7 +69,7 @@ test("live tools isolate workspaces, reject ownership claims and expose no archi
       assert.ok(artifacts);
       assert.deepEqual(await rpc(artifacts, "search_artifacts"), []);
       for (const name of ["read_artifact", "link_artifact", "nominate_artifact", "publish_artifact"]) {
-        const args = name === "publish_artifact" ? { artifactId: hidden.id, title: "Changed", type: "text", content: "overwrite" } : name === "nominate_artifact" ? { artifactId: hidden.id, revisionId: hidden.revisionId } : { artifactId: hidden.id };
+        const args = name === "publish_artifact" ? { artifactId: hidden.id, title: "Changed", type: "text", content: "overwrite" } : name === "nominate_artifact" ? { artifactId: hidden.id } : { artifactId: hidden.id };
         await assert.rejects(rpc(artifacts, name, args), /workspace/);
       }
       for (const key of ["workspaceId", "taskId", "runId", "creator"]) await assert.rejects(rpc(artifacts, "publish_artifact", { title: "Invalid", type: "text", content: "No", [key]: "spoofed" }), /Invalid argument/);
@@ -84,7 +84,7 @@ test("live tools isolate workspaces, reject ownership claims and expose no archi
   } finally { foreign.close(); f.close(); }
 });
 
-test("live tools publish files, links and revisions, reuse task context, and preserve feedback attachments", async () => {
+test("live tools publish files, links and document edits, reuse task context, and preserve feedback attachments", async () => {
   const f = fixture();
   try {
     const prior = f.library.create({ title: "Prior", type: "markdown", content: "# Prior", creator: "Human" });
@@ -102,18 +102,18 @@ test("live tools publish files, links and revisions, reuse task context, and pre
       assert.ok(f.library.forTask("task").some((item) => item.artifact.id === file.id && item.explicit));
       await rpc(artifacts, "unlink_artifact", { artifactId: file.id });
       assert.equal(f.library.forTask("task").some((item) => item.artifact.id === file.id), false);
-      await rpc(artifacts, "nominate_artifact", { artifactId: prior.id, revisionId: prior.revisionId });
-      await rpc(artifacts, "nominate_artifact", { artifactId: prior.id, revisionId: prior.revisionId });
+      await rpc(artifacts, "nominate_artifact", { artifactId: prior.id });
+      await rpc(artifacts, "nominate_artifact", { artifactId: prior.id });
       const revised = await rpc(artifacts, "publish_artifact", { artifactId: prior.id, title: "Updated", type: "markdown", content: "# Updated" });
-      assert.equal(revised.revisionNumber, 2);
-      assert.equal((await rpc(artifacts, "read_artifact", { artifactId: prior.id, revisionId: prior.revisionId })).content, "# Prior");
+      assert.equal(revised.id, prior.id);
+      assert.equal((await rpc(artifacts, "read_artifact", { artifactId: prior.id })).content, "# Updated");
       assert.equal((await rpc(artifacts, "search_artifacts", { search: "Updated" }))[0].id, prior.id);
       return JSON.stringify({ type: "feedback_request", question: "Approve the report?", recommendation: "Use the original" });
     }).drain();
     assert.equal(f.store.history()[0].status, "Waiting", f.store.history()[0].summary!);
     const comment = f.store.list()[0].comments![0];
     assert.equal(comment.feedbackStatus, "pending");
-    assert.deepEqual(comment.artifacts, [{ artifactId: prior.id, revisionId: prior.revisionId }]);
+    assert.deepEqual(comment.artifacts, [{ artifactId: prior.id }]);
     assert.equal(comment.runId, f.store.history()[0].id);
   } finally { f.close(); }
 });
@@ -121,12 +121,12 @@ test("live tools publish files, links and revisions, reuse task context, and pre
 for (const ending of ["failure", "stop", "move"] as const) {
   test(`published results survive ${ending} without attaching nominations to system notices`, async () => {
     const f = fixture();
-    let published!: { id: string; revisionId: string };
+    let published!: { id: string };
     try {
       await new ExecutionService(f.store, async ({ artifacts, run }) => {
         assert.ok(artifacts);
         published = await rpc(artifacts, "publish_artifact", { title: "Saved", type: "text", content: "Keep me" });
-        await rpc(artifacts, "nominate_artifact", { artifactId: published.id, revisionId: published.revisionId });
+        await rpc(artifacts, "nominate_artifact", { artifactId: published.id });
         if (ending === "failure") throw new Error("Executor crashed");
         if (ending === "stop") f.store.stopExecution(run.id);
         else f.store.save({ ...f.store.list()[0], status: "To do" });
@@ -173,8 +173,8 @@ process.stdin.on('end', async () => {
     if (!listed.tools.some(tool => tool.name === 'publish_artifact')) throw Error('Publication missing');
     const result = await rpc('tools/call', { name: 'publish_artifact', arguments: { title: 'Executor result', type: 'markdown', content: '# Live result' } });
     const artifact = JSON.parse(result.content[0].text);
-    await rpc('tools/call', { name: 'nominate_artifact', arguments: { artifactId: artifact.id, revisionId: artifact.revisionId } });
-    const summary = '[Executor result](#artifact/' + artifact.id + '/' + artifact.revisionId + ')';
+    await rpc('tools/call', { name: 'nominate_artifact', arguments: { artifactId: artifact.id } });
+    const summary = '[Executor result](#artifact/' + artifact.id + ')';
     if (${JSON.stringify(tool)} === 'codex') fs.writeFileSync(args[args.indexOf('--output-last-message') + 1], summary);
     else process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result: summary }));
   } catch (error) { process.stderr.write(String(error)); process.exitCode = 1; }
@@ -238,10 +238,10 @@ test("generic chat can publish, read, revise and link artifacts without task com
       assert.equal(created.creator, "Agent");
       assert.equal((await rpc(endpoint, "read_artifact", { artifactId: created.id })).content, "Report content");
       assert.ok((await rpc(endpoint, "search_artifacts")).some((item: { id: string }) => item.id === created.id));
-      const revised = await rpc(endpoint, "publish_artifact", { artifactId: created.id, title: "Chat report", type: "markdown", content: "Revised report" });
-      await rpc(endpoint, "nominate_artifact", { artifactId: created.id, revisionId: revised.revisionId });
+      await rpc(endpoint, "publish_artifact", { artifactId: created.id, title: "Chat report", type: "markdown", content: "Revised report" });
+      await rpc(endpoint, "nominate_artifact", { artifactId: created.id });
       assert.equal(f.library.forTask("task").length, 1);
-      return `Saved [Chat report](#artifact/${created.id}/${revised.revisionId}).`;
+      return `Saved [Chat report](#artifact/${created.id}).`;
     });
     assert.equal(result.error, null);
     assert.equal(result.messages.length, 2);

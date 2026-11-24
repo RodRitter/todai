@@ -55,7 +55,7 @@ export const DescriptionPreview: Story = {
   },
 };
 export const DescriptionArtifactPreview: Story = {
-  render: () => <DescriptionField value="See [Notes](#artifact/quick/r1) for context." disabled={false} onChange={fn()} />,
+  render: () => <DescriptionField value="See [Notes](#artifact/quick) for context." disabled={false} onChange={fn()} />,
   beforeEach: () => {
     const original = globalThis.fetch;
     globalThis.fetch = async (input, options) => {
@@ -104,9 +104,9 @@ export const SurfaceFocus: Story = {
   },
 };
 
-export const PinnedCitation: Story = { args: { artifacts: true, value: "See [Design evidence](#artifact/evidence/r1) alongside [@Reviewer](#agent/reviewer)." } };
+export const DocumentCitation: Story = { args: { artifacts: true, value: "See [Design evidence](#artifact/evidence/r1) alongside [@Reviewer](#agent/reviewer)." } };
 
-const artifact = { id: "quick", revisionId: "r1", revisionNumber: 1, title: "Notes", type: "markdown", creator: "You" };
+const artifact = { id: "quick", title: "Notes", type: "markdown", creator: "You" };
 const artifactSaved = fn();
 const artifactRequest = fn();
 export const QuickArtifact: Story = {
@@ -148,7 +148,7 @@ export const QuickArtifact: Story = {
     await userEvent.keyboard("A new document");
     await userEvent.click(within(reopened).getByRole("button", { name: "Save and attach" }));
     await waitFor(() => expect(artifactSaved).toHaveBeenCalledWith(artifact));
-    await expect(await canvas.findByRole("link", { name: "Notes" })).toHaveAttribute("href", "#artifact/quick/r1");
+    await expect(await canvas.findByRole("link", { name: "Notes" })).toHaveAttribute("href", "#artifact/quick");
   },
 };
 
@@ -165,10 +165,10 @@ export const ExistingArtifact: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole("textbox", { name: "Description" }));
     await userEvent.keyboard("#Notes");
-    await within(canvasElement.ownerDocument.body).findByRole("option", { name: /Notes Revision/ });
+    await within(canvasElement.ownerDocument.body).findByRole("option", { name: /Notes markdown/ });
     await userEvent.keyboard("{Enter}");
     await expect(artifactSaved).toHaveBeenCalledWith(artifact);
-    await expect(canvas.getByRole("link", { name: "Notes" })).toHaveAttribute("href", "#artifact/quick/r1");
+    await expect(canvas.getByRole("link", { name: "Notes" })).toHaveAttribute("href", "#artifact/quick");
     await expect(within(canvasElement.ownerDocument.body).queryByRole("dialog")).not.toBeInTheDocument();
   },
 };
@@ -219,9 +219,9 @@ export const ReplacePastedLinkWithArtifact: Story = {
     selection?.addRange(range);
     canvasElement.ownerDocument.dispatchEvent(new Event("selectionchange"));
     await userEvent.keyboard("#Notes");
-    await within(canvasElement.ownerDocument.body).findByRole("option", { name: /Notes Revision/ });
+    await within(canvasElement.ownerDocument.body).findByRole("option", { name: /Notes markdown/ });
     await userEvent.keyboard("{Enter}");
-    await expect(canvas.getByRole("link", { name: "Notes" })).toHaveAttribute("href", "#artifact/quick/r1");
+    await expect(canvas.getByRole("link", { name: "Notes" })).toHaveAttribute("href", "#artifact/quick");
     await expect(editor).toHaveTextContent("See Notes for context.");
     await expect(artifactSaved).toHaveBeenCalledWith(artifact);
   },
@@ -241,7 +241,7 @@ export const LongDescriptionSuggestions: Story = {
     await userEvent.click(editor);
     placeCaret(editor, true);
     await userEvent.keyboard("#Notes");
-    const option = await page.findByRole("option", { name: /Notes Revision/ });
+    const option = await page.findByRole("option", { name: /Notes markdown/ });
     await waitFor(() => expect(editor).toHaveFocus());
     const list = page.getByRole("listbox", { name: "Workspace artifacts" });
     await waitFor(() => {
@@ -373,11 +373,11 @@ export const UnifiedTags: Story = {
     const page = within(canvasElement.ownerDocument.body);
     const editor = await canvas.findByRole("textbox", { name: "Description" });
     await userEvent.type(editor, "@review");
-    for (const name of [/@Reviewer/, /Review notes Revision/, /\$code-review/, /\/review.ts/]) await page.findByRole("option", { name });
+    for (const name of [/@Reviewer/, /Review notes markdown/, /\$code-review/, /\/review.ts/]) await page.findByRole("option", { name });
     await waitFor(() => expect(editor).toHaveFocus());
     await userEvent.click(page.getByRole("button", { name: "Artifacts" }));
     await expect(page.getByRole("textbox", { name: "Search tags" })).toHaveValue("review");
-    await page.findByRole("option", { name: /Review notes Revision/ });
+    await page.findByRole("option", { name: /Review notes markdown/ });
     await expect(page.queryByRole("option", { name: /@Reviewer/ })).not.toBeInTheDocument();
     await userEvent.click(page.getByRole("button", { name: "All" }));
     await page.findByRole("option", { name: /\$code-review/ });
@@ -389,7 +389,7 @@ export const UnifiedTags: Story = {
     await expect(canvas.getByRole("link", { name: "$code-review" })).toHaveAttribute("href", "/workspace/skills/code-review/SKILL.md");
     await waitFor(() => expect(editor).toHaveFocus());
     await userEvent.click(canvas.getByRole("button", { name: "Add tag" }));
-    await page.findByRole("option", { name: /Review notes Revision/ });
+    await page.findByRole("option", { name: /Review notes markdown/ });
   },
 };
 export const UnifiedTagsDark: Story = { ...UnifiedTags, globals: { theme: "dark" } };
@@ -402,7 +402,7 @@ export const UnifiedTagSelection: Story = {
     await userEvent.type(editor, "See ");
     for (const [option, label, href] of [
       [/@Reviewer/, "@Reviewer", "#agent/reviewer"],
-      [/Review notes Revision/, "Review notes", "#artifact/quick/r1"],
+      [/Review notes markdown/, "Review notes", "#artifact/quick"],
       [/\$code-review/, "$code-review", "/workspace/skills/code-review/SKILL.md"],
       [/\/review.ts/, "/review.ts", "/workspace/src/review.ts"],
     ] as const) {
@@ -411,7 +411,7 @@ export const UnifiedTagSelection: Story = {
       await expect(canvas.getByRole("link", { name: label })).toHaveAttribute("href", href);
     }
     await expect(editor).toHaveTextContent("See @Reviewer Review notes $code-review /review.ts");
-    await expect(artifactSaved).toHaveBeenCalledWith(expect.objectContaining({ id: "quick", revisionId: "r1" }));
+    await expect(artifactSaved).toHaveBeenCalledWith(expect.objectContaining({ id: "quick" }));
   },
 };
 export const UnifiedTagsEmpty: Story = {
@@ -447,7 +447,7 @@ export const UnifiedTagsFailure: Story = {
     await page.findByText("Could not load: Artifacts.");
     await expect(page.getByRole("option", { name: /@Reviewer/ })).toBeVisible();
     await userEvent.click(page.getByRole("button", { name: "Retry" }));
-    await page.findByRole("option", { name: /Review notes Revision/ });
+    await page.findByRole("option", { name: /Review notes markdown/ });
     await expect(page.queryByText("Could not load: Artifacts.")).not.toBeInTheDocument();
   },
 };
@@ -457,7 +457,7 @@ export const UnifiedTagShortcuts: Story = {
     const canvas = within(canvasElement);
     const page = within(canvasElement.ownerDocument.body);
     const editor = await canvas.findByRole("textbox", { name: "Description" });
-    for (const [prefix, filter, name] of [["$code", "Skills", /\$code-review/], ["/review", "Files", /\/review.ts/], ["#Review", "Artifacts", /Review notes Revision/]] as const) {
+    for (const [prefix, filter, name] of [["$code", "Skills", /\$code-review/], ["/review", "Files", /\/review.ts/], ["#Review", "Artifacts", /Review notes markdown/]] as const) {
       await userEvent.type(editor, prefix);
       await expect(page.getByRole("button", { name: filter })).toHaveAttribute("aria-pressed", "true");
       await page.findByRole("option", { name });

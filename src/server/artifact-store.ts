@@ -46,7 +46,7 @@ export class ArtifactStore {
     return this.publish(input);
   }
 
-  revise(id: string, input: ArtifactInput): Artifact {
+  update(id: string, input: ArtifactInput): Artifact {
     return this.publish(input, id);
   }
 
@@ -89,11 +89,11 @@ export class ArtifactStore {
       const previous = id ? this.read(id) : undefined;
       const now = new Date().toISOString();
       const artifact: Artifact = {
-        id: id ?? randomUUID(), revisionId: randomUUID(), revisionNumber: (previous?.revisionNumber ?? 0) + 1, archived: previous?.archived ?? false, workspaceId: this.workspaceId, title, description,
+        id: id ?? randomUUID(), archived: previous?.archived ?? false, workspaceId: this.workspaceId, title, description,
         type: input.type, creator, createdAt: previous?.createdAt ?? now, updatedAt: now,
         filename, mediaType, byteSize: bytes?.length ?? null, url,
       };
-      // The latest snapshot and immutable revision publish in one transaction.
+      // Save the document content and metadata in one transaction.
       this.db.prepare(`INSERT INTO artifacts (${fields}, content) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET title=excluded.title, description=excluded.description,
         type=excluded.type, creator=excluded.creator, updatedAt=excluded.updatedAt, filename=excluded.filename,
@@ -101,11 +101,9 @@ export class ArtifactStore {
         artifact.id, artifact.workspaceId, title, description, artifact.type, creator,
         artifact.createdAt, now, filename, mediaType, artifact.byteSize, url, bytes,
       );
-      this.db.prepare(`INSERT INTO artifact_revisions (${fields}, content, revisionId, revisionNumber)
-        SELECT ${fields}, content, ?, ? FROM artifacts WHERE id = ?`).run(artifact.revisionId, artifact.revisionNumber, artifact.id);
-      if (run) this.db.prepare("UPDATE artifact_revisions SET runId = ?, taskId = ? WHERE revisionId = ?").run(this.runId!, run.taskId, artifact.revisionId);
-      if (this.chat) this.db.prepare("UPDATE artifact_revisions SET taskId = ? WHERE revisionId = ?").run(this.chat.taskId, artifact.revisionId);
-      return this.read(artifact.id, artifact.revisionId);
+      this.db.prepare("UPDATE artifacts SET runId = ?, taskId = ? WHERE id = ?")
+        .run(this.runId ?? null, run?.taskId ?? this.chat?.taskId ?? null, artifact.id);
+      return this.read(artifact.id);
     });
   }
 
@@ -131,13 +129,13 @@ export class ArtifactStore {
   forTask(taskId: string): TaskArtifact[] {
     this.assertTask(taskId);
     const links = this.db.prepare("SELECT artifactId FROM task_artifacts WHERE taskId = ? ORDER BY artifactId").all(taskId);
-    const citations = this.db.prepare(`SELECT ca.artifactId, ca.revisionId, ca.commentId FROM comment_artifacts ca
-      JOIN comments c ON c.id = ca.commentId WHERE c.taskId = ? AND c.workspaceId = ? ORDER BY c.createdAt, c.id, ca.revisionId`).all(taskId, this.workspaceId);
+    const citations = this.db.prepare(`SELECT ca.artifactId, ca.commentId FROM comment_artifacts ca
+      JOIN comments c ON c.id = ca.commentId WHERE c.taskId = ? AND c.workspaceId = ? ORDER BY c.createdAt, c.id, ca.artifactId`).all(taskId, this.workspaceId);
     const ids = new Set([...links, ...citations].map((row) => row.artifactId as string));
     return [...ids].map((id) => ({
       artifact: this.read(id), explicit: links.some((row) => row.artifactId === id),
       comments: citations.filter((row) => row.artifactId === id).map((row) => ({
-        commentId: row.commentId as string, artifact: this.read(id, row.revisionId as string),
+        commentId: row.commentId as string, artifact: this.read(id),
       })),
     }));
   }
@@ -154,14 +152,12 @@ export class ArtifactStore {
     ).map((row) => this.read(row.id as string));
   }
 
-  read(id: string, revisionId?: string): Artifact {
+  read(id: string): Artifact {
     this.assertActive();
-    const artifact = this.db.prepare(`SELECT ${fields}, revisionId, revisionNumber, runId, taskId FROM artifact_revisions
-      WHERE workspaceId = ? AND id = ? AND (? IS NULL OR revisionId = ?)
-      ORDER BY revisionNumber DESC LIMIT 1`).get(this.workspaceId, id, revisionId ?? null, revisionId ?? null);
+    const artifact = this.db.prepare(`SELECT ${fields}, archived, runId, taskId FROM artifacts
+      WHERE workspaceId = ? AND id = ?`).get(this.workspaceId, id);
     if (!artifact) throw new ArtifactError("Artifact not found in this workspace.");
-    const current = this.db.prepare("SELECT archived FROM artifacts WHERE id = ? AND workspaceId = ?").get(id, this.workspaceId)!;
-    return { ...artifact, archived: Boolean(current.archived) } as Artifact;
+    return { ...artifact, archived: Boolean(artifact.archived) } as Artifact;
   }
 
   archive(id: string): Artifact {
@@ -170,16 +166,10 @@ export class ArtifactStore {
     return this.read(id);
   }
 
-  history(id: string): Artifact[] {
-    this.read(id);
-    return this.db.prepare("SELECT revisionId FROM artifact_revisions WHERE workspaceId = ? AND id = ? ORDER BY revisionNumber DESC")
-      .all(this.workspaceId, id).map((row) => this.read(id, row.revisionId as string));
-  }
-
-  download(id: string, revisionId?: string) {
-    const artifact = this.read(id, revisionId);
+  download(id: string) {
+    const artifact = this.read(id);
     if (artifact.type === "link") throw new ArtifactError("External links have no stored content.");
-    const row = this.db.prepare("SELECT content FROM artifact_revisions WHERE workspaceId = ? AND id = ? AND revisionId = ?").get(this.workspaceId, id, artifact.revisionId)!;
+    const row = this.db.prepare("SELECT content FROM artifacts WHERE workspaceId = ? AND id = ?").get(this.workspaceId, id)!;
     return { artifact, bytes: Buffer.from(row.content as Uint8Array) };
   }
 

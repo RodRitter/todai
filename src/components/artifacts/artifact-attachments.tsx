@@ -7,7 +7,8 @@ import { workspaceFetch } from "@/lib/workspace-fetch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover } from "radix-ui";
-import { Eye, FileText, Link2, MessageSquare, Paperclip, Plus, Unlink } from "lucide-react";
+import { Eye, MessageSquare, Paperclip, Plus, Unlink } from "lucide-react";
+import { ArtifactTable } from "./artifact-table";
 import { ArtifactViewer } from "./artifact-viewer";
 import { toast } from "@/components/ui/toast";
 
@@ -16,24 +17,22 @@ async function checked(response: Response) {
   return response;
 }
 
-export function ArtifactOpenButton({ artifact, latest = false, compact = false }: { artifact: Artifact; latest?: boolean; compact?: boolean }) {
+export function ArtifactOpenButton({ artifact, compact = false }: { artifact: Artifact; compact?: boolean }) {
   const [selected, setSelected] = useState<Artifact | null>(null);
   const [busy, setBusy] = useState(false);
   async function open() {
     setBusy(true);
     try {
-      setSelected(latest
-        ? await (await checked(await workspaceFetch(`/api/artifacts?${new URLSearchParams({ id: artifact.id })}`))).json()
-        : artifact);
+      setSelected(await (await checked(await workspaceFetch(`/api/artifacts?${new URLSearchParams({ id: artifact.id })}`))).json());
     } catch (error) { toast.error(error instanceof Error ? error.message : "Could not open artifact."); }
     finally { setBusy(false); }
   }
-  const label = latest ? `Open latest revision of ${artifact.title}` : `Open ${artifact.title}, revision ${artifact.revisionNumber}`;
+  const label = `Open ${artifact.title}`;
   return <>
     <Button type="button" size={compact ? "icon-xs" : "sm"} variant={compact ? "ghost" : "outline"} disabled={busy} aria-label={label} title={label} onClick={() => void open()}>
-      {compact ? <Eye aria-hidden="true" /> : latest ? "Open latest revision" : `Open · r${artifact.revisionNumber}`}
+      {compact ? <Eye aria-hidden="true" /> : "Open"}
     </Button>
-    {selected && <ArtifactViewer key={selected.revisionId} artifact={selected} onClose={() => setSelected(null)} />}
+    {selected && <ArtifactViewer key={selected.id} artifact={selected} onClose={() => setSelected(null)} />}
   </>;
 }
 
@@ -59,7 +58,7 @@ export function ArtifactPicker({ onSelect, disabled, label = "Attach artifact", 
 <div className={compact ? "col-span-2 space-y-2" : "space-y-2"}>
       <Input aria-label="Search workspace artifacts" placeholder="Search artifacts" value={search} onChange={(event) => setSearch(event.target.value)} disabled={disabled} />
       {loading ? <p role="status" className="text-sm">Loading artifacts…</p> : error ? <div role="alert"><p>{error}</p><Button type="button" variant="outline" onClick={() => void load()}>Retry</Button></div> : <ScrollArea className="max-h-48"><ul className="space-y-1 ">
-        {visible.map((artifact) => <li key={artifact.id}><Button type="button" variant="ghost" size="row" disabled={disabled} onClick={() => { onSelect(artifact); setOpen(false); }}>{artifact.title} · r{artifact.revisionNumber} · {artifact.type}</Button></li>)}
+        {visible.map((artifact) => <li key={artifact.id}><Button type="button" variant="ghost" size="row" disabled={disabled} onClick={() => { onSelect(artifact); setOpen(false); }}>{artifact.title} · {artifact.type}</Button></li>)}
         {!visible.length && <li className="text-sm text-muted-foreground">No matching artifacts.</li>}
       </ul></ScrollArea>}
     </div>
@@ -79,14 +78,14 @@ export function CommentAttachments({ references }: { references: ArtifactReferen
   useEffect(() => {
     const controller = new AbortController();
     const refs: ArtifactReference[] = JSON.parse(key);
-    Promise.all(refs.map(async (ref) => (await checked(await workspaceFetch(`/api/artifacts?${new URLSearchParams({ id: ref.artifactId, revision: ref.revisionId })}`, { signal: controller.signal }))).json()))
+    Promise.all(refs.map(async (ref) => (await checked(await workspaceFetch(`/api/artifacts?${new URLSearchParams({ id: ref.artifactId })}`, { signal: controller.signal }))).json()))
       .then((items: Artifact[]) => { setArtifacts(items); setError(""); })
       .catch((error: Error) => { if (!controller.signal.aborted) setError(error.message); });
     return () => controller.abort();
   }, [key, attempt]);
   return <div aria-label="Comment attachments" className="space-y-2">
     {error && <div role="alert"><p>{error}</p><Button type="button" size="sm" variant="outline" onClick={() => setAttempt((value) => value + 1)}>Retry attachments</Button></div>}
-    {artifacts.map((artifact) => <div key={artifact.revisionId} className="flex min-w-0 items-center gap-3 rounded-lg border px-3 py-2 text-sm"><Paperclip aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" /><div className="min-w-0 flex-1"><p className="truncate font-medium" title={artifact.title}>{artifact.title}</p><p className="text-xs text-muted-foreground"><span className="capitalize">{artifactCategory(artifact)}</span> · Pinned revision {artifact.revisionNumber}{artifact.archived ? " · Archived" : ""}</p></div><ArtifactOpenButton artifact={artifact} compact /></div>)}
+    {artifacts.map((artifact) => <div key={artifact.id} className="flex min-w-0 items-center gap-3 rounded-lg border px-3 py-2 text-sm"><Paperclip aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" /><div className="min-w-0 flex-1"><p className="truncate font-medium" title={artifact.title}>{artifact.title}</p><p className="text-xs text-muted-foreground"><span className="capitalize">{artifactCategory(artifact)}</span>{artifact.archived ? " · Archived" : ""}</p></div><ArtifactOpenButton artifact={artifact} compact /></div>)}
   </div>;
 }
 
@@ -108,48 +107,39 @@ export function TaskArtifacts({ taskId, commentsKey, onNavigateComment, onCountC
     window.addEventListener("focus", refresh);
     return () => { controller.abort(); window.removeEventListener("focus", refresh); };
   }, [taskId, commentsKey, attempt, onCountChange]);
-  async function change(artifactId: string, remove = false) {
+  async function unlink(artifactId: string) {
     setBusy(true);
     try {
-      const response = await checked(await workspaceFetch("/api/artifacts/links", { method: remove ? "DELETE" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ taskId, artifactId }) }));
+      const response = await checked(await workspaceFetch("/api/artifacts/links", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ taskId, artifactId }) }));
       const items: TaskArtifact[] = await response.json();
       setLinks(items); onCountChange?.(items.length); setError("");
     } catch (error) { setError(error instanceof Error ? error.message : "Could not change artifact link."); }
     finally { setBusy(false); }
   }
   return <section aria-label="Task artifacts" className="space-y-3">
-    <div className="grid grid-cols-[1fr_auto] items-center gap-2">
-      <h3 className="text-sm font-semibold">Artifacts</h3>
-      <ArtifactPicker compact label="Link artifact to task" disabled={busy} onSelect={(artifact) => void change(artifact.id)} />
-    </div>
+    <h3 className="text-sm font-semibold">Artifacts</h3>
     {error && <div role="alert"><p>{error}</p><Button type="button" variant="outline" onClick={() => setAttempt((value) => value + 1)}>Retry</Button></div>}
     {loading && <p role="status">Loading task artifacts…</p>}
-    {!loading && !error && !links.length && <p className="text-sm text-muted-foreground">No linked artifacts yet.</p>}
-    <ul className="space-y-1">
-      {links.map(({ artifact, explicit, comments }) => <li key={artifact.id} className="group flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted/60 focus-within:bg-muted/60">
-        {artifact.type === "link" ? <Link2 aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" /> : <FileText aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />}
-        <span className="min-w-0 flex-1 truncate font-medium" title={artifact.title}>{artifact.title}</span>
-        <span className="shrink-0 text-xs text-muted-foreground">{artifact.archived ? "Archived" : explicit ? "Latest" : "Pinned"}</span>
-        <div className="flex shrink-0 items-center gap-0.5 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 has-[[data-state=open]]:opacity-100">
-          {explicit && <ArtifactOpenButton artifact={artifact} latest compact />}
+    {!loading && !error && !links.length && <p className="text-sm text-muted-foreground">No artifacts yet. Link artifacts through comments, the task description, or chat.</p>}
+    {links.length > 0 && <ArtifactTable artifacts={links.map(({ artifact }) => artifact)} label="Task artifacts" renderActions={(artifact) => {
+      const { explicit, comments } = links.find((link) => link.artifact.id === artifact.id)!;
+      return <>
           {comments.length > 0 && <Popover.Root>
             <Popover.Trigger asChild>
               <Button type="button" size="icon-xs" variant="ghost"  aria-label={`View ${comments.length} comment ${comments.length === 1 ? "reference" : "references"} for ${artifact.title}`} title="Comment references"><MessageSquare aria-hidden="true" className="size-4" /></Button>
             </Popover.Trigger>
             <Popover.Portal>
               <Popover.Content sideOffset={6} align="end" className="z-50 w-80 max-w-[calc(100vw-2rem)] space-y-2 rounded-md border bg-popover p-3 text-popover-foreground shadow-md">
-                <p className="text-xs font-semibold">Pinned comment references</p>
-                {comments.map((citation, index) => <div key={`${citation.commentId}:${citation.artifact.revisionId}`} className="flex items-center gap-2 text-sm">
+                <p className="text-xs font-semibold">Comment references</p>
+                {comments.map((citation, index) => <div key={`${citation.commentId}:${citation.artifact.id}`} className="flex items-center gap-2 text-sm">
                   <Popover.Close asChild><a className="min-w-0 flex-1 truncate underline underline-offset-4" href={`#comment-${citation.commentId}`} onClick={() => onNavigateComment?.(citation.commentId)} title={citation.artifact.title}>Comment {index + 1} · {citation.artifact.title}</a></Popover.Close>
-                  <span className="shrink-0 text-xs text-muted-foreground">r{citation.artifact.revisionNumber}</span>
                   <ArtifactOpenButton artifact={citation.artifact} compact />
                 </div>)}
               </Popover.Content>
             </Popover.Portal>
           </Popover.Root>}
-          {explicit && <Button type="button" size="icon-xs" variant="ghost-destructive"  disabled={busy} aria-label={`Unlink ${artifact.title} from task`} title="Unlink from task" onClick={() => void change(artifact.id, true)}><Unlink aria-hidden="true" /></Button>}
-        </div>
-      </li>)}
-    </ul>
+          {explicit && <Button type="button" size="icon-xs" variant="ghost-destructive"  disabled={busy} aria-label={`Unlink ${artifact.title} from task`} title="Unlink from task" onClick={() => void unlink(artifact.id)}><Unlink aria-hidden="true" /></Button>}
+      </>;
+    }} />}
   </section>;
 }

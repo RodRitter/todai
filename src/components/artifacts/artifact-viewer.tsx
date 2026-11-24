@@ -10,11 +10,12 @@ import remarkGfm from "remark-gfm";
 import { artifactPreviewKind, type Artifact } from "@/domain/artifact";
 import { workspaceFetch } from "@/lib/workspace-fetch";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { toast } from "@/components/ui/toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { richTextClassName } from "@/components/ui/rich-text-styles";
 
 async function fetchContent(artifact: Artifact, preview: boolean, signal?: AbortSignal) {
-  const response = await workspaceFetch(`/api/artifacts/download?${new URLSearchParams({ id: artifact.id, revision: artifact.revisionId, preview: String(preview) })}`, { signal });
+  const response = await workspaceFetch(`/api/artifacts/download?${new URLSearchParams({ id: artifact.id, preview: String(preview) })}`, { signal });
   if (!response.ok) throw new Error((await response.json()).error ?? "Content unavailable.");
   return response;
 }
@@ -24,7 +25,6 @@ export function ArtifactViewer({ artifact, onClose }: { artifact: Artifact; onCl
   const supported = kind !== "link" && kind !== "unsupported";
   const [content, setContent] = useState<{ text?: string; url?: string } | null>(null);
   const [error, setError] = useState("");
-  const [downloadError, setDownloadError] = useState("");
   const [downloading, setDownloading] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
@@ -53,7 +53,7 @@ export function ArtifactViewer({ artifact, onClose }: { artifact: Artifact; onCl
   }, [artifact, kind, supported, attempt]);
 
   async function download() {
-    setDownloading(true); setDownloadError("");
+    setDownloading(true);
     try {
       const response = await fetchContent(artifact, false);
       const url = URL.createObjectURL(await response.blob());
@@ -61,20 +61,21 @@ export function ArtifactViewer({ artifact, onClose }: { artifact: Artifact; onCl
       anchor.href = url; anchor.download = artifact.filename ?? "artifact";
       document.body.append(anchor); anchor.click(); anchor.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (error) { setDownloadError(error instanceof Error ? error.message : "Could not download artifact."); }
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Could not download artifact."); }
     finally { setDownloading(false); }
   }
 
   return <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-    <DialogContent size="large" layout="preview">
-      <DialogHeader>
+    <DialogContent size="expanded" layout="preview">
+      <DialogHeader variant={kind === "link" ? "default" : "actions"}>
         <div className="col-start-1 row-start-1 flex min-w-0 flex-wrap items-center gap-2">
           <ArtifactTypePill kind={kind} />
           <DialogTitle className="min-w-0 flex-1">{artifact.title}</DialogTitle>
         </div>
-        <DialogDescription className="sr-only">Preview of revision {artifact.revisionNumber} by {artifact.creator}.</DialogDescription>
+        {kind !== "link" && <Button size="icon-sm" variant="ghost-muted" className="col-start-2 row-start-1" disabled={downloading} aria-label={downloading ? "Downloading…" : "Download"} title="Download this document" onClick={() => void download()}><Download aria-hidden="true" /></Button>}
+        <DialogDescription className="sr-only">Document by {artifact.creator}.</DialogDescription>
       </DialogHeader>
-      <ScrollArea variant="modal" className="-mx-4">
+      <ScrollArea variant="preview" className="-mx-6 sm:-mx-8">
       {kind === "link" ? <div className="space-y-3">
         <p>This external link stores only its URL and metadata. Remote content may change; it is not a preserved snapshot.</p>
         <p className="break-all text-sm">{artifact.url}</p>
@@ -84,7 +85,7 @@ export function ArtifactViewer({ artifact, onClose }: { artifact: Artifact; onCl
         {supported && !content && !error && <p role="status">Loading preview…</p>}
         {error && <div role="alert" className="space-y-2"><p>{error} You can try downloading the stored file.</p><Button variant="outline" onClick={() => { setError(""); setContent(null); setAttempt((value) => value + 1); }}>Retry preview</Button></div>}
         {!error && content && <div className="min-w-0">
-          {kind === "text" && <pre className="whitespace-pre-wrap break-words text-sm">{content.text || "This revision is empty."}</pre>}
+          {kind === "text" && <pre className="whitespace-pre-wrap break-words text-sm">{content.text || "This document is empty."}</pre>}
           {kind === "markdown" && <article aria-label="Markdown document" className={cn(richTextClassName,
             "min-h-96 pb-4 text-base leading-7",
             "[&_h1]:mb-5 [&_h1]:mt-8 [&_h1]:text-3xl [&_h1]:leading-tight [&_h1]:tracking-tight [&_h2]:mb-4 [&_h2]:mt-8 [&_h2]:text-2xl [&_h2]:leading-snug [&_h3]:mb-3 [&_h3]:mt-6 [&_h3]:text-xl [&_h4]:text-lg [&_h5]:text-base [&_h6]:text-sm [&_h6]:text-muted-foreground",
@@ -94,7 +95,7 @@ export function ArtifactViewer({ artifact, onClose }: { artifact: Artifact; onCl
             img: ({ alt }) => <span>[Image: {alt || "external image"}]</span>,
             pre: ({ children }) => <ScrollArea orientation="both" className="max-h-96" variant="code"><pre>{children}</pre></ScrollArea>,
             table: ({ children }) => <ScrollArea orientation="horizontal" variant="table" className="my-6"><table>{children}</table></ScrollArea>,
-          }}>{content.text || "This revision is empty."}</ReactMarkdown></article>}
+          }}>{content.text || "This document is empty."}</ReactMarkdown></article>}
           {/* Uploaded images use an inert image context, never an embedded document. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           {kind === "image" && <img src={content.url} alt={artifact.title} className="mx-auto max-h-[60vh] object-contain" onError={() => setError("This image could not be displayed.")} />}
@@ -102,15 +103,6 @@ export function ArtifactViewer({ artifact, onClose }: { artifact: Artifact; onCl
         </div>}
       </>}
       </ScrollArea>
-      <DialogFooter variant="metadata" aria-label="Artifact details">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="min-w-0 break-words text-xs text-muted-foreground">{artifact.creator}<span className="mx-2" aria-hidden="true">·</span><span>Revision {artifact.revisionNumber}</span><span className="mx-2" aria-hidden="true">·</span><time dateTime={artifact.updatedAt} title={new Date(artifact.updatedAt).toLocaleString()}>{new Date(artifact.updatedAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}</time>{artifact.archived ? " · Archived" : ""}</p>
-          {kind !== "link" && <Button size="icon-xs" variant="ghost-muted" className="shrink-0" disabled={downloading} aria-label={downloading ? "Downloading…" : "Download"} title="Download this revision" onClick={() => void download()}><Download aria-hidden="true" className="size-4" /></Button>}
-          {downloadError && <p role="alert" className="w-full text-sm text-destructive">{downloadError}</p>}
-        </div>
-        {artifact.description && <p className="whitespace-pre-wrap break-words">{artifact.description}</p>}
-        {artifact.filename && <p className="break-words">{artifact.filename} · {artifact.mediaType} · {artifact.byteSize?.toLocaleString()} bytes</p>}
-      </DialogFooter>
     </DialogContent>
   </Dialog>;
 }

@@ -19,7 +19,7 @@ test("reset clears task history and references while preserving task identity an
     store.save({ id: "two", title: "Other task", description: "", status: "To do" });
     const artifact = artifacts.create({ title: "Shared", type: "markdown", creator: "Human", description: "", content: "Saved content" });
     for (const taskId of ["one", "two"]) {
-      store.postComment(taskId, "Comment", [{ artifactId: artifact.id, revisionId: artifact.revisionId }]);
+      store.postComment(taskId, "Comment", [{ artifactId: artifact.id }]);
       artifacts.linkTask(taskId, artifact.id);
       db.prepare("INSERT INTO chat_sessions (id, workspaceId, taskId, createdAt, updatedAt) VALUES (?, ?, ?, 'now', 'now')").run(taskId, store.workspaceId, taskId);
       db.prepare("INSERT INTO chat_messages (id, sessionId, authorName, body, createdAt) VALUES (?, ?, 'Human', 'Chat', 'now')").run(taskId, taskId);
@@ -28,7 +28,7 @@ test("reset clears task history and references while preserving task identity an
     }
     const parent = store.list().find(task => task.id === "one")!.comments![0];
     store.postComment("one", "Reply", [], parent.id);
-    db.prepare("UPDATE artifact_revisions SET taskId = 'one', runId = 'one'").run();
+    db.prepare("UPDATE artifacts SET taskId = 'one', runId = 'one'").run();
     store.reset("one");
     store.close();
     store = new TaskStore(path);
@@ -46,7 +46,7 @@ test("reset clears task history and references while preserving task identity an
       assert.equal(db.prepare(`SELECT count(*) AS n FROM ${table} WHERE taskId = 'one'`).get()!.n, 0, table);
     assert.equal(db.prepare("SELECT count(*) AS n FROM chat_messages WHERE sessionId = 'one'").get()!.n, 0);
     assert.equal(db.prepare("SELECT count(*) AS n FROM comment_artifacts").get()!.n, 1);
-    assert.equal(db.prepare("SELECT taskId FROM artifact_revisions").get()!.taskId, null);
+    assert.equal(db.prepare("SELECT taskId FROM artifacts").get()!.taskId, null);
     assert.equal(artifacts.read(artifact.id).title, "Shared");
     assert.equal(store.list().find(task => task.id === "two")!.comments!.length, 1);
     assert.equal(store.history("two").length, 1);

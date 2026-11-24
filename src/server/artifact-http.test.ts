@@ -7,7 +7,7 @@ import { TaskStore } from "./task-store.ts";
 import * as api from "../app/api/artifacts/route.ts";
 import { GET as download } from "../app/api/artifacts/download/route.ts";
 
-test("HTTP publication, history, exact downloads and archival retain workspace boundaries", async () => {
+test("HTTP publication, edits, downloads and archival retain workspace boundaries", async () => {
   const directory = mkdtempSync(join(tmpdir(), "todai-artifact-http-"));
   const previousPath = process.env.TODAI_DB_PATH;
   process.env.TODAI_DB_PATH = join(directory, "tasks.sqlite");
@@ -28,17 +28,17 @@ test("HTTP publication, history, exact downloads and archival retain workspace b
     const first = await firstResponse.json();
     const second = await (await publish("Updated", first.id)).json();
     assert.equal(second.id, first.id);
-    assert.equal(second.revisionNumber, 2);
-    const preview = download(request(`?id=${first.id}&revision=${first.revisionId}&preview=true`));
+    assert.equal("revisionId" in second, false);
+    const preview = download(request(`?id=${first.id}&preview=true`));
     assert.equal(preview.headers.get("X-Todai-Preview"), "text");
-    assert.equal(await preview.text(), "Original");
+    assert.equal(await preview.text(), "Updated");
     assert.equal(preview.headers.get("Content-Security-Policy"), "sandbox; default-src 'none'");
-    assert.equal(download(request(`?id=${first.id}&revision=${first.revisionId}&preview=true`, {}, other.id)).status, 400);
-    assert.equal(await download(request(`?id=${first.id}&revision=${first.revisionId}`)).text(), "Original");
-    assert.deepEqual(await api.GET(request(`?id=${first.id}&revision=${first.revisionId}`)).json(), first);
-    assert.equal((await api.GET(request(`?id=${first.id}&history=true`)).json()).length, 2);
+    assert.equal(download(request(`?id=${first.id}&preview=true`, {}, other.id)).status, 400);
+    assert.equal(await download(request(`?id=${first.id}`)).text(), "Updated");
+    assert.deepEqual(await api.GET(request(`?id=${first.id}`)).json(), second);
+    assert.deepEqual(await api.GET(request(`?id=${first.id}&history=true`)).json(), second);
     assert.equal(api.GET(request(`?id=${first.id}&history=true`, {}, other.id)).status, 400);
-    assert.equal(download(request(`?id=${first.id}&revision=missing`)).status, 400);
+    assert.equal(download(request(`?id=${first.id}&revision=legacy`)).status, 200);
     for (const [filename, mediaType, kind, content] of [
       ["untyped.md", "", "markdown", "# Uploaded notes"],
       ["notes.md", "text/markdown", "markdown", "# Notes\n<script>alert(1)</script>"],
@@ -52,7 +52,7 @@ test("HTTP publication, history, exact downloads and archival retain workspace b
       Object.entries({ title: filename, type: "file", creator: "Alice" }).forEach(([key, value]) => form.set(key, value));
       form.set("file", new File([content], filename, { type: mediaType }));
       const file = await (await api.POST(request("", { method: "POST", body: form }))).json();
-      const query = `?id=${file.id}&revision=${file.revisionId}`;
+      const query = `?id=${file.id}`;
       const response = download(request(`${query}&preview=true`));
       assert.equal(response.status, kind === "unsupported" ? 415 : 200, filename);
       if (kind !== "unsupported") {
@@ -63,16 +63,15 @@ test("HTTP publication, history, exact downloads and archival retain workspace b
       assert.equal(await download(request(query)).text(), content);
       assert.match(download(request(query)).headers.get("Content-Disposition")!, /^attachment;/);
       assert.equal(download(request(`${query}&preview=true`, {}, other.id)).status, 400);
-      assert.equal(download(request(`?id=${file.id}&revision=${first.revisionId}&preview=true`)).status, 400);
     }
-    assert.equal(download(request(`?id=${first.id}&revision=missing&preview=true`)).status, 400);
+    assert.equal(download(request(`?id=${first.id}&revision=legacy&preview=true`)).status, 200);
     assert.equal(download(request("?id=../../etc/passwd&preview=true")).status, 400);
     assert.equal(download(new Request("http://localhost/api/artifacts/download?preview=true")).status, 403);
     const archived = await api.PATCH(request("", { method: "PATCH", body: JSON.stringify({ id: first.id }) }));
     assert.equal(archived.status, 200);
     assert.equal((await api.GET(request()).json()).some((item: { id: string }) => item.id === first.id), false);
     assert.equal((await api.GET(request("?archived=true")).json()).length, 1);
-    assert.equal(await download(request(`?id=${first.id}&revision=${first.revisionId}`)).text(), "Original");
+    assert.equal(await download(request(`?id=${first.id}`)).text(), "Updated");
     assert.equal(api.GET(new Request("http://localhost/api/artifacts")).status, 403);
   } finally {
     if (previousPath === undefined) delete process.env.TODAI_DB_PATH;

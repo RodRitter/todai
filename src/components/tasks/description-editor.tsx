@@ -220,7 +220,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
       {footer && <div aria-hidden={collapsed || undefined} inert={collapsed || undefined} className={`space-y-2 [&:not(:empty)]:mt-3 ${collapsed ? "invisible" : ""}`}>{footer}</div>}
     </EditorSurface>
     {creating && <ArtifactCreateDialog title={creating.query} onCancel={() => setCreating(null)} onRestoreFocus={() => { editor?.commands.focus(); setMatch(null); }} onSave={(artifact) => {
-      insert({ kind: "artifact", label: artifact.title, path: artifactMentionPath({ artifactId: artifact.id, revisionId: artifact.revisionId }), detail: "" }, creating);
+      insert({ kind: "artifact", label: artifact.title, path: artifactMentionPath({ artifactId: artifact.id }), detail: "" }, creating);
       onArtifactSelect?.(artifact);
       setCreating(null);
     }} />}

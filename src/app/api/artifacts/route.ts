@@ -9,7 +9,7 @@ export function GET(request: Request) {
   try {
     const params = new URL(request.url).searchParams;
     return Response.json(withArtifactStore(request, (store) => params.has("id")
-      ? params.get("history") === "true" ? store.history(params.get("id")!) : store.read(params.get("id")!, params.get("revision") ?? undefined)
+      ? store.read(params.get("id")!)
       : store.list({ taskId: params.get("taskId") ?? "", archived: params.get("archived") === "true", search: params.get("search") ?? "", type: params.get("type") ?? "", creator: params.get("creator") ?? "" })));
   } catch (error) { return artifactFailure(error); }
 }
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
       bytes, filename: file instanceof File ? file.name : undefined,
       mediaType: file instanceof File ? file.type : undefined,
     };
-    const artifact = withArtifactStore(request, (store) => field("id") ? store.revise(field("id"), input) : store.create(input));
+    const artifact = withArtifactStore(request, (store) => field("id") ? store.update(field("id"), input) : store.create(input));
     return Response.json(artifact, { status: 201 });
   } catch (error) { return artifactFailure(error); }
 }

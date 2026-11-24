@@ -3,8 +3,6 @@ export type ArtifactType = (typeof artifactTypes)[number];
 export const MAX_ARTIFACT_BYTES = 20 * 1024 * 1024;
 export type Artifact = {
   id: string;
-  revisionId: string;
-  revisionNumber: number;
   runId?: string | null;
   taskId?: string | null;
   archived: boolean;
@@ -33,7 +31,7 @@ export type ArtifactInput = {
 };
 export type ArtifactFilters = { taskId?: string; archived?: boolean; search?: string; type?: string; creator?: string };
 
-export type ArtifactReference = { artifactId: string; revisionId: string };
+export type ArtifactReference = { artifactId: string };
 export type TaskArtifact = { artifact: Artifact; explicit: boolean; comments: { commentId: string; artifact: Artifact }[] };
 
 // Deliberately exclude active document formats such as HTML and SVG.

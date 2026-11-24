@@ -41,11 +41,9 @@ export function removeConversationMessages(db: DatabaseSync, scope: MessageScope
   const unlinked = db.prepare(`SELECT id FROM artifacts WHERE workspaceId = ? AND id = ?
     AND NOT EXISTS (SELECT 1 FROM comment_artifacts WHERE artifactId = artifacts.id)
     AND NOT EXISTS (SELECT 1 FROM task_artifacts WHERE artifactId = artifacts.id)`);
-  const removeRevisions = db.prepare("DELETE FROM artifact_revisions WHERE workspaceId = ? AND id = ?");
   const removeArtifact = db.prepare("DELETE FROM artifacts WHERE workspaceId = ? AND id = ?");
   for (const id of artifactIds) {
     if (!unlinked.get(scope.workspaceId, id)) continue;
-    removeRevisions.run(scope.workspaceId, id);
     removeArtifact.run(scope.workspaceId, id);
   }
   return deleting;

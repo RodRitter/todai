@@ -223,7 +223,7 @@ function CommentInput({ agents, onPost, agentStatus, variant = "default", id = "
     setBusy(true);
     setError("");
     try {
-      await onPost(body.trim(), attachments.map((artifact) => ({ artifactId: artifact.id, revisionId: artifact.revisionId })));
+      await onPost(body.trim(), attachments.map((artifact) => ({ artifactId: artifact.id })));
       setAttachments([]);
       setBody("");
       setVersion((value) => value + 1);
@@ -256,7 +256,7 @@ function CommentInput({ agents, onPost, agentStatus, variant = "default", id = "
       toolbarActions={<ArtifactPicker compact={reply} attachmentIcon disabled={busy || pendingRun} onSelect={(artifact) => setAttachments((items) => [...items.filter((item) => item.id !== artifact.id), artifact])} />}
       footer={<>
         {onCancel && <Button type="button" size="sm" variant="ghost-muted" disabled={busy} onClick={onCancel}>Cancel</Button>}
-        {attachments.map((artifact) => <div key={artifact.id} className="flex flex-wrap items-center gap-2 text-sm"><span>{artifact.title} · Pinned revision {artifact.revisionNumber}</span><Button type="button" size="sm" variant="ghost-muted" disabled={busy || pendingRun} onClick={() => setAttachments((items) => items.filter((item) => item.id !== artifact.id))}>Remove attachment</Button></div>)}
+        {attachments.map((artifact) => <div key={artifact.id} className="flex flex-wrap items-center gap-2 text-sm"><span>{artifact.title}</span><Button type="button" size="sm" variant="ghost-muted" disabled={busy || pendingRun} onClick={() => setAttachments((items) => items.filter((item) => item.id !== artifact.id))}>Remove attachment</Button></div>)}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       </>}
     />

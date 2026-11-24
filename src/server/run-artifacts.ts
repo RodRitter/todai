@@ -10,12 +10,12 @@ import { MAX_ARTIFACT_BYTES, type ArtifactInput, type ArtifactReference, type Ta
 export type RunArtifactConnection = { url: string; token: string; context: TaskArtifact[] };
 const string = { type: "string" };
 const tools: { name: string; description: string; properties: Record<string, { type: string; enum?: string[] }>; required: string[] }[] = [
-  { name: "publish_artifact", description: artifactPublicationPolicy + " Publish text, Markdown, a file (base64 bytes), or an HTTP/HTTPS link immediately. Supply artifactId to publish a new revision. Ownership and creator come from this run. Returns stable id and revisionId; cite as [title](#artifact/ID/REVISION_ID).", properties: { title: string, description: string, type: { type: "string", enum: ["text", "markdown", "file", "link"] }, content: string, base64: string, filename: string, mediaType: string, url: string, artifactId: string }, required: ["title", "type"] },
+  { name: "publish_artifact", description: artifactPublicationPolicy + " Publish text, Markdown, a file (base64 bytes), or an HTTP/HTTPS link immediately. Supply artifactId to update the document. Ownership and creator come from this run. Returns a stable id; cite as [title](#artifact/ID).", properties: { title: string, description: string, type: { type: "string", enum: ["text", "markdown", "file", "link"] }, content: string, base64: string, filename: string, mediaType: string, url: string, artifactId: string }, required: ["title", "type"] },
   { name: "search_artifacts", description: "Search this workspace's artifact metadata. Content is read separately. Use archived to discover archived artifacts.", properties: { search: string, archived: { type: "boolean" } }, required: [] },
-  { name: "read_artifact", description: "Read an artifact's metadata and stored content (base64 for files), optionally at an exact revision. External links return their URL without fetching it.", properties: { artifactId: string, revisionId: string }, required: ["artifactId"] },
-  { name: "link_artifact", description: "Link an artifact to the current task, following its latest revision.", properties: { artifactId: string }, required: ["artifactId"] },
+  { name: "read_artifact", description: "Read an artifact's metadata and stored content (base64 for files). External links return their URL without fetching it.", properties: { artifactId: string }, required: ["artifactId"] },
+  { name: "link_artifact", description: "Link an artifact to the current task.", properties: { artifactId: string }, required: ["artifactId"] },
   { name: "unlink_artifact", description: "Remove the current task's explicit link; comment citations remain intact.", properties: { artifactId: string }, required: ["artifactId"] },
-  { name: "nominate_artifact", description: "Pin an exact revision to your final handover or feedback comment. Failed or interrupted runs do not attach nominations to system notices.", properties: { artifactId: string, revisionId: string }, required: ["artifactId", "revisionId"] },
+  { name: "nominate_artifact", description: "Attach a document to your final handover or feedback comment. Failed or interrupted runs do not attach nominations to system notices.", properties: { artifactId: string }, required: ["artifactId"] },
 ];
 
 // A short-lived, stateless Streamable HTTP MCP server. No caller controls ownership.
@@ -42,7 +42,6 @@ export async function openRunArtifacts(store: TaskStore, run: AgentRun, signal: 
     }
     if (feedback) throw new Error("Feedback is already requested. Stop work and end your run.");
     const artifactId = args.artifactId as string;
-    const revisionId = args.revisionId as string | undefined;
     switch (name) {
       case "request_feedback":
         feedback = parseFeedback(JSON.stringify({ type: "feedback_request", ...args }));
@@ -52,21 +51,21 @@ export async function openRunArtifacts(store: TaskStore, run: AgentRun, signal: 
         const bytes = typeof base64 === "string" ? Buffer.from(base64, "base64") : undefined;
         if (base64 !== undefined && bytes?.toString("base64") !== base64) throw new Error("File bytes must be valid base64.");
         const input = { ...fields, creator: run.profile.name, ...(bytes ? { bytes } : {}) } as ArtifactInput;
-        return previous ? library.revise(previous as string, input) : library.create(input);
+        return previous ? library.update(previous as string, input) : library.create(input);
       }
       case "search_artifacts": return library.list(args);
       case "read_artifact": {
-        const artifact = library.read(artifactId, revisionId);
+        const artifact = library.read(artifactId);
         if (artifact.type === "link") return artifact;
-        const { bytes } = library.download(artifactId, artifact.revisionId);
+        const { bytes } = library.download(artifactId);
         return { ...artifact, ...(artifact.type === "file" ? { base64: bytes.toString("base64") } : { content: bytes.toString("utf8") }) };
       }
       case "link_artifact": library.linkTask(run.taskId, artifactId); return { linked: true };
       case "unlink_artifact": library.unlinkTask(run.taskId, artifactId); return { linked: false };
       case "nominate_artifact": {
-        library.read(artifactId, revisionId);
+        library.read(artifactId);
         if (chat) { library.linkTask(run.taskId, artifactId); return { nominated: true, linked: true }; }
-        if (!pending.some((ref) => ref.artifactId === artifactId && ref.revisionId === revisionId)) pending.push({ artifactId, revisionId: revisionId! });
+        if (!pending.some((ref) => ref.artifactId === artifactId)) pending.push({ artifactId });
         return { nominated: true };
       }
     }

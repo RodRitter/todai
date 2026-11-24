@@ -15,7 +15,7 @@ function fixture() {
   return { directory, path, tasks, artifacts, task, close() { artifacts.close(); tasks.close(); rmSync(directory, { recursive: true, force: true }); } };
 }
 
-test("task links reuse artifacts, follow latest revisions and survive task deletion", () => {
+test("task links reuse artifacts, follow document edits and survive task deletion", () => {
   const f = fixture();
   try {
     f.task("one"); f.task("two");
@@ -23,41 +23,41 @@ test("task links reuse artifacts, follow latest revisions and survive task delet
     f.artifacts.linkTask("one", first.id);
     f.artifacts.linkTask("one", first.id);
     f.artifacts.linkTask("two", first.id);
-    const latest = f.artifacts.revise(first.id, { title: "Updated", type: "text", content: "Updated", creator: "Bob" });
+    const latest = f.artifacts.update(first.id, { title: "Updated", type: "text", content: "Updated", creator: "Bob" });
     assert.deepEqual(f.artifacts.forTask("one"), [{ artifact: latest, explicit: true, comments: [] }]);
     assert.deepEqual(f.artifacts.list({ taskId: "two" }), [latest]);
     f.artifacts.unlinkTask("one", first.id);
     assert.deepEqual(f.artifacts.forTask("one"), []);
     f.tasks.delete("two");
-    assert.equal(f.artifacts.download(first.id, first.revisionId).bytes.toString(), "Original");
-    assert.deepEqual(f.artifacts.history(first.id), [latest, first]);
+    assert.equal(f.artifacts.download(first.id).bytes.toString(), "Updated");
+    assert.deepEqual(f.artifacts.read(first.id), latest);
   } finally { f.close(); }
 });
 
-test("comment attachments pin revisions atomically and retain provenance after unlinking and archival", () => {
+test("comment attachments attach documents atomically and retain provenance after unlinking and archival", () => {
   const f = fixture();
   try {
     f.task("one"); f.task("two");
     const first = f.artifacts.create({ title: "Original", type: "text", content: "Original", creator: "Alice" });
-    const ref = { artifactId: first.id, revisionId: first.revisionId };
+    const ref = { artifactId: first.id };
     const comment = f.tasks.postComment("one", "See evidence", [ref, ref]).comments![0];
     f.tasks.postComment("two", "Reuse evidence", [ref]);
     f.artifacts.linkTask("one", first.id);
-    const latest = f.artifacts.revise(first.id, { title: "Latest", type: "text", content: "Latest", creator: "Bob" });
-    assert.deepEqual(f.artifacts.forTask("one"), [{ artifact: latest, explicit: true, comments: [{ commentId: comment.id, artifact: first }] }]);
+    const latest = f.artifacts.update(first.id, { title: "Latest", type: "text", content: "Latest", creator: "Bob" });
+    assert.deepEqual(f.artifacts.forTask("one"), [{ artifact: latest, explicit: true, comments: [{ commentId: comment.id, artifact: latest }] }]);
     assert.deepEqual(comment.artifacts, [ref]);
     f.artifacts.unlinkTask("one", first.id);
     assert.equal(f.artifacts.forTask("one")[0].explicit, false);
     assert.deepEqual(f.artifacts.list({ taskId: "one" }), [latest]);
     f.artifacts.archive(first.id);
-    assert.equal(f.artifacts.forTask("one")[0].comments[0].artifact.revisionId, first.revisionId);
+    assert.equal(f.artifacts.forTask("one")[0].comments[0].artifact.id, first.id);
     f.tasks.delete("one");
     assert.equal(f.artifacts.forTask("two").length, 1);
-    assert.equal(f.artifacts.download(first.id, first.revisionId).bytes.toString(), "Original");
+    assert.equal(f.artifacts.download(first.id).bytes.toString(), "Latest");
   } finally { f.close(); }
 });
 
-test("foreign tasks and revisions are rejected and failed comment publication leaves no partial comment", () => {
+test("foreign tasks and artifacts are rejected and failed comment publication leaves no partial comment", () => {
   const f = fixture();
   const other = f.tasks.createWorkspace("Other", f.directory);
   const otherTasks = new TaskStore(f.path, other.id);
@@ -71,27 +71,27 @@ test("foreign tasks and revisions are rejected and failed comment publication le
     assert.throws(() => f.artifacts.linkTask("one", foreign.id), /workspace/);
     assert.throws(() => f.artifacts.forTask("foreign"), /workspace/);
     assert.throws(() => f.artifacts.list({ taskId: "foreign" }), /workspace/);
-    for (const invalid of [null, {}, [{ artifactId: foreign.id, revisionId: foreign.revisionId }], [{ artifactId: local.id, revisionId: foreign.revisionId }]]) {
-      assert.throws(() => f.tasks.postComment("one", "Invalid", invalid), /attachment|revision/);
+    for (const invalid of [null, {}, [{ artifactId: foreign.id }], [{ artifactId: "missing" }]]) {
+      assert.throws(() => f.tasks.postComment("one", "Invalid", invalid), /attachment|Artifact/);
       assert.deepEqual(f.tasks.list()[0].comments, []);
       assert.deepEqual(f.artifacts.forTask("one"), []);
     }
-    assert.throws(() => f.tasks.postComment("foreign", "Invalid", [{ artifactId: local.id, revisionId: local.revisionId }]), /workspace/);
+    assert.throws(() => f.tasks.postComment("foreign", "Invalid", [{ artifactId: local.id }]), /workspace/);
   } finally { otherArtifacts.close(); otherTasks.close(); f.close(); }
 });
 
-test("inline citations retain the selected revision through composition, repetition and archival", () => {
+test("inline citations follow document edits through composition, repetition and archival", () => {
   const f = fixture();
   try {
     f.task("one");
     const first = f.artifacts.create({ title: "Original", type: "text", content: "Original", creator: "Alice" });
-    const body = `See [Original](#artifact/${first.id}/${first.revisionId}) and [again](#artifact/${first.id}/${first.revisionId}).`;
-    f.artifacts.revise(first.id, { title: "Latest", type: "text", content: "Latest", creator: "Bob" });
+    const body = `See [Original](#artifact/${first.id}) and [again](#artifact/${first.id}).`;
+    f.artifacts.update(first.id, { title: "Latest", type: "text", content: "Latest", creator: "Bob" });
     const comment = f.tasks.postComment("one", body).comments![0];
-    assert.deepEqual(comment.artifacts, [{ artifactId: first.id, revisionId: first.revisionId }]);
+    assert.deepEqual(comment.artifacts, [{ artifactId: first.id }]);
     f.artifacts.archive(first.id);
     assert.equal(f.tasks.list()[0].comments![0].body, body);
-    assert.equal(f.artifacts.forTask("one")[0].comments[0].artifact.title, "Original");
+    assert.equal(f.artifacts.forTask("one")[0].comments[0].artifact.title, "Latest");
   } finally { f.close(); }
 });
 
@@ -103,8 +103,8 @@ test("invalid inline citations roll back comments and attachments together", () 
     f.task("one");
     const local = f.artifacts.create({ title: "Local", type: "text", content: "Local", creator: "Alice" });
     const foreign = foreignStore.create({ title: "Foreign", type: "text", content: "Foreign", creator: "Bob" });
-    for (const path of [`#artifact/${foreign.id}/${foreign.revisionId}`, `#artifact/${local.id}/${foreign.revisionId}`, "#artifact/broken"]) {
-      assert.throws(() => f.tasks.postComment("one", `[Invalid](${path})`, [{ artifactId: local.id, revisionId: local.revisionId }]), /revision/);
+    for (const path of [`#artifact/${foreign.id}`, "#artifact/missing", "#artifact/broken"]) {
+      assert.throws(() => f.tasks.postComment("one", `[Invalid](${path})`, [{ artifactId: local.id }]), /reference|not found/);
       assert.deepEqual(f.tasks.list()[0].comments, []);
       assert.deepEqual(f.artifacts.forTask("one"), []);
     }
@@ -116,8 +116,8 @@ test("agent comments track canonical citations while code examples remain plain 
   try {
     f.task("one");
     const artifact = f.artifacts.create({ title: "Evidence", type: "text", content: "Evidence", creator: "Agent" });
-    f.tasks.addComment({ id: "agent-comment", taskId: "one", authorName: "Agent", createdAt: new Date().toISOString(), body: `[Evidence](#artifact/${artifact.id}/${artifact.revisionId}) and \`[example](#artifact/invalid)\`` });
-    assert.deepEqual(f.tasks.list()[0].comments![0].artifacts, [{ artifactId: artifact.id, revisionId: artifact.revisionId }]);
+    f.tasks.addComment({ id: "agent-comment", taskId: "one", authorName: "Agent", createdAt: new Date().toISOString(), body: `[Evidence](#artifact/${artifact.id}) and \`[example](#artifact/invalid)\`` });
+    assert.deepEqual(f.tasks.list()[0].comments![0].artifacts, [{ artifactId: artifact.id }]);
   } finally { f.close(); }
 });
 
@@ -126,13 +126,13 @@ test("new and edited task descriptions attach cited artifacts on save", () => {
   try {
     const first = f.artifacts.create({ title: "Brief", type: "markdown", content: "Brief", creator: "You" });
     const second = f.artifacts.create({ title: "Plan", type: "markdown", content: "Plan", creator: "You" });
-    const description = `[Brief](#artifact/${first.id}/${first.revisionId}) [@Agent](#agent/agent) [skill](/skills/test) [file](/src/test)`;
+    const description = `[Brief](#artifact/${first.id}) [@Agent](#agent/agent) [skill](/skills/test) [file](/src/test)`;
     const task = f.tasks.save({ id: "draft", title: "Draft", description, status: "To do", agentStatus: "Not started" });
     assert.equal(task.description, description);
     assert.deepEqual(f.artifacts.forTask(task.id).map((link) => link.artifact.id), [first.id]);
-    f.tasks.save({ ...task, description: `${description} [Plan](#artifact/${second.id}/${second.revisionId})` });
+    f.tasks.save({ ...task, description: `${description} [Plan](#artifact/${second.id})` });
     assert.deepEqual(f.artifacts.forTask(task.id).map((link) => link.artifact.id).sort(), [first.id, second.id].sort());
-    assert.throws(() => f.tasks.save({ ...task, title: "Invalid", description: "[Missing](#artifact/missing/revision)" }), /revision/);
+    assert.throws(() => f.tasks.save({ ...task, title: "Invalid", description: "[Missing](#artifact/missing/revision)" }), /reference|not found/);
     assert.equal(f.tasks.list()[0].title, "Draft");
   } finally { f.close(); }
 });

@@ -20,7 +20,7 @@ test("comment deletion validates ownership and deletes artifacts linked only to 
   try {
     for (const id of ["one", "two"]) store.save({ id, title: id, description: "", status: "To do" });
     const artifact = library.create({ title: "Evidence", type: "text", creator: "Human", content: "Keep this" });
-    const comment = store.postComment("one", "Remove me", [{ artifactId: artifact.id, revisionId: artifact.revisionId }]).comments![0];
+    const comment = store.postComment("one", "Remove me", [{ artifactId: artifact.id }]).comments![0];
     store.postComment("one", "Keep me");
     const data = { taskId: "one", commentId: comment.id };
     assert.equal((await remove(data, null)).status, 403);
@@ -95,24 +95,23 @@ test("deleting a parent removes reply artifacts but preserves artifacts linked e
     const sharedComment = create("Shared comment");
     const sharedTask = create("Shared task");
     const unlinked = create("Unlinked library item");
-    const ref = (artifact: typeof parentOnly) => ({ artifactId: artifact.id, revisionId: artifact.revisionId });
+    const ref = (artifact: typeof parentOnly) => ({ artifactId: artifact.id });
     const parent = store.postComment("one", "Parent", [ref(parentOnly)]).comments![0];
     store.postComment("one", "Reply", [replyOnly, sharedComment, sharedTask].map(ref), parent.id);
-    const revision = library.revise(sharedComment.id, { title: "New revision", type: "text", creator: "Human", content: "New" });
+    const revision = library.update(sharedComment.id, { title: "New revision", type: "text", creator: "Human", content: "New" });
     store.postComment("two", "Other comment", [ref(revision)]);
     library.linkTask("one", sharedTask.id);
-    library.revise(replyOnly.id, { title: "New reply revision", type: "text", creator: "Human", content: "New" });
+    library.update(replyOnly.id, { title: "New reply revision", type: "text", creator: "Human", content: "New" });
 
     assert.equal(store.deleteComment("one", parent.id).comments!.length, 0);
     for (const artifact of [parentOnly, replyOnly]) assert.throws(() => library.read(artifact.id), /Artifact not found/);
     for (const artifact of [sharedComment, sharedTask, unlinked]) assert.equal(library.read(artifact.id).id, artifact.id);
-    assert.equal(library.history(sharedComment.id).length, 2);
+    assert.equal(library.read(sharedComment.id).title, "New revision");
     assert.equal(store.list().find((task) => task.id === "two")!.comments!.length, 1);
     const db = new DatabaseSync(path);
     try {
       for (const artifact of [parentOnly, replyOnly]) {
         assert.equal(db.prepare("SELECT count(*) AS count FROM artifacts WHERE id = ?").get(artifact.id)!.count, 0);
-        assert.equal(db.prepare("SELECT count(*) AS count FROM artifact_revisions WHERE id = ?").get(artifact.id)!.count, 0);
       }
     } finally { db.close(); }
   } finally {

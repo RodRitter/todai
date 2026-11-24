@@ -90,7 +90,7 @@ function DialogContent({
           size === "large" && "sm:max-w-3xl",
           size === "expanded" && "sm:max-w-[min(64rem,calc(100%-2rem))]",
           layout === "workspace" && "grid h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 px-4 [&>[data-slot=dialog-header]]:mt-0",
-          layout === "preview" && "px-4 [&>[data-slot=dialog-header]]:mt-0 [&>[data-slot=dialog-header]]:shrink-0",
+          layout === "preview" && "px-6 sm:px-8 [&>[data-slot=dialog-header]]:mt-0 [&>[data-slot=dialog-header]]:shrink-0 [&>[data-slot=dialog-header]]:pb-6 sm:[&>[data-slot=dialog-header]]:pt-8",
           layout === "prompt" && "rounded-xl",
           className,
         )}
@@ -141,7 +141,7 @@ function DialogFooter({ className, variant = "default", ...props }: React.Compon
         "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
         variant !== "default" && "z-10 shrink-0 flex-row flex-wrap items-center justify-end bg-background px-4 py-2",
         variant === "task" && "px-6 py-4",
-        variant === "metadata" && "block -mx-4 space-y-1 px-4 py-3 text-xs leading-relaxed text-muted-foreground",
+        variant === "metadata" && "block -mx-4 space-y-1 px-4 py-6 text-xs leading-relaxed text-muted-foreground",
         className,
       )}
       {...props}

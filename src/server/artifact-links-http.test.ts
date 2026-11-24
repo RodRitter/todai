@@ -27,7 +27,7 @@ test("HTTP links enforce workspace ownership and filter by task including histor
     assert.equal((await links.POST(request("POST", data, other.id))).status, 400);
     assert.equal((await links.POST(request("POST", {}))).status, 400);
     assert.equal(links.GET(new Request("http://localhost/api/artifacts/links?taskId=one")).status, 403);
-    tasks.postComment("one", "Evidence", [{ artifactId: a.id, revisionId: a.revisionId }]);
+    tasks.postComment("one", "Evidence", [{ artifactId: a.id }]);
     assert.equal((await links.DELETE(request("DELETE", data))).status, 200);
     assert.equal((await links.GET(request("GET")).json())[0].explicit, false);
     assert.equal((await list(request("GET")).json())[0].id, a.id);

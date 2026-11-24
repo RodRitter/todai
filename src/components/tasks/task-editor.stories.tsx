@@ -400,7 +400,7 @@ export const MoveBetweenBoards: Story = {
   },
 };
 
-const descriptionArtifact = { id: "brief", revisionId: "r1", revisionNumber: 1, title: "Brief", type: "markdown", creator: "You" };
+const descriptionArtifact = { id: "brief", title: "Brief", type: "markdown", creator: "You" };
 const newDescriptionArtifact = { ...descriptionArtifact, id: "plan", title: "Plan" };
 const referenceMocks = () => {
   const original = globalThis.fetch;

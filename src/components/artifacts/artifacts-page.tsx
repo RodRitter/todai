@@ -28,8 +28,8 @@ async function checked(response: Response) {
   return response;
 }
 
-async function fetchRevisionContent(artifact: Artifact) {
-  return checked(await workspaceFetch(`/api/artifacts/download?id=${encodeURIComponent(artifact.id)}&revision=${encodeURIComponent(artifact.revisionId)}`));
+async function fetchDocumentContent(artifact: Artifact) {
+  return checked(await workspaceFetch(`/api/artifacts/download?id=${encodeURIComponent(artifact.id)}`));
 }
 
 export function ArtifactsPage() {
@@ -43,7 +43,6 @@ export function ArtifactsPage() {
   const [archived, setArchived] = useState(false);
   const [editing, setEditing] = useState<Artifact | null>(null);
   const [content, setContent] = useState("");
-  const [history, setHistory] = useState<Artifact[]>([]);
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -95,11 +94,10 @@ export function ArtifactsPage() {
       const response = await checked(await workspaceFetch("/api/artifacts", { method: "POST", body: data }));
       const artifact: Artifact = await response.json();
       setArtifacts((items) => [artifact, ...items.filter((item) => item.id !== artifact.id)]);
-      setHistory([]);
       if (!artifact.archived) setArchived(false);
       setTaskId(""); setSearch(""); setFilterType(""); setCreator("");
       setCreating(false);
-      toast.success("Artifact published.");
+      toast.success("Artifact saved.");
     } catch (error) { toast.error(error instanceof Error ? error.message : "Could not publish artifact."); }
     finally { setSaving(false); }
   }
@@ -108,18 +106,11 @@ export function ArtifactsPage() {
     setSaving(true);
     try {
       const text = artifact.type === "text" || artifact.type === "markdown"
-        ? await (await fetchRevisionContent(artifact)).text()
+        ? await (await fetchDocumentContent(artifact)).text()
         : "";
       setEditing(artifact); setType(artifact.type === "text" ? "markdown" : artifact.type); setContent(text); setCreating(true);
-    } catch (error) { toast.error(error instanceof Error ? error.message : "Could not load revision."); }
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Could not load document."); }
     finally { setSaving(false); }
-  }
-
-  async function showHistory(artifact: Artifact) {
-    try {
-      const response = await checked(await workspaceFetch(`/api/artifacts?id=${encodeURIComponent(artifact.id)}&history=true`));
-      setHistory(await response.json());
-    } catch (error) { toast.error(error instanceof Error ? error.message : "Could not load history."); }
   }
 
   async function archive(artifact: Artifact) {
@@ -128,7 +119,7 @@ export function ArtifactsPage() {
       await checked(await workspaceFetch("/api/artifacts", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: artifact.id }) }));
       setArtifacts((items) => items.filter((item) => item.id !== artifact.id));
       if (editing?.id === artifact.id) setCreating(false);
-      toast.success("Artifact archived. Its revisions remain available in the archived view.");
+      toast.success("Artifact archived.");
     } catch (error) { toast.error(error instanceof Error ? error.message : "Could not archive artifact."); }
     finally { setSaving(false); }
   }
@@ -151,8 +142,8 @@ export function ArtifactsPage() {
       </div>
     </div>
     {creating && <Dialog open onOpenChange={(open) => { if (!saving) setCreating(open); }}><DialogContent size="large" closeDisabled={saving}>
-      <DialogHeader><DialogTitle>{editing ? "Publish new revision" : imageUpload ? "Create image" : "Create document"}</DialogTitle><DialogDescription className="sr-only">{imageUpload ? "Upload an image to your workspace." : "Write and publish a workspace document."}</DialogDescription></DialogHeader>
-      <form key={editing?.revisionId ?? type} onSubmit={publish} className="space-y-4">
+      <DialogHeader><DialogTitle>{editing ? "Edit artifact" : imageUpload ? "Create image" : "Create document"}</DialogTitle><DialogDescription className="sr-only">{imageUpload ? "Upload an image to your workspace." : "Write and publish a workspace document."}</DialogDescription></DialogHeader>
+      <form key={editing?.id ?? type} onSubmit={publish} className="space-y-4">
       <input type="hidden" name="type" value={type} />
       <div className="flex flex-wrap gap-4">
         <div className="min-w-48 flex-1 space-y-2"><Label htmlFor="artifact-title">Title</Label><Input id="artifact-title" name="title" defaultValue={editing?.title ?? ""} required maxLength={300} disabled={saving} /></div>
@@ -162,7 +153,7 @@ export function ArtifactsPage() {
       {type === "file" ? <div className="space-y-2"><Label htmlFor="artifact-file">{imageUpload ? "Image" : "File"}</Label><Input id="artifact-file" type="file" name="file" accept={imageUpload ? imageTypes.join(",") : undefined} required disabled={saving} /><p className="text-sm text-muted-foreground">{imageUpload ? "PNG, JPEG, GIF, WebP, AVIF, or BMP, up to 20 MiB." : "Any file type, up to 20 MiB."} A stored copy is kept independently of the original file.</p></div>
         : type === "link" ? <div className="space-y-2"><Label htmlFor="artifact-url">External URL</Label><Input id="artifact-url" name="url" defaultValue={editing?.url ?? ""} type="url" required maxLength={8000} placeholder="https://example.com" disabled={saving} /><p className="text-sm text-muted-foreground">Stores the URL and metadata only. Remote content can change; upload a copy to preserve it.</p></div>
           : <><input type="hidden" name="content" value={content} /><DescriptionEditor id="artifact-content" label="Document content" value={content} onChange={setContent} disabled={saving} /></>}
-      <div className="flex items-center gap-2"><Button type="submit" disabled={saving}>{saving ? "Publishing…" : editing ? "Publish revision" : imageUpload ? "Publish image" : "Publish document"}</Button><Button type="button" variant="ghost" disabled={saving} onClick={() => setCreating(false)}>Cancel</Button></div>
+      <div className="flex items-center gap-2"><Button type="submit" disabled={saving}>{saving ? "Saving…" : editing ? "Save changes" : imageUpload ? "Publish image" : "Publish document"}</Button><Button type="button" variant="ghost" disabled={saving} onClick={() => setCreating(false)}>Cancel</Button></div>
     </form></DialogContent></Dialog>}
     <div className="flex flex-wrap items-end gap-4">
       <div className="space-y-2"><Label htmlFor="artifact-task">Linked task</Label>
@@ -172,7 +163,7 @@ export function ArtifactsPage() {
         </Select>
       </div>
       <div className="space-y-2"><Label htmlFor="artifact-view">View</Label>
-        <Select value={archived ? "archived" : "active"} disabled={saving} onValueChange={(value) => { setArchived(value === "archived"); setLoading(true); setArtifacts([]); setHistory([]); setCreating(false); }}>
+        <Select value={archived ? "archived" : "active"} disabled={saving} onValueChange={(value) => { setArchived(value === "archived"); setLoading(true); setArtifacts([]); setCreating(false); }}>
           <SelectTrigger id="artifact-view" className="w-44"><SelectValue /></SelectTrigger>
           <SelectContent><SelectItem value="active">Active artifacts</SelectItem><SelectItem value="archived">Archived artifacts</SelectItem></SelectContent>
         </Select>
@@ -193,10 +184,6 @@ export function ArtifactsPage() {
     </div>
     {error && <div role="alert" className="space-y-2"><p>{error}</p><Button variant="outline" onClick={() => setAttempt((value) => value + 1)}>Retry</Button></div>}
     {loading ? <p aria-busy="true">Loading artifacts…</p> : !error && !visible.length ? <p className="text-muted-foreground">{artifacts.length ? "No artifacts match these filters." : "No artifacts in this view."}</p> : null}
-    {visible.length > 0 && <ArtifactTable artifacts={visible} busy={saving} onEdit={(artifact) => void edit(artifact)} onHistory={(artifact) => void showHistory(artifact)} onArchive={(artifact) => void archive(artifact)} />}
-    {history.length > 0 && <section aria-label="Revision history" className="space-y-3">
-      <div className="flex items-center justify-between"><h3 className="text-lg font-semibold">Revision history</h3><Button variant="outline" onClick={() => setHistory([])}>Close history</Button></div>
-      <ArtifactTable artifacts={history} label="Artifact revisions" />
-    </section>}
+    {visible.length > 0 && <ArtifactTable artifacts={visible} busy={saving} onEdit={(artifact) => void edit(artifact)} onArchive={(artifact) => void archive(artifact)} />}
   </main></AppShell>;
 }

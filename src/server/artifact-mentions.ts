@@ -23,7 +23,7 @@ export function artifactMentions(body: string): ArtifactReference[] {
     const path = node.type === "link" ? node.url : node.type === "linkReference" ? definitions.get(node.identifier) : undefined;
     if (!path?.startsWith("#artifact/")) return;
     const ref = parseArtifactMention(path);
-    if (!ref) throw new Error("Choose a valid artifact revision reference.");
+    if (!ref) throw new Error("Choose a valid artifact reference.");
     references.push(ref);
   });
   return references;

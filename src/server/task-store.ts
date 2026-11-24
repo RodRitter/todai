@@ -477,7 +477,7 @@ export class TaskStore {
           ) ORDER BY createdAt, rowid`,
         )
         .all(task.id).map((row) => {
-          const artifacts = this.db.prepare("SELECT artifactId, revisionId FROM comment_artifacts WHERE commentId = ? ORDER BY artifactId, revisionId").all(row.id).map((ref) => ({ ...ref }));
+          const artifacts = this.db.prepare("SELECT artifactId FROM comment_artifacts WHERE commentId = ? ORDER BY artifactId").all(row.id).map((ref) => ({ ...ref }));
           return { ...row, ...(artifacts.length ? { artifacts } : {}) } as TaskComment;
         }),
     }));
@@ -555,9 +555,9 @@ export class TaskStore {
       // Description references become task attachments in the same transaction,
       // including artifacts created while composing a task that has no ID yet.
       for (const ref of artifactMentions(task.description)) {
-        if (!this.db.prepare("SELECT revisionId FROM artifact_revisions WHERE id = ? AND revisionId = ? AND workspaceId = workspace_id()")
-          .get(ref.artifactId, ref.revisionId)) {
-          throw new Error("Choose a valid artifact revision reference.");
+        if (!this.db.prepare("SELECT id FROM artifacts WHERE id = ? AND workspaceId = workspace_id()")
+          .get(ref.artifactId)) {
+          throw new Error("Choose a valid artifact reference.");
         }
         this.db.prepare("INSERT OR IGNORE INTO task_artifacts (taskId, artifactId) VALUES (?, ?)").run(task.id, ref.artifactId);
       }
@@ -954,12 +954,12 @@ export class TaskStore {
   private attachCommentArtifacts(commentId: string, attachments: unknown) {
     if (!Array.isArray(attachments)) throw new CommentValidationError("Choose valid artifact attachments.");
     for (const ref of attachments) {
-      if (!ref || typeof ref.artifactId !== "string" || typeof ref.revisionId !== "string" ||
-          !this.db.prepare("SELECT revisionId FROM artifact_revisions WHERE id = ? AND revisionId = ? AND workspaceId = workspace_id()")
-            .get(ref.artifactId, ref.revisionId))
-        throw new CommentValidationError("Artifact revision not found in this workspace.");
-      this.db.prepare("INSERT OR IGNORE INTO comment_artifacts (commentId, artifactId, revisionId) VALUES (?, ?, ?)")
-        .run(commentId, ref.artifactId, ref.revisionId);
+      if (!ref || typeof ref.artifactId !== "string" ||
+          !this.db.prepare("SELECT id FROM artifacts WHERE id = ? AND workspaceId = workspace_id()")
+            .get(ref.artifactId))
+        throw new CommentValidationError("Artifact not found in this workspace.");
+      this.db.prepare("INSERT OR IGNORE INTO comment_artifacts (commentId, artifactId) VALUES (?, ?)")
+        .run(commentId, ref.artifactId);
     }
   }
 
@@ -984,7 +984,7 @@ export class TaskStore {
       const status = this.listColumns(task.boardId)[0];
       if (!status) throw new ColumnValidationError("Add a board column before resetting the task.");
       this.db.prepare("DELETE FROM task_artifacts WHERE taskId = ?").run(taskId);
-      this.db.prepare("UPDATE artifact_revisions SET taskId = NULL, runId = NULL WHERE workspaceId = workspace_id() AND taskId = ?").run(taskId);
+      this.db.prepare("UPDATE artifacts SET taskId = NULL, runId = NULL WHERE workspaceId = workspace_id() AND taskId = ?").run(taskId);
       for (const table of ["comments", "chat_sessions", "runs", "task_usage"])
         this.db.prepare(`DELETE FROM ${table} WHERE workspaceId = workspace_id() AND taskId = ?`).run(taskId);
       this.db.prepare("UPDATE tasks SET status = ?, agentStatus = 'Not started', autoRun = 0, autoWorkflow = 0 WHERE workspaceId = workspace_id() AND id = ?")
@@ -1026,7 +1026,7 @@ export class TaskStore {
     try {
       let references;
       try { references = artifactMentions(comment.body); }
-      catch { throw new CommentValidationError("Choose a valid artifact revision reference."); }
+      catch { throw new CommentValidationError("Choose a valid artifact reference."); }
       this.db
         .prepare(
           "INSERT INTO comments (workspaceId, id, taskId, body, createdAt, authorName, recommendation, feedbackStatus, runId, parentCommentId, authorRole, responseType) VALUES (workspace_id(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",

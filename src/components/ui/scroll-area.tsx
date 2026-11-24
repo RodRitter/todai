@@ -9,7 +9,7 @@ type ScrollAreaProps = Omit<React.ComponentProps<typeof ScrollAreaPrimitive.Root
   orientation?: "vertical" | "horizontal" | "both";
   fade?: "none" | "bottom" | "vertical";
   fadeSize?: "sm" | "default";
-  variant?: "default" | "table" | "code" | "modal";
+  variant?: "default" | "table" | "code" | "modal" | "preview";
   viewportProps?: Omit<React.ComponentProps<typeof ScrollAreaPrimitive.Viewport>, "className" | "children">;
 };
 
@@ -34,6 +34,7 @@ function ScrollArea({ className, children, orientation = "vertical", fade = "non
         <ScrollAreaPrimitive.Content className={cn(
           orientation === "vertical" ? "min-w-0!" : "w-max min-w-full!",
           variant === "modal" && "grid gap-4 p-4",
+          variant === "preview" && "grid gap-6 px-6 pb-6 sm:px-8 sm:pb-8",
         )}>{children}</ScrollAreaPrimitive.Content>
       </ScrollAreaPrimitive.Viewport>
       {orientation !== "horizontal" && <ScrollBar />}

@@ -73,7 +73,7 @@ export function EntityPicker({ editor, id, match, agents, artifacts, keyboardRef
         if (!response.ok) throw new Error("References unavailable");
         if (kind === "artifact") {
           const artifacts: Artifact[] = await response.json();
-          return artifacts.map((artifact): EntityReference => ({ kind, label: artifact.title, path: artifactMentionPath({ artifactId: artifact.id, revisionId: artifact.revisionId }), detail: `Revision ${artifact.revisionNumber} · ${artifact.type}`, artifact }));
+          return artifacts.map((artifact): EntityReference => ({ kind, label: artifact.title, path: artifactMentionPath({ artifactId: artifact.id }), detail: artifact.type, artifact }));
         }
         const payload: { references: TaskReference[] } = await response.json();
         return payload.references;

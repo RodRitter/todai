@@ -8,13 +8,13 @@ import { TaskComments } from "@/components/tasks/task-comments";
 import { ArtifactPicker, TaskArtifacts } from "./artifact-attachments";
 
 const first: Artifact = {
-  id: "evidence", revisionId: "r1", revisionNumber: 1, archived: false, workspaceId: "workspace",
+  id: "evidence", archived: false, workspaceId: "workspace",
   title: "Original design evidence with a long title that wraps on narrow screens",
   description: "Published evidence", type: "text", creator: "Alice", createdAt: "2026-11-17T10:00:00Z",
   updatedAt: "2026-11-17T10:00:00Z", filename: "evidence.txt", mediaType: "text/plain", byteSize: 8, url: null,
 };
-const latest = { ...first, title: "Revised design evidence", revisionId: "r2", revisionNumber: 2, creator: "Bob" };
-const initialLinks: TaskArtifact[] = [{ artifact: latest, explicit: true, comments: [{ commentId: "comment", artifact: first }] }];
+const latest = { ...first, title: "Revised design evidence", creator: "Bob" };
+const initialLinks: TaskArtifact[] = [{ artifact: latest, explicit: true, comments: [{ commentId: "comment", artifact: latest }] }];
 
 const meta = {
   title: "Artifacts/Attachments",
@@ -39,7 +39,7 @@ const meta = {
         return Response.json(links);
       }
       if (url.pathname.endsWith("/download")) return new Response("Evidence");
-      if (url.searchParams.has("id")) return Response.json(url.searchParams.get("revision") === "r1" ? first : latest);
+      if (url.searchParams.has("id")) return Response.json(latest);
       return Response.json([latest]);
     };
     return () => { globalThis.fetch = original; };
@@ -48,7 +48,23 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const LatestAndPinned: Story = {};
+export const LinkedAndAttached: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const table = within(await canvas.findByRole("table", { name: "Task artifacts" }));
+    await expect(table.getByRole("columnheader", { name: "Name" })).toBeVisible();
+    await expect(table.queryByText("Linked", { exact: true })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("button", { name: "Link artifact to task" })).not.toBeInTheDocument();
+    await expect(table.getAllByRole("button", { name: `Open ${latest.title}` })).toHaveLength(1);
+    const unlink = table.getByRole("button", { name: `Unlink ${latest.title} from task` });
+    await expect(unlink).toBeVisible();
+    await expect(table.getByRole("button", { name: `View 1 comment reference for ${latest.title}` })).toBeVisible();
+    await userEvent.click(unlink);
+    await waitFor(() => expect(table.queryByRole("button", { name: `Unlink ${latest.title} from task` })).not.toBeInTheDocument());
+    await expect(table.getByRole("button", { name: `View 1 comment reference for ${latest.title}` })).toBeVisible();
+  },
+};
+export const DarkRows: Story = { parameters: { compactRows: true }, globals: { theme: "dark" } };
 export const TaskTabs: Story = {
   render: () => <TaskEditor open onOpenChange={() => {}} onSave={() => {}} task={{
     id: "task", title: "Review evidence", description: "Review the linked artifacts.", status: "To do", agentStatus: "Not started",
@@ -58,7 +74,7 @@ export const TaskTabs: Story = {
     const page = within(canvasElement.ownerDocument.body);
     const dialog = within(await page.findByRole("dialog"));
     await expect(dialog.getAllByRole("tablist")).toHaveLength(1);
-    await expect(dialog.getAllByRole("tab")).toHaveLength(3);
+    await expect(dialog.getAllByRole("tab").map((tab) => tab.getAttribute("aria-label") ?? tab.textContent)).toEqual(["Detail", "Activity", "Chat", "Artifacts", "Usage"]);
     await userEvent.click(dialog.getByRole("tab", { name: "Activity" }));
     await expect(dialog.getByText("See the original evidence.")).toBeVisible();
     await expect(dialog.queryByRole("tab", { name: "Comments" })).not.toBeInTheDocument();
@@ -67,7 +83,7 @@ export const TaskTabs: Story = {
     await userEvent.click(artifactsTab);
     await expect(dialog.getByText(latest.title)).toBeVisible();
     await userEvent.click(dialog.getByRole("button", { name: `View 1 comment reference for ${latest.title}` }));
-    await userEvent.click(await page.findByRole("link", { name: `Comment 1 · ${first.title}` }));
+    await userEvent.click(await page.findByRole("link", { name: `Comment 1 · ${latest.title}` }));
     await expect(dialog.getByRole("tab", { name: "Activity" })).toHaveAttribute("aria-selected", "true");
     await expect(dialog.getByText("See the original evidence.")).toBeVisible();
   },
@@ -112,13 +128,13 @@ export const PaperclipLoadError: Story = {
   },
 };
 
-export const OpenPinnedRevision: Story = {
+export const OpenDocument: Story = {
   play: async ({ canvasElement }) => {
     await userEvent.click(await within(canvasElement).findByRole("button", { name: /View 1 comment reference/ }));
-    await userEvent.click(await within(document.body).findByRole("button", { name: `Open ${first.title}, revision 1` }));
+    const references = (await within(document.body).findByText("Comment references", { exact: true })).parentElement!;
+    await userEvent.click(within(references).getByRole("button", { name: `Open ${latest.title}` }));
     const dialog = within(await within(document.body).findByRole("dialog"));
     await waitFor(() => expect(dialog.getByText("Evidence")).toBeVisible());
-    await expect(dialog.getByText("Revision 1", { exact: true })).toBeInTheDocument();
   },
 };
 
@@ -126,18 +142,16 @@ export const CitationPreview: Story = {
   render: () => <TaskComments comments={[{
     id: "citation", taskId: "task", authorName: "Builder", createdAt: first.createdAt,
     body: "Review [design evidence](#artifact/evidence/r1) before continuing.",
-    artifacts: [{ artifactId: first.id, revisionId: first.revisionId }],
+    artifacts: [{ artifactId: first.id }],
   }]} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const citation = canvas.getByRole("button", { name: "design evidence" });
     await userEvent.hover(citation);
-    await expect(await within(document.body).findByText("Click to open this revision")).toBeVisible();
-    await expect(within(document.body).getByText(/· Revision 1/)).toBeVisible();
+    await expect(await within(document.body).findByText("Click to open this document")).toBeVisible();
     await userEvent.click(citation);
     const dialog = within(await within(document.body).findByRole("dialog"));
     await waitFor(() => expect(dialog.getByText("Evidence")).toBeVisible());
-    await expect(dialog.getByText("Revision 1", { exact: true })).toBeVisible();
   },
 };
 
@@ -149,8 +163,8 @@ function RefreshingActivity() {
   }, []);
   return <><output aria-label="Refresh count">{refresh}</output><TaskComments comments={[{
     id: "citation", taskId: "task", authorName: "Builder", createdAt: first.createdAt,
-    body: `[Design evidence](#artifact/${first.id}/${first.revisionId})`,
-    artifacts: [{ artifactId: first.id, revisionId: first.revisionId }],
+    body: `[Design evidence](#artifact/${first.id})`,
+    artifacts: [{ artifactId: first.id }],
   }]} /></>;
 }
 export const CitationSurvivesRefresh: Story = {
@@ -162,7 +176,6 @@ export const CitationSurvivesRefresh: Story = {
     const count = Number(canvas.getByLabelText("Refresh count").textContent);
     await waitFor(() => expect(Number(canvas.getByLabelText("Refresh count").textContent)).toBeGreaterThan(count + 1));
     await expect(dialog).toBeVisible();
-    await expect(within(dialog).getByText("Revision 1", { exact: true })).toBeVisible();
-    await expect(canvas.queryByRole("button", { name: /Open .*revision 1/ })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("button", { name: /Open .*evidence/ })).not.toBeInTheDocument();
   },
 };
