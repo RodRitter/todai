@@ -134,7 +134,7 @@ export function DescriptionEditor({ value, onChange, disabled = false, autoFocus
   keyboard.current = (event) => {
     if (disabled || event.isComposing) return false;
     if (!match) {
-      if (variant !== "default" && event.key === "Enter" && !event.shiftKey) { event.preventDefault(); onSubmit?.(); return true; }
+      if (variant !== "default" && onSubmit && event.key === "Enter" && (event.ctrlKey || event.metaKey) && !event.shiftKey) { event.preventDefault(); onSubmit(); return true; }
       return false;
     }
     return pickerKeyboard.current(event);

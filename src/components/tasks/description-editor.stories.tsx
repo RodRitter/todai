@@ -38,6 +38,26 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Empty: Story = {};
+export const MultilineComment: Story = {
+  args: { variant: "prompt", value: "- First item", onSubmit: fn() },
+  play: async ({ canvasElement, args }) => {
+    const editor = await within(canvasElement).findByRole("textbox", { name: "Description" });
+    await userEvent.click(editor);
+    placeCaret(editor.querySelector("li p")!, false);
+    await userEvent.keyboard("{Enter}Second item");
+    await expect(args.onSubmit).not.toHaveBeenCalled();
+    await expect(editor.querySelectorAll("li")).toHaveLength(2);
+    await expect(editor.querySelectorAll("li")[1]).toHaveTextContent("Second item");
+    await userEvent.keyboard("{Control>}{Enter}{/Control}");
+    await expect(args.onSubmit).toHaveBeenCalledTimes(1);
+    await userEvent.keyboard("{Meta>}{Enter}{/Meta}");
+    await expect(args.onSubmit).toHaveBeenCalledTimes(2);
+  },
+};
+export const MultilineReply: Story = {
+  ...MultilineComment,
+  args: { ...MultilineComment.args, variant: "reply", onSubmit: fn() },
+};
 export const WithContent: Story = {
   args: { value: "## Requirements\n\nKeep **descriptions** and comments consistent.\n\n- Shared typography\n- One editor surface" },
 };

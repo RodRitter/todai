@@ -291,15 +291,15 @@ export const ReplyThread: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.queryByRole("button", { name: "Send reply" })).not.toBeInTheDocument();
-    await userEvent.click(canvas.getByLabelText("Your reply"));
-    await expect(canvas.getByRole("button", { name: "Send reply" })).toBeDisabled();
+    await userEvent.click(await canvas.findByRole("textbox", { name: "Your reply" }));
+    await expect(await canvas.findByRole("button", { name: "Send reply" })).toBeDisabled();
     await userEvent.type(canvas.getByLabelText("Your reply"), "Ready to ship.");
     await userEvent.click(canvas.getByRole("button", { name: "Send reply" }));
     await expect(within(canvas.getByLabelText("Reply thread")).getByText("Ready to ship.")).toBeVisible();
-    await expect(canvas.getByLabelText("Your reply")).toHaveValue("");
-    await userEvent.type(canvas.getByLabelText("Your reply"), "One more reply.{Enter}");
+    await expect(canvas.getByLabelText("Your reply")).toHaveTextContent(/^$/);
+    await userEvent.type(canvas.getByLabelText("Your reply"), "One more reply.{Control>}{Enter}{/Control}");
     await expect(within(canvas.getByLabelText("Reply thread")).getByText("One more reply.")).toBeVisible();
-    await expect(canvas.getByLabelText("Your reply")).toHaveValue("");
+    await expect(canvas.getByLabelText("Your reply")).toHaveTextContent(/^$/);
   },
 };
 export const ReplyTagging: Story = {
