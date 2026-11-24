@@ -1,3 +1,4 @@
+import { codexActivity } from "./run-activity.ts";
 import { parseUsage } from "./usage-rates.ts";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -16,6 +17,8 @@ export function createCodexRunner(executable = "codex"): Runner {
         onStdoutLine: (line) => {
           let event;
           try { event = JSON.parse(line); } catch { return; }
+          const activity = codexActivity(event);
+          if (activity) request.onActivity?.(activity);
           if (event?.type !== "turn.completed") return;
           const usage = parseUsage(event.usage);
           if (usage) request.onUsage?.(usage);

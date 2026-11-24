@@ -1,3 +1,4 @@
+import { createClaudeActivity } from "./run-activity.ts";
 import type { Runner } from "./execution-service.ts";
 import { runCli } from "./cli-process.ts";
 import { agentPrompt } from "./agent-prompt.ts";
@@ -18,7 +19,15 @@ export function claudeSummary(output: string): string {
 export function createClaudeRunner(executable = "claude"): Runner {
   return async (request) => {
     const { run, workspace, signal, onStart } = request;
-    const output = await runCli({
+    let result = "";
+    const activity = createClaudeActivity(update => request.onActivity?.(update));
+    await runCli({
+      onStdoutLine: line => {
+        let event;
+        try { event = JSON.parse(line); } catch { return; }
+        if (event?.type === "result") result = line;
+        activity(event);
+      },
       executable, label: "Claude Code", cwd: workspace, stopChildren: Boolean(request.task.worktree), signal, onStart,
       input: agentPrompt(request), timeout: run.kind === "intent" ? 60000 : run.kind === "memory" ? 300000 : 0,
       args: [
@@ -27,10 +36,10 @@ export function createClaudeRunner(executable = "claude"): Runner {
           "--allowedTools", "mcp__todai_artifacts",
         ] : []),
         ...((run.kind === "memory" || (request.privateChat && !request.privateChat.toolsEnabled)) ? ["--tools", "", "--strict-mcp-config", ...(!request.artifacts ? ["--mcp-config", '{"mcpServers":{}}'] : [])] : []),
-        "-p", "--output-format", "json", "--no-session-persistence",
+        "-p", "--output-format", "stream-json", "--verbose", "--no-session-persistence",
         "--permission-prompts", "none", "--model", run.profile.model,
         "--effort", run.profile.effort, "--permission-mode", run.profile.permissions],
     });
-    return claudeSummary(output);
+    return claudeSummary(result);
   };
 }

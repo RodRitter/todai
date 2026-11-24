@@ -26,11 +26,11 @@ import { validateWorkspace } from "./workspace-settings.ts";
 import { processIdentity } from "./process-identity.ts";
 import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import { mkdirSync, realpathSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { type Task, type TaskComment } from "../domain/task.ts";
 
-import type { ExecutionState } from "../domain/execution.ts";
+import type { RunActivity, RunActivityUpdate, ExecutionState } from "../domain/execution.ts";
 import type { Workspace } from "../domain/workspace.ts";
 export type { Workspace } from "../domain/workspace.ts";
 export class WorkspaceOwnershipError extends Error {}
@@ -552,7 +552,7 @@ export class TaskStore {
       .run(JSON.stringify(record), taskId);
   }
 
-  taskWorkspace(taskId: string, workspace: string): string {
+  taskWorkspace(taskId: string, workspace: string, onActivity?: (activity: RunActivityUpdate) => void): string {
     const task = this.readTask(taskId);
     if (!task) throw new Error("This task no longer exists.");
     if (task.status === this.completionColumn(task.boardId))
@@ -563,11 +563,15 @@ export class TaskStore {
       throw new Error("The workspace directory changed. Restore the original workspace directory before continuing this task.");
     // Persist ownership before Git changes the filesystem, so restart can recover creation.
     this.recordWorktree(task.id, record);
+    const activity = { id: "setup:worktree", title: existsSync(record.path) ? "Preparing the task worktree" : "Creating a worktree" };
+    onActivity?.({ ...activity, status: "running" });
     try {
       const path = openWorktree(record);
       this.recordWorktree(task.id, { ...record, headCommit: worktreeHead(record), status: "active", error: undefined });
+      onActivity?.({ ...activity, status: "complete" });
       return path;
     } catch (error) {
+      onActivity?.({ ...activity, status: "error" });
       this.recordWorktree(task.id, { ...record, status: "error", error: error instanceof Error ? error.message : String(error) });
       throw error;
     }
@@ -778,6 +782,25 @@ export class TaskStore {
     })) as AgentRun[];
   }
 
+  recordActivity(runId: string, activity: RunActivityUpdate) {
+    this.assertOwnership("runs", runId);
+    const run = this.db.prepare("SELECT status FROM runs WHERE id = ?").get(runId);
+    if (run?.status !== "Running") return;
+    const now = new Date().toISOString();
+    this.db.prepare(`INSERT INTO run_activity (runId, id, title, status, detail, createdAt, updatedAt, toolName, filePath)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(runId, id) DO UPDATE SET
+      title = excluded.title, status = excluded.status,
+      detail = COALESCE(excluded.detail, run_activity.detail), updatedAt = excluded.updatedAt,
+      toolName = COALESCE(excluded.toolName, run_activity.toolName), filePath = COALESCE(excluded.filePath, run_activity.filePath)`)
+      .run(runId, activity.id, activity.title.slice(0, 500), activity.status, activity.detail?.slice(0, 16000) ?? null, now, now, activity.toolName?.slice(0, 200) ?? null, activity.filePath?.slice(0, 1000) ?? null);
+  }
+
+  runActivity(runId: string): RunActivity[] {
+    this.assertOwnership("runs", runId);
+    return this.db.prepare("SELECT id, title, status, detail, toolName, filePath, createdAt, updatedAt FROM run_activity WHERE runId = ? ORDER BY rowid")
+      .all(runId).map(row => ({ ...row, detail: row.detail ?? undefined, toolName: row.toolName ?? undefined, filePath: row.filePath ?? undefined })) as RunActivity[];
+  }
+
   executionState(): ExecutionState {
     const active = this.db.prepare(`SELECT runs.id AS runId, tasks.id AS taskId, tasks.title AS taskTitle,
       json_extract(runs.profile, '$.name') AS agentName, workspaces.id AS workspaceId,
@@ -930,6 +953,8 @@ export class TaskStore {
       if (status === "Waiting" && (!summary.trim() || !recommendation?.trim()))
         throw new FeedbackValidationError("Feedback requests require a question and recommendation.");
       const finishedAt = new Date().toISOString();
+      this.db.prepare("UPDATE run_activity SET status = 'interrupted', updatedAt = ? WHERE runId = ? AND status = 'running'")
+        .run(finishedAt, runId);
       this.db
         .prepare(
           "UPDATE runs SET status = ?, finishedAt = ?, summary = ? WHERE runs.workspaceId = workspace_id() AND id = ?",

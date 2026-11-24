@@ -951,3 +951,123 @@ export const MemoryApprovalDark: Story = { args: MemoryApproval.args, globals: {
 export const MemoryApprovalNarrow: Story = { args: MemoryApproval.args, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
 export const MemoryApprovalPending: Story = { ...ApprovalPending, args: { ...ApprovalPending.args, comments: [memoryRequest] } };
 export const MemoryApprovalError: Story = { ...ApprovalError, args: { ...ApprovalError.args, comments: [memoryRequest] } };
+
+const activityRun = {
+  id: "run", agentName: "Builder", status: "Running" as const,
+  createdAt: "2026-11-24T10:00:00Z", startedAt: "2026-11-24T10:00:00Z", finishedAt: null, summary: null,
+  activity: [
+    { id: "memory", title: "Checking memories for the sign-in page", status: "complete" as const, createdAt: "2026-11-24T10:00:01Z", updatedAt: "2026-11-24T10:00:02Z" },
+    { id: "worktree", title: "Creating a worktree", status: "complete" as const, createdAt: "2026-11-24T10:00:03Z", updatedAt: "2026-11-24T10:00:04Z" },
+    { id: "test", title: "npm test -- --runInBand", status: "running" as const, detail: "Raw CLI output", createdAt: "2026-11-24T10:00:05Z", updatedAt: "2026-11-24T10:00:05Z" },
+  ],
+};
+export const LiveExecutionActivity: Story = {
+  args: { taskId: "activity-task", agentStatus: "Running", comments: [], loadActivity: async () => [activityRun] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText("Running tests")).toBeVisible();
+    await expect(canvas.getByText("Checked memories for the sign-in page")).toBeVisible();
+    await expect(canvas.queryByText("Run history")).not.toBeInTheDocument();
+    await expect(canvas.queryByText(/runInBand|Raw CLI output/)).not.toBeInTheDocument();
+  },
+};
+export const LiveExecutionActivityDark: Story = { ...LiveExecutionActivity, globals: { theme: "dark" } };
+export const CompletedExecutionActivity: Story = {
+  args: { taskId: "activity-task", agentStatus: "Complete", comments: [{ id: "result", taskId: "activity-task", runId: "run", authorName: "Builder", body: "The sign-in page is ready.", createdAt: "2026-11-24T10:01:00Z" }],
+    loadActivity: async () => [{ ...activityRun, status: "Complete", finishedAt: "2026-11-24T10:01:23Z", activity: activityRun.activity.map(step => ({ ...step, status: "complete" })) }],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const summary = await canvas.findByRole("button", { name: /^3 steps/ });
+    await expect(summary).toHaveAttribute("aria-expanded", "false");
+    await expect(canvas.getByLabelText("Duration: 1m 23s")).toBeVisible();
+    await expect(canvas.getByText("The sign-in page is ready.")).toBeVisible();
+    await userEvent.click(summary);
+    await expect(canvas.getByText("Ran tests")).toBeVisible();
+  },
+};
+
+export const ExecutionUpdatesLive: Story = {
+  args: { taskId: "activity-task", agentStatus: "Running", comments: [] },
+  render: function LiveUpdates(args) {
+    const [load] = useState(() => {
+      let calls = 0;
+      return async () => [{ ...activityRun, activity: ++calls === 1
+        ? [{ ...activityRun.activity[0], status: "running" as const }]
+        : activityRun.activity }];
+    });
+    return <TaskComments {...args} loadActivity={load} />;
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText("Checking memories for the sign-in page")).toBeVisible();
+    await waitFor(() => expect(canvas.getByText("Running tests")).toBeVisible(), { timeout: 3000 });
+    await expect(canvas.getByText("Created a worktree")).toBeVisible();
+  },
+};
+
+export const RecentExecutionSteps: Story = {
+  args: { taskId: "activity-task", agentStatus: "Running", comments: [], loadActivity: async () => [{ ...activityRun,
+    activity: Array.from({ length: 17 }, (_, index) => ({ ...activityRun.activity[0], id: `read-${index}`, title: "Read", toolName: "Read", filePath: `file-${index}.md` })),
+  }] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText("12+ more")).toBeVisible();
+    await expect(canvas.queryByText("file-11.md")).not.toBeInTheDocument();
+    await expect(canvas.getByText("file-12.md")).toBeVisible();
+    await expect(canvas.getByText("file-16.md")).toBeVisible();
+  },
+};
+export const NamedToolActivity: Story = {
+  args: { taskId: "activity-task", agentStatus: "Running", comments: [], loadActivity: async () => [{ ...activityRun, activity: [
+    { ...activityRun.activity[0], id: "read", title: "Read", toolName: "Read", filePath: "myfile.md", status: "running" },
+    { ...activityRun.activity[0], id: "used", title: "my_tool", toolName: "my_tool", status: "complete" },
+    { ...activityRun.activity[0], id: "failed", title: "other_tool", toolName: "other_tool", status: "error" },
+  ] }] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText("myfile.md")).toBeVisible();
+    await expect(canvas.getByText("myfile.md").tagName).toBe("CODE");
+    await expect(canvas.getByText("my_tool").parentElement).toHaveTextContent("Used my_tool tool");
+    await expect(canvas.getByText("other_tool").parentElement).toHaveTextContent("Failed to use other_tool tool");
+  },
+};
+
+export const RunningTraceScroll: Story = {
+  args: { ...LiveExecutionActivity.args, embedded: true,
+    comments: Array.from({ length: 8 }, (_, index) => ({ id: `scroll-${index}`, taskId: "activity-task", authorName: "Human", body: `Earlier message ${index}`, createdAt: "2026-11-24T09:00:00Z" })),
+  },
+  decorators: [(Story) => <div className="flex h-80 flex-col"><Story /></div>],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = await canvas.findByRole("button", { name: /^Builder is working/ });
+    const viewport = canvasElement.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')!;
+    const trace = trigger.closest<HTMLElement>('[data-slot="trace-collapsible"]')!;
+    await userEvent.click(trigger);
+    await waitFor(() => expect(viewport.dataset.scrollPreserving).toBeUndefined());
+    const top = viewport.scrollTop;
+    const height = trace.getBoundingClientRect().height;
+    await userEvent.click(trigger);
+    await waitFor(() => expect(viewport.dataset.scrollPreserving).toBeUndefined());
+    const growth = trace.getBoundingClientRect().height - height;
+    await expect(growth).toBeGreaterThan(0);
+    await expect(Math.abs(viewport.scrollTop - Math.min(top + growth, viewport.scrollHeight - viewport.clientHeight))).toBeLessThan(2);
+    const icon = trigger.querySelector<HTMLElement>('[data-slot="trace-icon"]')!;
+    await expect(icon).toHaveClass("animate-spin");
+  },
+};
+
+export const LiveExecutionTimer: Story = {
+  ...LiveExecutionActivity,
+  render: function TimerExample(args) {
+    const [startedAt] = useState(() => new Date().toISOString());
+    const [loadActivity] = useState(() => async () => [{ ...activityRun, startedAt }]);
+    return <TaskComments {...args} loadActivity={loadActivity} />;
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const timer = await canvas.findByLabelText(/^Elapsed time:/);
+    const first = timer.textContent;
+    await waitFor(() => expect(timer.textContent).not.toBe(first), { timeout: 2500 });
+  },
+};

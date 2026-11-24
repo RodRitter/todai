@@ -157,6 +157,15 @@ export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
     initializeArtifactSchema(db);
     initializeChatSchema(db);
     initializeUsageSchema(db);
+    db.exec(`CREATE TABLE IF NOT EXISTS run_activity (
+      runId TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+      id TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL, detail TEXT,
+      createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, PRIMARY KEY (runId, id)
+    );`);
+    const activityColumns = db.prepare("PRAGMA table_info(run_activity)").all();
+    for (const column of ["toolName", "filePath"]) {
+      if (!activityColumns.some(field => field.name === column)) db.exec(`ALTER TABLE run_activity ADD COLUMN ${column} TEXT`);
+    }
     db.exec("CREATE TABLE IF NOT EXISTS general_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
     db.exec(`
       INSERT OR IGNORE INTO settings (workspaceId, key, value)

@@ -70,16 +70,21 @@ let prompt = '';
 process.stdin.on('data', chunk => prompt += chunk);
 process.stdin.on('end', () => {
   fs.writeFileSync('received.json', JSON.stringify({ args, prompt, cwd: process.cwd() }));
+  process.stdout.write(JSON.stringify({"type": "item.started", "item": {"id": "cmd", "type": "command_execution", "command": "npm test", "status": "in_progress"}}) + '\\n');
+  process.stdout.write(JSON.stringify({"type": "item.completed", "item": {"id": "cmd", "type": "command_execution", "command": "npm test", "status": "completed", "exit_code": 0, "aggregated_output": "Passed"}}) + '\\n');
   fs.writeFileSync(args[args.indexOf('--output-last-message') + 1], 'Built and verified the board');
 });
 `,
     { mode: 0o755 },
   );
   try {
+    const activity: import("../domain/execution.ts").RunActivityUpdate[] = [];
     assert.equal(
-      await createCodexRunner(executable)({ ...request(directory), artifacts: { url: "http://127.0.0.1:12345/mcp", token: "test-token", context: [] } }),
+      await createCodexRunner(executable)({ ...request(directory), onActivity: update => activity.push(update), artifacts: { url: "http://127.0.0.1:12345/mcp", token: "test-token", context: [] } }),
       "Built and verified the board",
     );
+    assert.deepEqual(activity.map(step => step.status), ["running", "complete"]);
+    assert.equal(activity[1].detail, "Passed");
     const received = JSON.parse(
       readFileSync(join(directory, "received.json"), "utf8"),
     );

@@ -27,7 +27,13 @@ export function useBottomScroll(active: boolean) {
     const resize = new ResizeObserver(follow);
     resize.observe(body);
     resize.observe(node);
-    const mutations = new MutationObserver(follow);
+    const mutations = new MutationObserver(records => {
+      const contentChanged = records.some(record => {
+        const element = record.target instanceof Element ? record.target : record.target.parentElement;
+        return !element?.closest('[data-slot="trace-duration"]');
+      });
+      if (contentChanged) follow();
+    });
     mutations.observe(body, { childList: true, characterData: true, subtree: true });
     const resume = (event: FocusEvent) => {
       if (event.target instanceof Element && event.target.closest('[data-slot="message-reply-composer"]')) follow();

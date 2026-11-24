@@ -52,3 +52,19 @@ test("cleanup waits when the process-group check temporarily returns EPERM", asy
   assert.equal(denied, true);
   assert.equal(output.trim(), "Complete");
 });
+
+test("CLI line streaming preserves split UTF-8 and flushes the final line", async () => {
+  const lines: string[] = [];
+  await runCli({ executable: process.execPath, label: "Test", cwd: process.cwd(),
+    args: ["-e", "const bytes = Buffer.from('✓\\nlast'); process.stdout.write(bytes.subarray(0, 1)); setTimeout(() => process.stdout.write(bytes.subarray(1)), 30);"],
+    onStdoutLine: line => lines.push(line),
+  });
+  assert.deepEqual(lines, ["✓\n", "last"]);
+});
+
+test("CLI activity callback failures reject the run", async () => {
+  await assert.rejects(runCli({ executable: process.execPath, label: "Test", cwd: process.cwd(),
+    args: ["-e", "process.stdout.write('event\\n'); setInterval(() => {}, 100);"],
+    onStdoutLine: () => { throw new Error("Could not save activity."); },
+  }), /Could not save activity/);
+});

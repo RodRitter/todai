@@ -1,3 +1,15 @@
+export type RunActivity = {
+  id: string;
+  title: string;
+  status: "running" | "complete" | "error" | "interrupted";
+  detail?: string;
+  toolName?: string;
+  filePath?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+export type RunActivityUpdate = Omit<RunActivity, "createdAt" | "updatedAt">;
+
 export type QueuedDirectoryChange = { runId: string; workspaceName: string; previousPath: string; path: string };
 
 export type RunHistoryEntry = {
@@ -8,6 +20,7 @@ export type RunHistoryEntry = {
   startedAt: string | null;
   finishedAt: string | null;
   summary: string | null;
+  activity?: RunActivity[];
 };
 
 export type QueuedRun = {

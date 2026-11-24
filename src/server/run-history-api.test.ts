@@ -16,7 +16,16 @@ test("run history is workspace-scoped and exposes only display data in newest-fi
     store.assignColumnAgent({ column: "In progress", agentId: "agent" });
     store.save({ id: "task", title: "Build", description: "", status: "In progress", autoRun: true });
     const first = store.claimRun()!;
+    store.recordActivity(first.id, { id: "command", title: "npm test", status: "running", toolName: "Bash" });
+    const createdAt = store.runActivity(first.id)[0].createdAt;
+    store.recordActivity(first.id, { id: "command", title: "npm test", status: "complete", detail: "Tests passed." });
+    store.recordActivity(first.id, { id: "unfinished", title: "Read file", status: "running" });
     store.finishRun(first.id, "Complete", "Work completed.");
+    store.recordActivity(first.id, { id: "late", title: "Late event", status: "running" });
+    const reopened = new TaskStore(process.env.TODAI_DB_PATH);
+    assert.deepEqual(reopened.runActivity(first.id).map(step => step.status), ["complete", "interrupted"]);
+    assert.equal(reopened.runActivity(first.id)[0].createdAt, createdAt);
+    reopened.close();
     store.runTask("task");
     const request = (workspaceId?: string, taskId = "task") => new Request(`http://localhost/api/tasks/run?taskId=${taskId}`, {
       headers: workspaceId ? { "X-Todai-Workspace": workspaceId } : {},
@@ -27,11 +36,18 @@ test("run history is workspace-scoped and exposes only display data in newest-fi
     assert.deepEqual(history.map((run: { status: string }) => run.status), ["Queued", "Complete"]);
     assert.equal(history[1].summary, "Work completed.");
     assert.equal(history[1].agentName, "Builder");
-    assert.deepEqual(Object.keys(history[1]).sort(), ["id", "agentName", "status", "createdAt", "startedAt", "finishedAt", "summary"].sort());
+    assert.equal(history[1].activity[0].detail, "Tests passed.");
+    assert.equal(history[1].activity[0].toolName, "Bash");
+    assert.deepEqual(history[0].activity, []);
+    assert.deepEqual(Object.keys(history[1]).sort(), ["id", "agentName", "status", "createdAt", "startedAt", "finishedAt", "summary", "activity"].sort());
     assert.equal(GET(request()).status, 400);
     assert.deepEqual(await GET(request(store.workspaceId, "missing")).json(), []);
     const other = store.createWorkspace("Other", directory);
     assert.equal(GET(request(other.id)).status, 400);
+    const otherStore = new TaskStore(process.env.TODAI_DB_PATH, other.id);
+    assert.throws(() => otherStore.runActivity(first.id));
+    assert.throws(() => otherStore.recordActivity(first.id, { id: "bad", title: "Bad", status: "running" }));
+    otherStore.close();
     assert.equal(GET(new Request("http://localhost/api/tasks/run")).status, 400);
   } finally {
     store.close();

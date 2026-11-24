@@ -7,14 +7,16 @@ import { preserveScroll } from "./preserve-scroll";
 
 const OpenContext = React.createContext(false);
 
-function Collapsible({ open: controlled, defaultOpen = false, onOpenChange, children, ref, ...props }: React.ComponentProps<typeof CollapsiblePrimitive.Root>) {
+function Collapsible({ open: controlled, defaultOpen = false, onOpenChange, children, ref, scrollBehavior = "preserve", ...props }: React.ComponentProps<typeof CollapsiblePrimitive.Root> & { scrollBehavior?: "preserve" | "follow-expansion" }) {
   const [local, setLocal] = React.useState(defaultOpen);
   const node = React.useRef<HTMLDivElement>(null);
   React.useImperativeHandle(ref, () => node.current!);
   const open = controlled ?? local;
+  const stopScrolling = React.useRef<(() => void) | undefined>(undefined);
+  React.useEffect(() => () => stopScrolling.current?.(), []);
   return <OpenContext.Provider value={open}>
     <CollapsiblePrimitive.Root {...props} ref={node} open={open} onOpenChange={(value) => {
-      preserveScroll(node.current);
+      stopScrolling.current = preserveScroll(node.current, value ? scrollBehavior : "preserve");
       setLocal(value);
       onOpenChange?.(value);
     }}>{children}</CollapsiblePrimitive.Root>

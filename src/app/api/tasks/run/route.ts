@@ -16,7 +16,7 @@ export function GET(request: Request) {
       .map((run): RunHistoryEntry => ({
         id: run.id, agentName: run.profile.name, status: run.status,
         createdAt: run.createdAt, startedAt: run.startedAt,
-        finishedAt: run.finishedAt, summary: run.summary,
+        finishedAt: run.finishedAt, summary: run.summary, activity: store.runActivity(run.id),
       })));
     return Response.json(history);
   } catch {

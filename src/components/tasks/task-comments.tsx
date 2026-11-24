@@ -1,4 +1,7 @@
 "use client";
+import { RunActivity } from "./run-activity";
+import { useRunHistory, loadRunHistory } from "./use-run-history";
+import type { RunHistoryEntry } from "@/domain/execution";
 import { isHumanComment } from "@/domain/comment-author";
 
 
@@ -28,8 +31,9 @@ import type { AgentStatus, TaskComment } from "@/domain/task";
 
 const emptyComments: TaskComment[] = [];
 
-export function TaskComments({ taskId, active = true, onChat, embedded = false, comments = emptyComments, onAnswerFeedback, onPostComment, onDeleteComment, agents = [], agentStatus }: {
+export function TaskComments({ taskId, active = true, onChat, embedded = false, comments = emptyComments, onAnswerFeedback, onPostComment, onDeleteComment, agents = [], agentStatus, loadActivity = loadRunHistory }: {
   taskId?: string;
+  loadActivity?: typeof loadRunHistory;
   active?: boolean;
   onChat?: (comment: TaskComment) => void;
   embedded?: boolean;
@@ -40,6 +44,9 @@ export function TaskComments({ taskId, active = true, onChat, embedded = false, 
   onPostComment?: (body: string, artifacts?: ArtifactReference[], parentCommentId?: string) => Promise<void>;
   onAnswerFeedback?: (commentId: string, body: string) => Promise<void>;
 }) {
+  const { runs, error: activityError, retry } = useRunHistory(taskId, active, `${agentStatus}:${comments.length}`, loadActivity);
+  const runsById = new Map(runs.map(run => [run.id, run]));
+  const liveRuns = runs.filter(run => run.status === "Running" || run.status === "Queued");
   const { viewport, content } = useBottomScroll(active && embedded);
   const [observed, setObserved] = useState({ taskId, comments, active });
   const [attentionId, setAttentionId] = useState<string>();
@@ -58,14 +65,16 @@ export function TaskComments({ taskId, active = true, onChat, embedded = false, 
         <ol aria-label="Activity, oldest first" className="space-y-4">
           {groupActivity(comments).toReversed().map(({ message: comment, replies }) => (
             <li key={comment.id} tabIndex={-1} id={`comment-${comment.id}`} className="group">
-              <ActivityMessage agents={agents} attentionId={attentionId} onChat={onChat} comment={comment} replies={replies} agentStatus={agentStatus} onDeleteComment={onDeleteComment} onAnswerFeedback={onAnswerFeedback} onPostComment={onPostComment} />
+              <ActivityMessage runsById={runsById} agents={agents} attentionId={attentionId} onChat={onChat} comment={comment} replies={replies} agentStatus={agentStatus} onDeleteComment={onDeleteComment} onAnswerFeedback={onAnswerFeedback} onPostComment={onPostComment} />
             </li>
           ))}
         </ol>
       ) : null}
-      {(agentStatus === "Running" || agentStatus === "Queued") && (
+      {(agentStatus === "Running" || agentStatus === "Queued") && liveRuns.length === 0 && (
         <MessageAgentStatus status={agentStatus} />
       )}
+      {liveRuns.map(run => <RunActivity key={run.id} activity={run.activity ?? []} running={run.status === "Running"} queued={run.status === "Queued"} agentName={run.agentName} startedAt={run.startedAt} finishedAt={run.finishedAt} active={active} />)}
+      {activityError && <div role="alert">Could not load agent activity. <Button variant="ghost-muted" size="sm" onClick={retry}>Retry</Button></div>}
     </div>;
   return (
     <section aria-label="Task activity" className={embedded ? "flex min-h-0 flex-1 flex-col" : "mt-8 space-y-6"}>
@@ -77,7 +86,8 @@ export function TaskComments({ taskId, active = true, onChat, embedded = false, 
   );
 }
 
-function ActivityMessage({ agents, attentionId, onChat, comment, replies = [], agentStatus, onDeleteComment, onAnswerFeedback, onPostComment, nested = false, label }: {
+function ActivityMessage({ runsById, agents, attentionId, onChat, comment, replies = [], agentStatus, onDeleteComment, onAnswerFeedback, onPostComment, nested = false, label }: {
+  runsById: Map<string, RunHistoryEntry>;
   nested?: boolean;
   label?: string;
   agents: AgentProfile[];
@@ -119,11 +129,13 @@ function ActivityMessage({ agents, attentionId, onChat, comment, replies = [], a
           onCancel={replies.length ? undefined : () => { setReplying(false); replyButton.current?.focus(); }} />
       </MessageReplyComposer>}
       attention={attentionId === comment.id} id={nested ? `comment-${comment.id}` : undefined}>
+      {!isHumanComment(comment) && comment.runId && runsById.has(comment.runId) &&
+        <RunActivity activity={runsById.get(comment.runId)!.activity ?? []} running={false} startedAt={runsById.get(comment.runId)!.startedAt} finishedAt={runsById.get(comment.runId)!.finishedAt} />}
       <div id={`comment-content-${comment.id}`}>
         <ConversationMessageBody message={comment} feedback={feedback} embedded />
       </div>
       {replies.length > 0 && <MessageThread gutter={!nested} id={`thread-${comment.id}`} aria-label="Reply thread">
-        {groupActivity(replies).toReversed().map(({ message, replies: children }) => <ActivityMessage key={message.id} nested
+        {groupActivity(replies).toReversed().map(({ message, replies: children }) => <ActivityMessage runsById={runsById} key={message.id} nested
           agents={agents} attentionId={attentionId} onChat={onChat} comment={message} replies={children} agentStatus={agentStatus}
           label={comment.feedbackStatus && message.runId === comment.runId && isHumanComment(message) ? "Your answer" : undefined}
           onDeleteComment={onDeleteComment} onAnswerFeedback={onAnswerFeedback} />)}

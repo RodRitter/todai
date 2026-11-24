@@ -10,6 +10,7 @@ import type { TaskStore, AgentRun } from "./task-store.ts";
 import type { Task } from "../domain/task.ts";
 
 export type RunRequest = {
+  onActivity?: (activity: import("../domain/execution.ts").RunActivityUpdate) => void;
   onUsage?: (usage: TokenUsage) => void;
   userName?: string;
   workspaceMemory?: import("../domain/memory.ts").MemoryContext;
@@ -95,12 +96,24 @@ export class ExecutionService {
         if (run.kind !== "intent") artifacts = await openRunArtifacts(this.store, run, controller.signal);
         if (this.store.interruptionRequested(run.id)) controller.abort();
         controller.signal.throwIfAborted();
+        const onActivity: NonNullable<RunRequest["onActivity"]> = activity => this.store.recordActivity(run.id, activity);
+        const memoryStep = { id: "setup:memory", title: `Checking memories for ${task.title.slice(0, 80)}` };
+        onActivity({ ...memoryStep, status: "running" });
+        let workspaceMemory: RunRequest["workspaceMemory"];
+        try {
+          workspaceMemory = this.store.memoryContext(`${task.title} ${task.description}`);
+          onActivity({ ...memoryStep, status: "complete" });
+        } catch (error) {
+          onActivity({ ...memoryStep, status: "error" });
+          throw error;
+        }
         const sourceWorkspace = executionWorkspacePath(run.workspacePath);
         const workspace = run.kind === "intent" || run.kind === "memory"
-          ? sourceWorkspace : this.store.taskWorkspace(task.id, sourceWorkspace);
+          ? sourceWorkspace : this.store.taskWorkspace(task.id, sourceWorkspace, onActivity);
         summary = await runWithUsage(this.store, this.runner, {
+          onActivity,
           userName: this.store.getUserName(),
-          workspaceMemory: this.store.memoryContext(`${task.title} ${task.description}`),
+          workspaceMemory,
           artifacts: artifacts?.connection,
           run,
           task: this.store.readTask(task.id)!,

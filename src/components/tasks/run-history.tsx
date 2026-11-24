@@ -7,6 +7,7 @@ import { workspaceFetch } from "@/lib/workspace-fetch";
 import { Button } from "@/components/ui/button";
 import { Trace, TraceCollapsible, TraceCollapsibleContent, TraceCollapsibleTrigger, TraceDescription, TraceIcon, TraceLine, TraceTitle } from "@/components/ui/trace";
 import { Markdown } from "@/components/ui/markdown";
+import { RunActivity } from "./run-activity";
 import { AgentStatus } from "./agent-status";
 
 async function loadHistory(taskId: string, signal: AbortSignal): Promise<RunHistoryEntry[]> {
@@ -15,11 +16,14 @@ async function loadHistory(taskId: string, signal: AbortSignal): Promise<RunHist
   return response.json();
 }
 
-export function RunHistory({ taskId, load = loadHistory }: {
+export function RunHistory({ taskId, load = loadHistory, active = true, running = false }: {
   taskId: string;
   load?: typeof loadHistory;
+  active?: boolean;
+  running?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [chosenOpen, setOpen] = useState<boolean>();
+  const open = chosenOpen ?? running;
   return <Trace>
     <TraceCollapsible open={open} onOpenChange={setOpen}>
       <TraceCollapsibleTrigger>
@@ -27,7 +31,7 @@ export function RunHistory({ taskId, load = loadHistory }: {
         <TraceTitle>Run history</TraceTitle>
       </TraceCollapsibleTrigger>
       <TraceCollapsibleContent keepMounted>
-        <RunHistoryContent key={taskId} taskId={taskId} load={load} active={open} />
+        <RunHistoryContent key={taskId} taskId={taskId} load={load} active={active && open} />
       </TraceCollapsibleContent>
     </TraceCollapsible>
   </Trace>;
@@ -78,6 +82,7 @@ function RunHistoryContent({ taskId, load, active }: { taskId: string; load: typ
                 {new Date(run.finishedAt ?? run.startedAt ?? run.createdAt).toLocaleString()}
               </time>
             </p>
+            <RunActivity activity={run.activity ?? []} running={run.status === "Running"} startedAt={run.startedAt} finishedAt={run.finishedAt} active={active} />
             {run.summary && <TraceCollapsible>
               <TraceCollapsibleTrigger size="xs">View summary</TraceCollapsibleTrigger>
               <TraceCollapsibleContent keepMounted><Markdown>{run.summary}</Markdown></TraceCollapsibleContent>

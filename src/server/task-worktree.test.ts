@@ -31,12 +31,16 @@ test("task worktrees isolate files, preserve the workspace subdirectory, and reu
   const f = fixture();
   try {
     writeFileSync(join(f.workspace, "source.txt"), "main checkout edit\n");
-    const path = f.store.taskWorkspace(f.task.id, f.workspace);
+    const activity: import("../domain/execution.ts").RunActivityUpdate[] = [];
+    const path = f.store.taskWorkspace(f.task.id, f.workspace, step => activity.push(step));
+    assert.deepEqual(activity.map(step => [step.title, step.status]), [["Creating a worktree", "running"], ["Creating a worktree", "complete"]]);
     assert.notEqual(path, f.workspace);
     assert.ok(path.endsWith("/src/app"));
     assert.equal(readFileSync(join(path, "source.txt"), "utf8"), "base\n");
     writeFileSync(join(path, "source.txt"), "task edit\n");
-    assert.equal(f.store.taskWorkspace(f.task.id, f.workspace), path);
+    activity.length = 0;
+    assert.equal(f.store.taskWorkspace(f.task.id, f.workspace, step => activity.push(step)), path);
+    assert.deepEqual(activity.map(step => [step.title, step.status]), [["Preparing the task worktree", "running"], ["Preparing the task worktree", "complete"]]);
     const other = f.store.save({ id: "two", title: "Other", description: "", status: "In progress" });
     const otherPath = f.store.taskWorkspace(other.id, f.workspace);
     assert.notEqual(otherPath, path);

@@ -59,7 +59,8 @@ test("a move to an assigned column queues a run, with a profile snapshot", async
 test("runs are serialized across services and completion persists handovers without moving tasks", async () => {
   const started: string[] = [];
   let finish!: (summary: string) => void;
-  const f = fixture(({ task }) => {
+  const f = fixture(({ task, onActivity }) => {
+    onActivity?.({ id: "command", title: "npm test", status: "running" });
     started.push(task.id);
     return new Promise((resolve) => {
       finish = resolve;
@@ -79,6 +80,8 @@ test("runs are serialized across services and completion persists handovers with
     const draining = f.service.drain();
     await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(started, ["one"]);
+    assert.deepEqual(f.store.runActivity(f.service.history("one")[0].id).map(step => step.id), ["setup:memory", "command"]);
+    assert.equal(f.store.runActivity(f.service.history("one")[0].id).find(step => step.id === "command")!.status, "running");
     assert.deepEqual(
       f.service.list().map((task) => task.agentStatus),
       ["Running", "Queued"],
@@ -111,6 +114,7 @@ test("runs are serialized across services and completion persists handovers with
       );
       assert.equal(reopened.list()[0].comments?.[0].authorName, "Builder");
       assert.equal(reopened.history("one")[0].summary, "Implemented the board");
+      assert.equal(reopened.runActivity(reopened.history("one")[0].id).find(step => step.id === "command")!.status, "interrupted");
     } finally {
       reopened.close();
     }

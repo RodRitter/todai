@@ -70,16 +70,21 @@ let prompt = '';
 process.stdin.on('data', chunk => prompt += chunk);
 process.stdin.on('end', () => {
   fs.writeFileSync('received.json', JSON.stringify({ args, prompt, cwd: process.cwd() }));
+  process.stdout.write(JSON.stringify({"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "cmd", "name": "Bash", "input": {"command": "npm test"}}]}}) + '\\n');
+  process.stdout.write(JSON.stringify({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "cmd", "content": "Passed"}]}}) + '\\n');
   process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: 'Built and verified the board' }));
 });
 `,
     { mode: 0o755 },
   );
   try {
+    const activity: import("../domain/execution.ts").RunActivityUpdate[] = [];
     assert.equal(
-      await createClaudeRunner(executable)({ ...request(directory), artifacts: { url: "http://127.0.0.1:12345/mcp", token: "test-token", context: [] } }),
+      await createClaudeRunner(executable)({ ...request(directory), onActivity: update => activity.push(update), artifacts: { url: "http://127.0.0.1:12345/mcp", token: "test-token", context: [] } }),
       "Built and verified the board",
     );
+    assert.deepEqual(activity.map(step => step.status), ["running", "complete"]);
+    assert.equal(activity[1].detail, "Passed");
     const received = JSON.parse(
       readFileSync(join(directory, "received.json"), "utf8"),
     );
@@ -89,7 +94,8 @@ process.stdin.on('end', () => {
     for (const arg of [
       "-p",
       "--output-format",
-      "json",
+      "stream-json",
+      "--verbose",
       "--no-session-persistence",
       "--permission-prompts",
       "none",

@@ -32,6 +32,11 @@ export async function runCli({ executable, label, args, cwd, input = "", signal,
         failure = new Error(`${label} timed out after ${timeout / 1000} seconds.`);
         stop();
       }, timeout);
+      const publishLine = (line: string) => {
+        try { onStdoutLine?.(line); }
+        catch (error) { failure = error instanceof Error ? error : new Error(String(error)); stop(); }
+      };
+      child.stdout.setEncoding("utf8");
       child.stdout.on("data", (chunk) => {
         if (failure) return;
         if (onStdoutLine) {
@@ -39,7 +44,7 @@ export async function runCli({ executable, label, args, cwd, input = "", signal,
             if (!droppingLine) lineBuffer += part;
             if (lineBuffer.length > 1_000_000) { lineBuffer = ""; droppingLine = true; }
             if (part.endsWith("\n")) {
-              if (!droppingLine) onStdoutLine(lineBuffer);
+              if (!droppingLine && !failure) publishLine(lineBuffer);
               lineBuffer = ""; droppingLine = false;
             }
           }
@@ -59,7 +64,7 @@ export async function runCli({ executable, label, args, cwd, input = "", signal,
       // Descendants can keep stdout open after the executor exits. Stop them before waiting for close.
       child.once("exit", () => { if (stopChildren) stop(); });
       child.on("close", (code, exitSignal) => {
-        if (lineBuffer && !droppingLine) onStdoutLine?.(lineBuffer);
+        if (lineBuffer && !droppingLine && !failure) publishLine(lineBuffer);
         if (failure) reject(failure);
         else if (signal?.aborted) reject(new Error(`${label} was interrupted.`));
         else if (code === 0) resolve(stdout);
