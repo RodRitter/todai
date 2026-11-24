@@ -13,7 +13,7 @@ export async function runCli({ executable, label, args, cwd, input = "", signal,
   let timer: ReturnType<typeof globalThis.setTimeout> | undefined;
   let failure: Error | undefined;
   const stop = () => {
-    if (!pid) return;
+    if (!pid || stopped) return;
     try { process.kill(-pid, "SIGKILL"); stopped = true; }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error; }
   };
@@ -81,5 +81,11 @@ export async function runCli({ executable, label, args, cwd, input = "", signal,
 
 function groupExists(pid: number) {
   try { process.kill(-pid, 0); return true; }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === "ESRCH") return false; throw error; }
+  catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ESRCH") return false;
+    // A denied probe does not confirm exit. Keep waiting for the stopped group to disappear.
+    if (code === "EPERM") return true;
+    throw error;
+  }
 }
