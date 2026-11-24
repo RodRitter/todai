@@ -35,6 +35,8 @@ async function request<T>(
 }
 
 export const taskApi = {
+  retryWorktree: (taskId: string) =>
+    request<Task>("/api/tasks/worktree", { method: "POST", body: { taskId } }),
   reset: (taskId: string) =>
     request<Task>("/api/tasks/reset", { method: "POST", body: { taskId } }),
   stop: (taskId: string) =>

@@ -16,7 +16,19 @@ export const agentStatuses = [
 ] as const;
 export type AgentStatus = (typeof agentStatuses)[number];
 export type Board = { id: string; name: string; columns: string[] };
+export type TaskWorktree = {
+  repository: string;
+  path: string;
+  subdirectory: string;
+  branch: string;
+  baseBranch: string;
+  baseCommit: string;
+  headCommit?: string;
+  status: "creating" | "active" | "removed" | "error";
+  error?: string;
+};
 export type Task = {
+  worktree?: TaskWorktree | null;
   archivedAt?: string | null;
   creditUsage?: import("./usage.ts").TaskCreditUsage;
   /** Assigned by the database when the task is first saved. */

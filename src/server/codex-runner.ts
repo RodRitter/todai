@@ -12,7 +12,7 @@ export function createCodexRunner(executable = "codex"): Runner {
     const directory = await mkdtemp(join(tmpdir(), "todai-handover-"));
     const output = join(directory, "handover.txt");
     try {
-      await runCli({ executable, label: "Codex CLI", cwd: workspace, onStart, signal, input: agentPrompt(request), timeout: run.kind === "intent" ? 60000 : run.kind === "memory" ? 300000 : 0,
+      await runCli({ executable, label: "Codex CLI", cwd: workspace, stopChildren: Boolean(request.task.worktree), onStart, signal, input: agentPrompt(request), timeout: run.kind === "intent" ? 60000 : run.kind === "memory" ? 300000 : 0,
         onStdoutLine: (line) => {
           let event;
           try { event = JSON.parse(line); } catch { return; }

@@ -2,7 +2,8 @@ import { spawn } from "node:child_process";
 import { setTimeout } from "node:timers/promises";
 
 // Both executors must own a process group so cancellation also stops their commands.
-export async function runCli({ executable, label, args, cwd, input = "", signal, onStart = () => {}, timeout = 0, onStdoutLine }: {
+export async function runCli({ executable, label, args, cwd, input = "", signal, onStart = () => {}, timeout = 0, stopChildren = false, onStdoutLine }: {
+  stopChildren?: boolean;
   onStdoutLine?: (line: string) => void;
   executable: string; label: string; args: string[]; cwd: string; input?: string;
   signal?: AbortSignal; onStart?: (pid: number) => void; timeout?: number;
@@ -55,6 +56,8 @@ export async function runCli({ executable, label, args, cwd, input = "", signal,
         `Could not launch ${label}: ${error.code === "ENOENT" ? `install ${executable} and ensure it is on the app server's PATH` : error.message}.`,
       )));
       child.stdin.on("error", () => { /* close/error reports broken input pipes */ });
+      // Descendants can keep stdout open after the executor exits. Stop them before waiting for close.
+      child.once("exit", () => { if (stopChildren) stop(); });
       child.on("close", (code, exitSignal) => {
         if (lineBuffer && !droppingLine) onStdoutLine?.(lineBuffer);
         if (failure) reject(failure);
@@ -69,6 +72,7 @@ export async function runCli({ executable, label, args, cwd, input = "", signal,
       child.stdin.end(input);
     });
   } finally {
+    if (stopChildren) stop();
     if (timer) clearTimeout(timer);
     signal?.removeEventListener("abort", stop);
     while (stopped && pid && groupExists(pid)) await setTimeout(20);

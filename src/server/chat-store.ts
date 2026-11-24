@@ -48,6 +48,8 @@ export class ChatStore {
       const session = this.forTask(taskId);
       if (session.running) throw new Error("The chat is already processing a message.");
       const task = this.task(taskId);
+      if (this.db.prepare("SELECT id FROM runs WHERE taskId = ? AND status = 'Running'").get(taskId))
+        throw new Error("Wait for the task agent to finish before starting a chat response.");
       const lease = new Date(Date.now() + 360000).toISOString();
       const now = new Date().toISOString();
       this.db.prepare("UPDATE chat_sessions SET lease = ?, error = NULL, updatedAt = ? WHERE id = ?").run(lease, now, session.id);

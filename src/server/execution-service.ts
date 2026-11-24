@@ -81,6 +81,7 @@ export class ExecutionService {
       );
     }
     while (true) {
+      this.store.cleanupWorktrees();
       const run = this.store.claimRun();
       if (!run) return;
       const task = this.store.list().find((task) => task.id === run.taskId)!;
@@ -94,13 +95,16 @@ export class ExecutionService {
         if (run.kind !== "intent") artifacts = await openRunArtifacts(this.store, run, controller.signal);
         if (this.store.interruptionRequested(run.id)) controller.abort();
         controller.signal.throwIfAborted();
+        const sourceWorkspace = executionWorkspacePath(run.workspacePath);
+        const workspace = run.kind === "intent" || run.kind === "memory"
+          ? sourceWorkspace : this.store.taskWorkspace(task.id, sourceWorkspace);
         summary = await runWithUsage(this.store, this.runner, {
           userName: this.store.getUserName(),
           workspaceMemory: this.store.memoryContext(`${task.title} ${task.description}`),
           artifacts: artifacts?.connection,
           run,
-          task,
-          workspace: executionWorkspacePath(run.workspacePath),
+          task: this.store.readTask(task.id)!,
+          workspace,
           signal: controller.signal,
           onStart: (pid) => {
             this.store.recordRunner(run.id, pid);

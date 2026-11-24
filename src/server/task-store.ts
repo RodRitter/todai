@@ -1,3 +1,5 @@
+import { closeWorktree, openWorktree, planWorktree, worktreeHead } from "./task-worktree.ts";
+import type { TaskWorktree } from "../domain/task.ts";
 import { searchMemoryEntries, readMemoryEntries, memoryContext, prepareMemoryChanges, applyMemoryChanges, memoryDocument, memoryChangesSummary } from "./memory-entries.ts";
 import { readMemory, readMemorySnapshot, memoryProfile } from "./workspace-memory.ts";
 import { parseCredits } from "../domain/credit-settings.ts";
@@ -24,8 +26,8 @@ import { validateWorkspace } from "./workspace-settings.ts";
 import { processIdentity } from "./process-identity.ts";
 import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { mkdirSync, realpathSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { type Task, type TaskComment } from "../domain/task.ts";
 
 import type { ExecutionState } from "../domain/execution.ts";
@@ -522,6 +524,7 @@ export class TaskStore {
         .all(includeArchived ? 1 : 0, taskId ?? null, taskId ?? null) as unknown as Task[]
     ).map((task) => ({
       ...task,
+      worktree: typeof task.worktree === "string" ? JSON.parse(task.worktree) : null,
       creditUsage: credits.get(task.id) ?? { credits: 0, calls: 0, priced: 0, pending: 0 },
       autoWorkflow: Boolean(task.autoWorkflow),
       autoRun: Boolean(task.autoRun),
@@ -542,6 +545,52 @@ export class TaskStore {
           return { ...row, ...(changes ? { memoryChanges: JSON.parse(String(changes)) } : {}), ...(artifacts.length ? { artifacts } : {}) } as TaskComment;
         }),
     }));
+  }
+
+  private recordWorktree(taskId: string, record: TaskWorktree) {
+    this.db.prepare("UPDATE tasks SET worktree = ? WHERE id = ? AND workspaceId = workspace_id()")
+      .run(JSON.stringify(record), taskId);
+  }
+
+  taskWorkspace(taskId: string, workspace: string): string {
+    const task = this.readTask(taskId);
+    if (!task) throw new Error("This task no longer exists.");
+    if (task.status === this.completionColumn(task.boardId))
+      throw new Error("Reopen the task before running an agent with code access.");
+    const record = task.worktree ?? planWorktree(workspace, task, `${this.databasePath}:${this.workspaceId}:${task.id}`);
+    if (!record) return workspace;
+    if (realpathSync(workspace) !== realpathSync(resolve(record.repository, record.subdirectory)))
+      throw new Error("The workspace directory changed. Restore the original workspace directory before continuing this task.");
+    // Persist ownership before Git changes the filesystem, so restart can recover creation.
+    this.recordWorktree(task.id, record);
+    try {
+      const path = openWorktree(record);
+      this.recordWorktree(task.id, { ...record, headCommit: worktreeHead(record), status: "active", error: undefined });
+      return path;
+    } catch (error) {
+      this.recordWorktree(task.id, { ...record, status: "error", error: error instanceof Error ? error.message : String(error) });
+      throw error;
+    }
+  }
+
+  cleanupWorktrees(retryTaskId?: string) {
+    for (const candidate of this.list(true)) {
+      if (retryTaskId && candidate.id !== retryTaskId) continue;
+      if (!candidate.worktree || candidate.worktree.status === "removed") continue;
+      // Keep task moves and run claims out of the cleanup window across app processes.
+      this.transaction(() => {
+        const task = this.readTask(candidate.id);
+        if (!task?.worktree || task.worktree.status === "removed" || (task.worktree.status === "error" && !retryTaskId)) return;
+        if (!task.archivedAt && task.status !== this.completionColumn(task.boardId)) return;
+        if (this.history(task.id).some((run) => run.status === "Running")) return;
+        if (this.db.prepare("SELECT id FROM chat_sessions WHERE workspaceId = workspace_id() AND taskId = ? AND lease > ?")
+          .get(task.id, new Date().toISOString())) return;
+        try { this.recordWorktree(task.id, closeWorktree(task.worktree, task)); }
+        catch (error) {
+          this.recordWorktree(task.id, { ...task.worktree, status: "error", error: error instanceof Error ? error.message : String(error) });
+        }
+      });
+    }
   }
 
   save(input: unknown): Task {
@@ -565,7 +614,7 @@ export class TaskStore {
     ) {
       throw new Error("Enter a title and valid task properties.");
     }
-    return this.transaction(() => {
+    this.transaction(() => {
       this.assertOwnership("tasks", task.id);
       const previous = this.list().find((item) => item.id === task.id);
       const movedBoard = previous && previous.boardId !== boardId;
@@ -630,6 +679,8 @@ export class TaskStore {
       }
       return this.list().find((item) => item.id === task.id)!;
     });
+    this.cleanupWorktrees(task.id);
+    return this.readTask(task.id)!;
   }
 
   runTask(taskId: unknown): Task {
@@ -794,6 +845,7 @@ export class TaskStore {
       const waiting = new Set(this.list().filter((task) => task.agentStatus === "Stopped" || task.comments?.some((comment) => comment.feedbackStatus === "pending")).map((task) => task.id));
       const run = this.history().sort((a, b) => a.createdAt.localeCompare(b.createdAt)).find((run) => run.status === "Queued" && !waiting.has(run.taskId));
       if (!run) return;
+      if (this.db.prepare("SELECT id FROM chat_sessions WHERE taskId = ? AND lease > ?").get(run.taskId, new Date().toISOString())) return;
       const taskBoard = this.db.prepare("SELECT boardId FROM tasks WHERE workspaceId = workspace_id() AND id = ?").get(run.taskId)!.boardId as string;
       const columnInstructions = run.kind === "intent" || run.kind === "memory" ? "" : this.columnInstructions(taskBoard)[run.column] ?? "";
       this.db.prepare("UPDATE runs SET columnInstructions = ? WHERE id = ? AND workspaceId = workspace_id()").run(columnInstructions, run.id);
@@ -1087,6 +1139,7 @@ export class TaskStore {
       this.db.prepare("UPDATE comments SET feedbackStatus = 'cancelled' WHERE workspaceId = workspace_id() AND taskId = ? AND feedbackStatus = 'pending'").run(id);
       this.db.prepare("UPDATE runs SET status = 'Stopped', finishedAt = ? WHERE workspaceId = workspace_id() AND taskId = ? AND status = 'Waiting'").run(new Date().toISOString(), id);
     });
+    this.cleanupWorktrees(id);
   }
 
   private assertIdle(taskId: string, action = "deleting the task") {

@@ -19,7 +19,7 @@ export function createClaudeRunner(executable = "claude"): Runner {
   return async (request) => {
     const { run, workspace, signal, onStart } = request;
     const output = await runCli({
-      executable, label: "Claude Code", cwd: workspace, signal, onStart,
+      executable, label: "Claude Code", cwd: workspace, stopChildren: Boolean(request.task.worktree), signal, onStart,
       input: agentPrompt(request), timeout: run.kind === "intent" ? 60000 : run.kind === "memory" ? 300000 : 0,
       args: [
         ...(request.artifacts ? [

@@ -740,3 +740,33 @@ export const RetryMemoryReview: Story = {
     await expect(args.onRun).toHaveBeenCalledOnce();
   },
 };
+
+const taskWorktree = {
+  repository: "/projects/legacy", path: "/projects/legacy/.git/todai/worktrees/example",
+  subdirectory: "src/AngularSpa", branch: "todai/task-3-example", baseBranch: "main",
+  baseCommit: "1234567890abcdef", headCommit: "abcdef1234567890", status: "active" as const,
+};
+export const TaskBranchActive: Story = {
+  args: { open: true, task: { ...exampleTasks[2], worktree: taskWorktree } },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    await expect(page.getByText("TASK-3")).toBeVisible();
+    await userEvent.click(page.getByRole("button", { name: "Branch details: todai/task-3-example" }));
+    await expect(page.getByText("Base: main")).toBeVisible();
+    await expect(page.getByText("Starting commit: 1234567890abcdef")).toBeVisible();
+  },
+};
+export const TaskBranchRetained: Story = {
+  args: { open: true, task: { ...exampleTasks[2], status: "Done", worktree: { ...taskWorktree, status: "removed" } } },
+};
+export const TaskBranchCleanupFailed: Story = {
+  args: { open: true, completionColumn: "Done", onRetryWorktree: fn().mockResolvedValue(undefined), task: { ...exampleTasks[2], status: "Done", worktree: { ...taskWorktree, status: "error", error: "The commit hook failed. Correct the files, then retry cleanup." } } },
+  play: async ({ canvasElement, args }) => {
+    await userEvent.click(within(canvasElement.ownerDocument.body).getByRole("button", { name: "Retry cleanup" }));
+    await expect(args.onRetryWorktree).toHaveBeenCalled();
+  },
+};
+export const TaskBranchLongDark: Story = {
+  args: { open: true, task: { ...exampleTasks[2], worktree: { ...taskWorktree, branch: "todai/task-3-a-long-branch-name-that-must-fit-without-hiding-the-task-controls" } } },
+  globals: { theme: "dark" },
+};

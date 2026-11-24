@@ -46,6 +46,7 @@ export function TaskBoard({
     agentId: string | null,
   ) => Promise<ColumnAssignment | null>;
   persistence?: {
+    retryWorktree?: (taskId: string) => Promise<Task>;
     list?: () => Promise<Task[] | BoardSnapshot>;
     save: (task: Task) => Promise<Task>;
     delete: (id: string) => Promise<void>;
@@ -315,6 +316,11 @@ export function TaskBoard({
             setEditing(task);
           }}
           onDelete={deleteTask}
+          onRetryWorktree={persistence?.retryWorktree ? () => mutate(async () => {
+            const saved = await persistence.retryWorktree!(editing!.id);
+            updateTasks((current) => current.map((task) => task.id === saved.id ? saved : task));
+            setEditing(saved);
+          }) : undefined}
           onReset={persistence?.reset ? (taskId) => mutate(async () => {
             const saved = await persistence.reset!(taskId);
             updateTasks((current) => current.map((task) => task.id === saved.id ? saved : task));

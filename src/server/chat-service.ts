@@ -25,7 +25,8 @@ export async function sendChat(tasks: TaskStore, chats: ChatStore, taskId: strin
     const workspace = executionWorkspace(tasks);
     const signal = AbortSignal.timeout(300000);
     const runAgent = async (profile: AgentProfile, classify = false) => {
-      const toolsEnabled = profile === generic;
+      const toolsEnabled = profile === generic && task.status !== tasks.completionColumn(task.boardId);
+      const agentWorkspace = toolsEnabled ? tasks.taskWorkspace(task.id, workspace) : workspace;
       const request: RunRequest = {
         run: { id: randomUUID(), workspaceId: tasks.workspaceId, workspacePath: workspace, taskId,
           column: task.status, ...(classify ? { kind: "intent" as const } : {}), profile: toolsEnabled ? profile : { ...profile, permissions: profile.tool === "codex" ? "read-only" : "dontAsk" },
@@ -33,7 +34,7 @@ export async function sendChat(tasks: TaskStore, chats: ChatStore, taskId: strin
           summary: null, ownerPid: null, runnerPid: null },
         userName: tasks.getUserName(),
         workspaceMemory: tasks.memoryContext(`${task.title} ${body}`),
-        task, workspace, signal, onStart: () => {},
+        task: tasks.readTask(task.id)!, workspace: agentWorkspace, signal, onStart: () => {},
         privateChat: { toolsEnabled, messages: chats.get(session.id).messages, ...(classify ? { candidates } : {}) },
       };
       const artifacts = toolsEnabled ? await openRunArtifacts(tasks, request.run, signal, {
@@ -59,5 +60,6 @@ export async function sendChat(tasks: TaskStore, chats: ChatStore, taskId: strin
   } catch (error) {
     chats.finish(session.id, lease, error instanceof Error ? error.message : "The response failed. Send a message to retry.");
   }
+  tasks.cleanupWorktrees();
   return chats.get(session.id);
 }

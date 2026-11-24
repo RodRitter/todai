@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { TaskId } from "./task-id";
+import { TaskBranch } from "./task-branch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -37,6 +38,7 @@ import type { AgentProfile, ColumnAssignment } from "@/domain/column-agent";
 import { statuses, type Status, type Task } from "@/domain/task";
 
 export type TaskEditorProps = {
+  onRetryWorktree?: () => Promise<void>;
   boards?: import("@/domain/task").Board[];
   boardId?: string;
   columns?: readonly string[];
@@ -85,6 +87,7 @@ function TaskEditorSession({
   onSave,
   onDelete,
   onReset,
+  onRetryWorktree,
   onAnswerFeedback,
   onPostComment,
   onDeleteComment,
@@ -287,7 +290,10 @@ function TaskEditorSession({
       <DialogContent closeDisabled={busy} aria-describedby={undefined} size={expanded ? "expanded" : "large"} layout="workspace">
         <DialogHeader variant="task" className="w-[calc(100%+3rem)] max-w-5xl justify-self-center">
           <div className="col-start-1 row-start-1 min-w-0 space-y-2">
-            <TaskId number={editing?.taskNumber} />
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <TaskId number={editing?.taskNumber} />
+              <TaskBranch worktree={editing?.worktree} onRetry={editing?.status === completionColumn ? onRetryWorktree : undefined} />
+            </div>
             {isEditingTitle ? <>
             <DialogTitle className="sr-only">{title.trim() || "Create task"}</DialogTitle>
             <Label htmlFor="task-title" className="sr-only">Title</Label>
