@@ -751,21 +751,33 @@ export const TaskBranchActive: Story = {
   play: async ({ canvasElement }) => {
     const page = within(canvasElement.ownerDocument.body);
     await expect(page.getByText("TASK-3")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Copy branch name: todai/task-3-example" })).toBeVisible();
+    await expect(page.queryByRole("status", { name: "Worktree active" })).not.toBeInTheDocument();
+    await userEvent.click(page.getByRole("button", { name: "Branch and worktree actions" }));
     await expect(page.getByRole("status", { name: "Worktree active" })).toHaveTextContent("Active");
-    await expect(page.getByRole("link", { name: "Open in VS Code" })).toHaveAttribute("href", "vscode://file/projects/legacy/.git/todai/worktrees/example/");
-    await expect(page.getByRole("button", { name: "Copy path" })).toBeVisible();
-    await userEvent.click(page.getByRole("button", { name: "Branch details: todai/task-3-example" }));
-    await expect(page.getByText("Base: main")).toBeVisible();
-    await expect(page.getByText("Starting commit: 1234567890abcdef")).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Open worktree in VS Code" })).toHaveAttribute("href", "vscode://file/projects/legacy/.git/todai/worktrees/example/");
+    await expect(page.getByRole("menuitem", { name: "Copy worktree path" })).toBeVisible();
+    await userEvent.keyboard("{Escape}");
+    await expect(page.getByRole("button", { name: "Branch and worktree actions" })).toHaveFocus();
   },
 };
 export const TaskBranchRetained: Story = {
   args: { open: true, task: { ...exampleTasks[2], status: "Done", worktree: { ...taskWorktree, status: "removed" } } },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(page.getByRole("button", { name: "Branch and worktree actions" }));
+    await expect(page.getByRole("status", { name: "Worktree removed; local branch retained" })).toHaveTextContent("Removed");
+    await expect(page.getByRole("menuitem", { name: "Copy worktree path" })).toHaveAttribute("aria-disabled", "true");
+    await expect(page.getByRole("menuitem", { name: "Open worktree in VS Code" })).toHaveAttribute("aria-disabled", "true");
+  },
 };
 export const TaskBranchCleanupFailed: Story = {
   args: { open: true, completionColumn: "Done", onRetryWorktree: fn().mockResolvedValue(undefined), task: { ...exampleTasks[2], status: "Done", worktree: { ...taskWorktree, status: "error", error: "The commit hook failed. Correct the files, then retry cleanup." } } },
   play: async ({ canvasElement, args }) => {
-    await userEvent.click(within(canvasElement.ownerDocument.body).getByRole("button", { name: "Retry cleanup" }));
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(page.getByRole("button", { name: "Branch and worktree actions" }));
+    await expect(page.getByText("The commit hook failed. Correct the files, then retry cleanup.")).toBeVisible();
+    await userEvent.click(page.getByRole("menuitem", { name: "Retry cleanup" }));
     await expect(args.onRetryWorktree).toHaveBeenCalled();
   },
 };
