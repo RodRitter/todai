@@ -45,7 +45,10 @@ test("one task stream survives reload and keeps chat out of task context", async
       return "Second answer";
     });
     assert.deepEqual(calls, ["comment-intent", "author"]);
-    assert.deepEqual(f.tasks.list(), before);
+    const after = f.tasks.list();
+    assert.equal(after[0].creditUsage!.calls, 3);
+    // Chat usage is counted, but task content and workflow state stay unchanged.
+    assert.deepEqual(after.map((task) => ({ ...task, creditUsage: undefined })), before.map((task) => ({ ...task, creditUsage: undefined })));
     assert.equal(f.tasks.history().length, 0);
     const reloaded = new ChatStore(f.tasks);
     try { assert.equal(reloaded.forTask("task").messages.length, 4); } finally { reloaded.close(); }
@@ -163,7 +166,7 @@ test("workspace and task scope prevent chat access across boundaries", () => {
       assert.throws(() => f.chats.get(session.id, "other"), /not found in this task/);
     } finally { chats.close(); tasks.close(); }
     f.tasks.delete("task");
-    assert.throws(() => f.chats.get(session.id), /not found/);
+    assert.equal(f.chats.get(session.id).id, session.id);
   } finally { f.cleanup(); }
 });
 

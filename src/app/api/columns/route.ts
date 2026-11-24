@@ -59,7 +59,7 @@ export function PATCH(request: Request) {
         "Choose a column and enter its new name.",
       );
     }
-    return store.renameColumn(input.column, input.name, "instructions" in input ? input.instructions : undefined);
+    return store.renameColumn(input.column, input.name, "instructions" in input ? input.instructions : undefined, "completion" in input ? input.completion : undefined);
   });
 }
 export function DELETE(request: Request) {

@@ -115,3 +115,35 @@ Instructions remain with a column when it is renamed or reordered. Configuration
 Use the instructions to describe the stage’s purpose, required work, verification steps, and expected handover.
 For example: “Review the changes against the task requirements. Run the relevant tests. Report findings, test results, and unfinished work.”
 Instructions guide the agent. They do not change Auto-run, Auto-workflow, or the agent’s permissions.
+
+## Workspace memory
+
+Open **Memory** in the sidebar to search accepted entries. Each accordion row shows a title and category. Expand a row to read its statement, scope, source, and revision. Results show 20 entries per page. Use **Previous** and **Next** to change pages. A new search returns to the first page. Select **Refresh** to load changes accepted elsewhere.
+
+Select **Clear memory** to remove all accepted entries and saved memory versions in the current workspace. Confirm the action in the dialog. Clearing also cancels pending memory reviews. Task comments and other workspaces remain unchanged. This action cannot be undone.
+
+Workspace memory stores accepted terms, practices, decisions, and preferences. All boards in the same workspace share this memory. Other workspaces have separate memory.
+
+To enable automatic review:
+
+1. Open the column settings from the board or the board settings editor.
+2. Enable **Completion column**.
+3. Select **Save settings**.
+
+Each board can have at most one completion column. Enabling another column unmarks the previous column in the same save. Disable the current switch to stop automatic memory reviews. Renaming or reordering a column preserves its setting. Existing tasks do not receive reviews when this setting changes.
+
+When a task enters the completion column, Todai queues a built-in memory review. This review replaces the assigned column agent while the completion setting is enabled. It uses the workspace's default executor and requires no separate agent assignment. It runs for manual moves and automatic workflow moves, including tasks with automatic agents disabled. The global execution pause still applies.
+
+The reviewer searches recorded memory and automatically saves supported entry additions, changes, and removals. It posts a short change count on the task. No approval feedback is required.
+
+These updates do not move the task. If there is no useful change, Todai posts **No memory changes recorded**. If a review fails, use the task's run action to retry it. Revision checks prevent stale changes from overwriting newer entries.
+
+Task, reply, and chat runs receive up to five relevant entries within a 4,000-character budget. Agents with tools can search memory and read selected entries. Search returns short excerpts; reading returns exact content and revisions. The reviewer has only read-only memory tools. Memory does not grant permissions or override current instructions.
+
+Old pending memory approvals are cancelled and replaced with fresh automatic reviews. Clearing memory cancels these reviews too.
+
+## Archived tasks and references
+
+Select **Archive task** from the task actions menu to remove a task from its board. Its ID, comments, chats, artifacts, usage, and run history remain stored. Tasks with queued or running work must finish or stop before archiving.
+
+Select **Copy task reference** to copy a reference based on the task ID. References use `[Task ID](#task/ID)`. They open a read-only task page, including archived tasks. Existing local task links continue to resolve. Archived tasks cannot be edited or reused as new tasks.

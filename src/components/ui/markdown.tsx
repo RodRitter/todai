@@ -1,3 +1,4 @@
+import { parseTaskReference } from "@/domain/task-reference";
 import { ReferenceChip } from "./reference-chip";
 import { parseCommentReference } from "@/domain/comment-reference";
 import { CommentReference } from "@/components/tasks/comment-reference";
@@ -34,6 +35,8 @@ function markdownComponents(compact: boolean): Components {
     a: ({ href, children }) =>
       compact ? (
         <span>{children}</span>
+      ) : href && parseTaskReference(href) ? (
+        <ReferenceChip asChild kind="task"><a href={`/tasks/${encodeURIComponent(parseTaskReference(href)!)}`}>{children}</a></ReferenceChip>
       ) : href && parseCommentReference(href) ? (
         <CommentReference reference={parseCommentReference(href)!}>{children}</CommentReference>
       ) : href && parseArtifactMention(href) ? (

@@ -8,6 +8,7 @@ export type BoardSnapshot = {
   tasks: Task[];
   columns: string[];
   columnInstructions?: Record<string, string>;
+  completionColumn?: string | null;
   assignments: ColumnAssignment[];
 };
 
@@ -74,10 +75,10 @@ export const agentApi = {
 export const columnApi = {
   create: (name: string) =>
     request<string[]>("/api/columns", { method: "POST", body: name }),
-  rename: (column: string, name: string, instructions?: string) =>
+  rename: (column: string, name: string, instructions?: string, completion?: boolean) =>
     request<string[]>("/api/columns", {
       method: "PATCH",
-      body: { column, name, ...(instructions !== undefined ? { instructions } : {}) },
+      body: { column, name, ...(instructions !== undefined ? { instructions } : {}), ...(completion !== undefined ? { completion } : {}) },
     }),
   remove: (column: string) =>
     request<string[]>("/api/columns", { method: "DELETE", body: column }),
@@ -145,7 +146,7 @@ export function boardSettingsApi(boardId: string) {
   return {
     load: () => request<BoardSnapshot>("/api/tasks?workspace=true", { headers }),
     create: (name: string) => request<string[]>("/api/columns", { headers, method: "POST", body: name }),
-    rename: (column: string, name: string, instructions?: string) => request<string[]>("/api/columns", { headers, method: "PATCH", body: { column, name, ...(instructions !== undefined ? { instructions } : {}) } }),
+    rename: (column: string, name: string, instructions?: string, completion?: boolean) => request<string[]>("/api/columns", { headers, method: "PATCH", body: { column, name, ...(instructions !== undefined ? { instructions } : {}), ...(completion !== undefined ? { completion } : {}) } }),
     remove: (column: string) => request<string[]>("/api/columns", { headers, method: "DELETE", body: column }),
     reorder: (columns: string[]) => request<string[]>("/api/columns", { headers, method: "PUT", body: columns }),
   };
@@ -155,4 +156,11 @@ export const generalSettingsApi = {
   get: () => request<{ userName: string }>("/api/general-settings"),
   setCreditLimit: (creditLimit: number) => request<{ creditLimit: number }>("/api/credit-limit", { method: "PUT", body: { creditLimit } }),
   save: (userName: string) => request<{ userName: string }>("/api/general-settings", { method: "PUT", body: { userName } }),
+};
+
+
+export const memoryApi = {
+  clear: () => request<{ cleared: number }>("/api/memory", { method: "DELETE", body: { confirmation: "clear-memory" } }, "Could not clear workspace memory. Try again."),
+  search: (query = "", offset = 0, signal?: AbortSignal) => request<import("@/domain/memory").MemorySearchResult>(`/api/memory?view=entries&query=${encodeURIComponent(query)}&offset=${offset}`, { signal }, "Could not load workspace memory. Try again."),
+  get: (signal?: AbortSignal) => request<import("@/domain/memory").MemorySnapshot>("/api/memory", { signal }, "Could not load workspace memory. Try again."),
 };

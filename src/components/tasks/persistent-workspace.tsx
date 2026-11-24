@@ -119,6 +119,8 @@ export function PersistentWorkspace({
       initialAgents={agents}
       initialAssignments={assignments}
       initialColumnInstructions={board.columnInstructions}
+      initialCompletionColumn={board.completionColumn}
+      initialTaskId={typeof window === "undefined" ? undefined : new URL(window.location.href).searchParams.get("task") ?? undefined}
       configureColumn={columnApi.rename}
       assignAgent={agentApi.assign}
       persistence={taskApi}

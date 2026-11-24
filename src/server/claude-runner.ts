@@ -20,13 +20,13 @@ export function createClaudeRunner(executable = "claude"): Runner {
     const { run, workspace, signal, onStart } = request;
     const output = await runCli({
       executable, label: "Claude Code", cwd: workspace, signal, onStart,
-      input: agentPrompt(request), timeout: run.kind === "intent" ? 60000 : 0,
+      input: agentPrompt(request), timeout: run.kind === "intent" ? 60000 : run.kind === "memory" ? 300000 : 0,
       args: [
         ...(request.artifacts ? [
           "--mcp-config", JSON.stringify({ mcpServers: { todai_artifacts: { type: "http", url: request.artifacts.url, headers: { Authorization: `Bearer ${request.artifacts.token}` } } } }),
           "--allowedTools", "mcp__todai_artifacts",
         ] : []),
-        ...(request.privateChat && !request.privateChat.toolsEnabled ? ["--tools", "", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}'] : []),
+        ...((run.kind === "memory" || (request.privateChat && !request.privateChat.toolsEnabled)) ? ["--tools", "", "--strict-mcp-config", ...(!request.artifacts ? ["--mcp-config", '{"mcpServers":{}}'] : [])] : []),
         "-p", "--output-format", "json", "--no-session-persistence",
         "--permission-prompts", "none", "--model", run.profile.model,
         "--effort", run.profile.effort, "--permission-mode", run.profile.permissions],

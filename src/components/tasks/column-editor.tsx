@@ -32,7 +32,8 @@ import { Label } from "@/components/ui/label";
 export type ColumnEditorProps = {
   initialColumns: string[];
   initialInstructions?: Record<string, string>;
-  configure?: (column: string, name: string, instructions: string) => Promise<string[]>;
+  initialCompletionColumn?: string | null;
+  configure?: (column: string, name: string, instructions: string, completion: boolean) => Promise<string[]>;
   initialTaskCounts?: Record<string, number>;
   create: (name: string) => Promise<string[]>;
   reorder: (columns: string[]) => Promise<string[]>;
@@ -43,7 +44,8 @@ export type ColumnEditorProps = {
   onEditingChange?: (editing: boolean) => void;
 };
 
-export function ColumnEditor({ initialInstructions = {}, configure, initialColumns, initialTaskCounts = {}, create, reorder, rename, remove, compact = false, disabled = false, onEditingChange }: ColumnEditorProps) {
+export function ColumnEditor({ initialInstructions = {}, initialCompletionColumn = null, configure, initialColumns, initialTaskCounts = {}, create, reorder, rename, remove, compact = false, disabled = false, onEditingChange }: ColumnEditorProps) {
+  const [completionColumn, setCompletionColumn] = useState(initialCompletionColumn);
   const [instructions, setInstructions] = useState(initialInstructions);
   const [columns, setColumns] = useState(initialColumns);
   const [taskCounts, setTaskCounts] = useState(initialTaskCounts);
@@ -366,14 +368,15 @@ export function ColumnEditor({ initialInstructions = {}, configure, initialColum
               </form>
               {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
             </section>
-      {configure && editing !== null && <ColumnSettingsDialog column={editing} instructions={instructions[editing] ?? ""} open disabled={disabled}
+      {configure && editing !== null && <ColumnSettingsDialog column={editing} completion={completionColumn === editing} instructions={instructions[editing] ?? ""} open disabled={disabled}
         onOpenChange={(open) => { if (!open) setEditing(null); }}
-        onSave={async (name, instructionDraft) => {
+        onSave={async (name, instructionDraft, completion) => {
           if (saving.current) throw new Error("Wait for the current save to finish.");
           saving.current = true; setBusy(true);
           try {
-            const next = await configure(editing, name, instructionDraft);
+            const next = await configure(editing, name, instructionDraft, completion);
             setColumns(next);
+            setCompletionColumn((current) => completion ? name : current === editing ? null : current);
             setInstructions((current) => ({ ...current, [name]: instructionDraft }));
             setTaskCounts((current) => ({ ...current, [name]: current[editing] ?? 0 }));
           } finally { saving.current = false; setBusy(false); }
@@ -388,6 +391,7 @@ export function ColumnEditor({ initialInstructions = {}, configure, initialColum
         onConfirm={() => {
           if (pendingDelete !== null) void save(async () => {
             const next = await remove(pendingDelete);
+            if (completionColumn === pendingDelete) setCompletionColumn(null);
             setPendingDelete(null);
             return next;
           }, "Column deleted.");

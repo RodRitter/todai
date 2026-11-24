@@ -1,3 +1,5 @@
+import { searchMemoryEntries, readMemoryEntries, memoryContext, prepareMemoryChanges, applyMemoryChanges, memoryDocument, memoryChangesSummary } from "./memory-entries.ts";
+import { readMemory, readMemorySnapshot, memoryProfile } from "./workspace-memory.ts";
 import { parseCredits } from "../domain/credit-settings.ts";
 import { UsageStore } from "./usage-store.ts";
 import { conversationDeletion, removeConversationMessages } from "./conversation-messages.ts";
@@ -48,7 +50,7 @@ export type AgentRun = {
   profile: AgentProfile;
   columnInstructions?: string;
   status: "Queued" | "Running" | "Complete" | "Failed" | "Interrupted" | "Stopped" | "Waiting";
-  kind?: "intent" | "reply" | null;
+  kind?: "intent" | "reply" | "memory" | null;
   commentId?: string | null;
   replyPlan?: AgentProfile[] | null;
   stopRequested?: string | null;
@@ -240,16 +242,17 @@ export class TaskStore {
       tasks: this.list().filter((task) => task.boardId === this.boardId),
       columns: this.listColumns(),
       columnInstructions: this.columnInstructions(),
+      completionColumn: this.completionColumn(),
       assignments: this.listColumnAgents(),
     }));
   }
 
   exportConfiguration(): Configuration {
     return this.transaction(() => {
-      const columns = this.db.prepare("SELECT id, name, instructions FROM board_columns WHERE board_columns.workspaceId = workspace_id() AND board_columns.boardId = board_id() ORDER BY position").all() as { id: string; name: string; instructions: string }[];
+      const columns = this.db.prepare("SELECT id, name, instructions, completion FROM board_columns WHERE board_columns.workspaceId = workspace_id() AND board_columns.boardId = board_id() ORDER BY position").all() as { id: string; name: string; instructions: string; completion: number }[];
       return {
         format: "todai-configuration", version: 1,
-        agents: this.listAgents(), columns: columns.map((column) => ({ ...column })),
+        agents: this.listAgents(), columns: columns.map(({ completion, ...column }) => ({ ...column, ...(completion ? { completion: true } : {}) })),
         assignments: this.listColumnAgents().map((assignment) => ({
           columnId: columns.find((column) => column.name === assignment.column)!.id,
           agentId: assignment.agentId,
@@ -286,6 +289,7 @@ export class TaskStore {
         this.saveAgent({ ...agent, id });
         agentIds.set(agent.id, id);
       }
+      if (data.columns.some((column) => column.completion)) this.db.prepare("UPDATE board_columns SET completion = 0 WHERE workspaceId = workspace_id() AND boardId = board_id()").run();
       const columnNames = new Map<string, string>();
       const existing = this.listColumns();
       for (const column of data.columns) {
@@ -306,6 +310,7 @@ export class TaskStore {
           existing.push(name);
         }
         this.db.prepare("UPDATE board_columns SET instructions = ? WHERE workspaceId = workspace_id() AND boardId = board_id() AND name = ?").run(column.instructions ?? "", name);
+        if (column.completion !== undefined) this.db.prepare("UPDATE board_columns SET completion = ? WHERE workspaceId = workspace_id() AND boardId = board_id() AND name = ?").run(Number(column.completion), name);
         columnNames.set(column.id, name);
       }
       for (const assignment of data.assignments) {
@@ -328,6 +333,50 @@ export class TaskStore {
 
   columnInstructions(boardId = this.boardId): Record<string, string> {
     return Object.fromEntries(this.db.prepare("SELECT name, instructions FROM board_columns WHERE workspaceId = workspace_id() AND boardId = ?").all(boardId).map((row) => [row.name as string, row.instructions as string]));
+  }
+
+  completionColumn(boardId = this.boardId): string | null {
+    return this.db.prepare("SELECT name FROM board_columns WHERE workspaceId = workspace_id() AND boardId = ? AND completion = 1").get(boardId)?.name as string | undefined ?? null;
+  }
+
+  searchMemory(query = "", offset = 0, limit = 20) { return searchMemoryEntries(this.db, this.workspaceId, query, offset, limit); }
+  readMemoryEntries(ids: string[]) { return readMemoryEntries(this.db, this.workspaceId, ids); }
+  memoryContext(query: string) { return memoryContext(this.db, this.workspaceId, query); }
+
+  workspaceMemory() { return readMemory(this.db, this.workspaceId); }
+
+  memorySnapshot() { return this.transaction(() => readMemorySnapshot(this.db, this.workspaceId)); }
+
+  clearMemory() {
+    return this.transaction(() => {
+      const affected = this.db.prepare("SELECT DISTINCT taskId FROM runs WHERE workspaceId = workspace_id() AND kind = 'memory' AND status IN ('Queued', 'Running', 'Waiting')").all();
+      const now = new Date().toISOString();
+      this.db.prepare(`UPDATE comments SET feedbackStatus = 'cancelled' WHERE workspaceId = workspace_id()
+        AND responseType = 'memory' AND feedbackStatus = 'pending'`).run();
+      this.db.prepare("UPDATE runs SET stopRequested = ? WHERE workspaceId = workspace_id() AND kind = 'memory' AND status = 'Running'").run(now);
+      this.db.prepare(`UPDATE runs SET status = 'Stopped', finishedAt = ?, summary = 'Memory review cancelled because workspace memory was cleared.'
+        WHERE workspaceId = workspace_id() AND kind = 'memory' AND status IN ('Queued', 'Waiting')`).run(now);
+      const cleared = Number(this.db.prepare("SELECT COUNT(*) AS count FROM memory_entries WHERE workspaceId = workspace_id() AND removed = 0").get()!.count);
+      this.db.prepare("DELETE FROM memory_entries WHERE workspaceId = workspace_id()").run();
+      this.db.prepare("DELETE FROM workspace_memory WHERE workspaceId = workspace_id()").run();
+      // Keep the migration marker so old document data cannot be imported again.
+      this.db.prepare("INSERT OR IGNORE INTO memory_entry_migrations(workspaceId) VALUES (workspace_id())").run();
+      for (const { taskId } of affected) {
+        this.db.prepare(`UPDATE tasks SET agentStatus = CASE
+          WHEN EXISTS (SELECT 1 FROM runs WHERE taskId = tasks.id AND status = 'Running') THEN 'Running'
+          WHEN EXISTS (SELECT 1 FROM comments WHERE taskId = tasks.id AND feedbackStatus = 'pending') THEN 'Waiting'
+          WHEN EXISTS (SELECT 1 FROM runs WHERE taskId = tasks.id AND status = 'Queued') THEN 'Queued'
+          ELSE 'Complete' END WHERE workspaceId = workspace_id() AND id = ?`).run(taskId);
+      }
+      return { cleared };
+    });
+  }
+
+  private queueMemoryReview(taskId: string, column: string) {
+    this.db.prepare(`INSERT INTO runs (workspaceId, workspacePath, id, taskId, column, profile, status, createdAt, kind)
+      VALUES (workspace_id(), (SELECT path FROM workspaces WHERE id = workspace_id()), ?, ?, ?, ?, 'Queued', ?, 'memory')`)
+      .run(randomUUID(), taskId, column, JSON.stringify(memoryProfile(this.getDefaultExecutor())), new Date().toISOString());
+    this.db.prepare("UPDATE tasks SET agentStatus = 'Queued' WHERE workspaceId = workspace_id() AND id = ?").run(taskId);
   }
 
   private columnName(input: unknown, current?: string): string {
@@ -364,7 +413,8 @@ export class TaskStore {
     });
   }
 
-  renameColumn(column: unknown, input: unknown, instructions?: unknown): string[] {
+  renameColumn(column: unknown, input: unknown, instructions?: unknown, completion?: unknown): string[] {
+    if (completion !== undefined && typeof completion !== "boolean") throw new ColumnValidationError("Choose whether this is the completion column.");
     if (instructions !== undefined && (typeof instructions !== "string" || instructions.length > 20000))
       throw new ColumnValidationError("Column instructions must contain no more than 20,000 characters.");
     return this.transaction(() => {
@@ -374,6 +424,10 @@ export class TaskStore {
         );
       }
       const name = this.columnName(input, column);
+      if (completion !== undefined) {
+        if (completion) this.db.prepare("UPDATE board_columns SET completion = 0 WHERE workspaceId = workspace_id() AND boardId = board_id()").run();
+        this.db.prepare("UPDATE board_columns SET completion = ? WHERE workspaceId = workspace_id() AND boardId = board_id() AND name = ?").run(Number(completion), column);
+      }
       if (instructions !== undefined)
         this.db.prepare("UPDATE board_columns SET instructions = ? WHERE workspaceId = workspace_id() AND boardId = board_id() AND name = ?").run(instructions as string, column);
       this.db
@@ -411,7 +465,7 @@ export class TaskStore {
         throw new ColumnValidationError("Keep at least one board column.");
       if (
         this.db
-          .prepare("SELECT id FROM tasks WHERE tasks.workspaceId = workspace_id() AND tasks.boardId = board_id() AND status = ? LIMIT 1")
+          .prepare("SELECT id FROM tasks WHERE tasks.workspaceId = workspace_id() AND tasks.boardId = board_id() AND archivedAt IS NULL AND status = ? LIMIT 1")
           .get(column)
       ) {
         throw new ColumnValidationError(
@@ -455,12 +509,17 @@ export class TaskStore {
     });
   }
 
-  list(): Task[] {
+  readTask(id: string): Task | undefined {
+    this.assertOwnership("tasks", id);
+    return this.list(true, id)[0];
+  }
+
+  list(includeArchived = false, taskId?: string): Task[] {
     const credits = this.usage().taskCredits();
     return (
       this.db
-        .prepare("SELECT tasks.*, task_numbers.number AS taskNumber FROM tasks JOIN task_numbers ON task_numbers.taskId = tasks.id WHERE tasks.workspaceId = workspace_id() ORDER BY tasks.rowid")
-        .all() as unknown as Task[]
+        .prepare("SELECT tasks.*, task_numbers.number AS taskNumber FROM tasks JOIN task_numbers ON task_numbers.taskId = tasks.id WHERE tasks.workspaceId = workspace_id() AND (? OR tasks.archivedAt IS NULL) AND (? IS NULL OR tasks.id = ?) ORDER BY tasks.rowid")
+        .all(includeArchived ? 1 : 0, taskId ?? null, taskId ?? null) as unknown as Task[]
     ).map((task) => ({
       ...task,
       creditUsage: credits.get(task.id) ?? { credits: 0, calls: 0, priced: 0, pending: 0 },
@@ -478,7 +537,9 @@ export class TaskStore {
         )
         .all(task.id).map((row) => {
           const artifacts = this.db.prepare("SELECT artifactId FROM comment_artifacts WHERE commentId = ? ORDER BY artifactId").all(row.id).map((ref) => ({ ...ref }));
-          return { ...row, ...(artifacts.length ? { artifacts } : {}) } as TaskComment;
+          const changes = row.runId
+            ? this.db.prepare("SELECT changes FROM memory_reviews WHERE runId = ?").get(row.runId)?.changes : null;
+          return { ...row, ...(changes ? { memoryChanges: JSON.parse(String(changes)) } : {}), ...(artifacts.length ? { artifacts } : {}) } as TaskComment;
         }),
     }));
   }
@@ -487,6 +548,7 @@ export class TaskStore {
     if (!input || typeof input !== "object") throw new Error("Invalid task.");
     this.assertInputOwnership(input);
     const task = input as Task;
+    if (this.readTask(task.id)?.archivedAt) throw new Error("Archived tasks cannot be edited.");
     const existing = this.list().find((item) => item.id === task.id);
     const boardId = task.boardId ?? existing?.boardId ?? this.boardId;
     this.requireBoard(boardId);
@@ -561,7 +623,9 @@ export class TaskStore {
         }
         this.db.prepare("INSERT OR IGNORE INTO task_artifacts (taskId, artifactId) VALUES (?, ?)").run(task.id, ref.artifactId);
       }
-      if (previous?.agentStatus !== "Stopped" && (!previous || previous.status !== task.status || movedBoard) && (task.autoRun ?? previous?.autoRun ?? false)) {
+      if ((!previous || previous.status !== task.status || movedBoard) && task.status === this.completionColumn(boardId)) {
+        this.queueMemoryReview(task.id, task.status);
+      } else if (previous?.agentStatus !== "Stopped" && (!previous || previous.status !== task.status || movedBoard) && (task.autoRun ?? previous?.autoRun ?? false)) {
         this.queueAgent(task.id, task.status);
       }
       return this.list().find((item) => item.id === task.id)!;
@@ -578,6 +642,10 @@ export class TaskStore {
         throw new RunValidationError("This task already has a queued or running agent.");
       if (task.comments?.some((comment) => comment.feedbackStatus === "pending"))
         throw new RunValidationError("Answer the pending feedback before starting another run.");
+      if (task.status === this.completionColumn(task.boardId)) {
+        this.queueMemoryReview(task.id, task.status);
+        return this.list().find((item) => item.id === taskId)!;
+      }
       if (!this.listColumnAgents(task.boardId).some((assignment) => assignment.column === task.status))
         throw new RunValidationError("Assign an agent to this column before running the task.");
       this.queueAgent(task.id, task.status);
@@ -727,8 +795,9 @@ export class TaskStore {
       const run = this.history().sort((a, b) => a.createdAt.localeCompare(b.createdAt)).find((run) => run.status === "Queued" && !waiting.has(run.taskId));
       if (!run) return;
       const taskBoard = this.db.prepare("SELECT boardId FROM tasks WHERE workspaceId = workspace_id() AND id = ?").get(run.taskId)!.boardId as string;
-      const columnInstructions = run.kind === "intent" ? "" : this.columnInstructions(taskBoard)[run.column] ?? "";
+      const columnInstructions = run.kind === "intent" || run.kind === "memory" ? "" : this.columnInstructions(taskBoard)[run.column] ?? "";
       this.db.prepare("UPDATE runs SET columnInstructions = ? WHERE id = ? AND workspaceId = workspace_id()").run(columnInstructions, run.id);
+      if (run.kind === "memory") this.db.prepare("INSERT OR REPLACE INTO memory_reviews (runId, baseRevision, baseDocument) VALUES (?, ?, ?)").run(run.id, this.workspaceMemory().revision, this.workspaceMemory().document);
       const startedAt = new Date().toISOString();
       const ownerIdentity = processIdentity(process.pid);
       if (!ownerIdentity)
@@ -777,7 +846,7 @@ export class TaskStore {
     recommendation?: string,
     replyPlan?: AgentProfile[],
     artifacts: ArtifactReference[] = [],
-    responseType?: "text" | "approval",
+    responseType?: "text" | "approval" | "memory",
   ) {
     this.assertOwnership("runs", runId);
     this.transaction(() => {
@@ -793,6 +862,19 @@ export class TaskStore {
         status = "Stopped";
         summary = "Agent run stopped by the user. Saved work and history were preserved. Run this task again to request a new run.";
       }
+      if (run.kind === "memory" && status === "Complete") {
+        const output = JSON.parse(summary.trim().replace(/^```(?:json)?\s*|\s*```$/g, ""));
+        if (!output || typeof output !== "object" || !("changes" in output))
+          throw new Error("Memory review must return entry changes.");
+        const changes = prepareMemoryChanges(this.db, this.workspaceId, output.changes);
+        if (changes.length) {
+          applyMemoryChanges(this.db, this.workspaceId, changes);
+          this.db.prepare("UPDATE memory_reviews SET changes = ? WHERE runId = ?").run(JSON.stringify(changes), runId);
+          this.db.prepare("INSERT INTO workspace_memory (workspaceId, revision, document, sourceTaskId, createdAt) VALUES (workspace_id(), ?, ?, ?, ?)")
+            .run(this.workspaceMemory().revision + 1, memoryDocument(this.db, this.workspaceId), run.taskId, new Date().toISOString());
+          summary = `Workspace memory updated: ${memoryChangesSummary(changes)}.`;
+        } else summary = "No memory changes recorded.";
+      }
       if (status === "Waiting" && (!summary.trim() || !recommendation?.trim()))
         throw new FeedbackValidationError("Feedback requests require a question and recommendation.");
       const finishedAt = new Date().toISOString();
@@ -801,7 +883,7 @@ export class TaskStore {
           "UPDATE runs SET status = ?, finishedAt = ?, summary = ? WHERE runs.workspaceId = workspace_id() AND id = ?",
         )
         .run(status, finishedAt, summary, runId);
-      if (run.kind && (status === "Complete" || (status === "Failed" && run.kind === "reply"))) {
+      if (run.kind && run.kind !== "memory" && (status === "Complete" || (status === "Failed" && run.kind === "reply"))) {
         const remaining = replyPlan ?? run.replyPlan ?? [];
         const [next, ...rest] = remaining;
         if (next) this.queueCommentRun(run.taskId, run.column, next, "reply", run.commentId!, rest, run.createdAt);
@@ -840,7 +922,8 @@ export class TaskStore {
         !run.kind &&
         !this.history(run.taskId).some((item) => item.status === "Queued") &&
         task?.autoWorkflow &&
-        task.status === run.column
+        task.status === run.column &&
+        task.status !== this.completionColumn(task.boardId)
       ) {
         const columns = this.listColumns(task.boardId);
         const index = columns.indexOf(task.status);
@@ -851,7 +934,8 @@ export class TaskStore {
               "UPDATE tasks SET status = ? WHERE tasks.workspaceId = workspace_id() AND id = ?",
             )
             .run(nextColumn, task.id);
-          if (task.autoRun) this.queueAgent(task.id, nextColumn);
+          if (nextColumn === this.completionColumn(task.boardId)) this.queueMemoryReview(task.id, nextColumn);
+          else if (task.autoRun) this.queueAgent(task.id, nextColumn);
         }
       }
     });
@@ -996,8 +1080,12 @@ export class TaskStore {
   delete(id: string) {
     this.assertOwnership("tasks", id);
     this.transaction(() => {
-      this.assertIdle(id);
-      this.db.prepare("DELETE FROM tasks WHERE tasks.workspaceId = workspace_id() AND id = ?").run(id);
+      this.assertIdle(id, "archiving the task");
+      if (this.db.prepare("SELECT id FROM chat_sessions WHERE workspaceId = workspace_id() AND taskId = ? AND lease > ?").get(id, new Date().toISOString()))
+        throw new PendingRunError("Wait for the chat response before archiving the task.");
+      this.db.prepare("UPDATE tasks SET archivedAt = COALESCE(archivedAt, ?), autoRun = 0, autoWorkflow = 0 WHERE workspaceId = workspace_id() AND id = ?").run(new Date().toISOString(), id);
+      this.db.prepare("UPDATE comments SET feedbackStatus = 'cancelled' WHERE workspaceId = workspace_id() AND taskId = ? AND feedbackStatus = 'pending'").run(id);
+      this.db.prepare("UPDATE runs SET status = 'Stopped', finishedAt = ? WHERE workspaceId = workspace_id() AND taskId = ? AND status = 'Waiting'").run(new Date().toISOString(), id);
     });
   }
 

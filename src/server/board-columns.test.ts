@@ -146,6 +146,7 @@ test("renaming a column preserves tasks, assignments and queued work across rest
     assert.deepEqual(store.boardSnapshot(), {
       tasks: store.list(),
       columns: ["Backlog", "In progress", "In review", "Done"],
+      completionColumn: null,
       columnInstructions: { Backlog: "", "In progress": "", "In review": "", Done: "" },
       assignments: [{ column: "Backlog", agentId: "planner" }],
     });

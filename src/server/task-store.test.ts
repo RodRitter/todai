@@ -72,16 +72,9 @@ test("comments stay with their task in chronological order after reopening", () 
     );
     assert.deepEqual(store.list()[1].comments, []);
     store.delete("one");
-    store.save({
-      id: "one",
-      title: "New task",
-      description: "",
-      status: "To do",
-    });
-    assert.deepEqual(
-      store.list().find((task) => task.id === "one")?.comments,
-      [],
-    );
+    assert.throws(() => store.save({ id: "one", title: "New task", description: "", status: "To do" }), /Archived/);
+    assert.deepEqual(store.readTask("one")?.comments?.map((comment) => comment.body), ["Started", "Finished"]);
+    assert.ok(store.readTask("one")?.archivedAt);
   } finally {
     store.close();
     rmSync(directory, { recursive: true, force: true });
@@ -143,7 +136,8 @@ test("task numbers survive edits, board moves and reopen, and are never reused",
     store.close();
     store = new TaskStore(path);
     assert.equal(store.list()[0].taskNumber, 1);
-    assert.equal(store.save({ ...second }).taskNumber, 3);
+    assert.equal(store.readTask(second.id)?.taskNumber, 2);
+    assert.equal(store.save({ ...second, id: "third" }).taskNumber, 3);
     const workspace = store.createWorkspace("Another workspace", directory);
     const other = new TaskStore(path, workspace.id);
     try {

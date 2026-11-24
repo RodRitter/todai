@@ -1,4 +1,5 @@
 "use client";
+import { taskReference } from "@/domain/task-reference";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TaskChat } from "@/components/chat/task-chat";
@@ -40,6 +41,7 @@ export type TaskEditorProps = {
   boardId?: string;
   columns?: readonly string[];
   assignedColumns?: readonly string[];
+  completionColumn?: string | null;
   assignments?: readonly ColumnAssignment[];
   onRun?: () => Promise<void>;
   onStop?: () => Promise<void>;
@@ -71,6 +73,7 @@ function TaskEditorSession({
   boardId,
   columns: initialColumns = statuses,
   assignedColumns = [],
+  completionColumn,
   assignments = [],
   onRun,
   onStop,
@@ -194,14 +197,14 @@ function TaskEditorSession({
     setBusy(true);
     try {
       await notifyOperation(operation, {
-        loading: deleting ? "Deleting task…" : "Saving task…",
+        loading: deleting ? "Archiving task…" : "Saving task…",
         success: deleting
-          ? "Task deleted."
+          ? "Task archived."
           : editing
             ? "Task saved."
             : "Task created.",
         error: deleting
-          ? "Could not confirm the task was deleted. Try again or reload to check."
+          ? "Could not confirm the task was archived. Try again or reload to check."
           : "Could not confirm changes were saved. Try again to save your draft.",
       });
       draftId.current = null;
@@ -340,6 +343,12 @@ function TaskEditorSession({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                {editing && <DropdownMenuItem onSelect={() => {
+                  void navigator.clipboard.writeText(taskReference(editing.id)).then(
+                    () => toast.success("Task reference copied."),
+                    () => toast.error("Could not copy the task reference."),
+                  );
+                }}>Copy task reference</DropdownMenuItem>}
                 <DropdownMenuItem onSelect={() => setExpanded((value) => !value)}>
                   {expanded ? "Collapse task panel" : "Expand task panel"}
                 </DropdownMenuItem>
@@ -358,7 +367,7 @@ function TaskEditorSession({
                     disabled={busy || pendingRun || saving}
                     onSelect={() => setConfirmDelete(true)}
                   >
-                    Delete task
+                    Archive task
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>
@@ -384,7 +393,7 @@ function TaskEditorSession({
               </TabsList>
               {editing && ((onRun && !pendingRun) || (pendingRun && onStop)) && (
               <div className="ml-auto flex min-w-0 max-w-full items-center gap-2">
-                {assignedAgent && (
+                {assignedAgent && editing?.status !== completionColumn && (
                   <Label variant="metadata" asChild className="min-w-0">
                     <span title={assignedAgent.name}><span className="truncate">{assignedAgent.name}</span></span>
                   </Label>
@@ -394,7 +403,7 @@ function TaskEditorSession({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span>
-                          <Button type="button" size="sm" variant="ghost-primary" disabled={busy || saving || canSave || !title.trim() || editing.agentStatus === "Waiting" || !assignedColumns.includes(editing.status)} onClick={async () => {
+                          <Button type="button" size="sm" variant="ghost-primary" disabled={busy || saving || canSave || !title.trim() || editing.agentStatus === "Waiting" || (!assignedColumns.includes(editing.status) && editing.status !== completionColumn)} onClick={async () => {
                             setBusy(true);
                             try {
                               await notifyOperation(onRun, { loading: "Queuing agent…", success: "Agent queued.", error: "Could not start the agent. Reload the task and try again." });
@@ -407,7 +416,7 @@ function TaskEditorSession({
                         </span>
                       </TooltipTrigger>
                       <TooltipContent>
-                        {canSave ? "Leave the edited field to save before running the agent." : editing.agentStatus === "Waiting" ? "Answer the pending feedback first." : !assignedColumns.includes(editing.status) ? "Assign an agent to this column first." : editing.agentStatus === "Stopped" ? "Request a new run using saved work and history." : "Run the current column’s agent using the saved task details."}
+                        {canSave ? "Leave the edited field to save before running the agent." : editing.agentStatus === "Waiting" ? "Answer the pending feedback first." : (!assignedColumns.includes(editing.status) && editing.status !== completionColumn) ? "Assign an agent to this column first." : editing.agentStatus === "Stopped" ? "Request a new run using saved work and history." : editing.status === completionColumn ? "Review workspace memory using this completed task." : "Run the current column’s agent using the saved task details."}
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -631,8 +640,9 @@ function TaskEditorSession({
         <DeleteConfirmation
           open={confirmDelete}
           onOpenChange={setConfirmDelete}
-          title="Delete task?"
-          description={`Delete “${editing.title}” and its comments? This cannot be undone.`}
+          title="Archive task?"
+          description={`Archive “${editing.title}”? The task leaves the board. Its comments, history, and references remain available.`}
+          confirmLabel="Archive task" busyLabel="Archiving…"
           busy={busy}
           onConfirm={() => {
             if (!busy && !pendingRun) void persist(() => onDelete(editing.id), true);

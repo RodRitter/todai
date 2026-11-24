@@ -9,5 +9,5 @@ export function CommentReferenceProvider({ taskId, onNavigate, children }: { tas
 export function CommentReference({ reference, children }: { reference: { taskId: string; commentId: string }; children: ReactNode }) {
   const context = useContext(ReferenceContext);
   if (context?.taskId === reference.taskId) return <ReferenceChip kind="comment" type="button" onClick={() => context.onNavigate(reference.commentId)}>{children}</ReferenceChip>;
-  return <ReferenceChip asChild kind="comment"><a href={`#comment-${encodeURIComponent(reference.commentId)}`}>{children}</a></ReferenceChip>;
+  return <ReferenceChip asChild kind="comment"><a href={`/tasks/${encodeURIComponent(reference.taskId)}#comment-${encodeURIComponent(reference.commentId)}`}>{children}</a></ReferenceChip>;
 }

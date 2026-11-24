@@ -12,6 +12,7 @@ import type { Task } from "../domain/task.ts";
 export type RunRequest = {
   onUsage?: (usage: TokenUsage) => void;
   userName?: string;
+  workspaceMemory?: import("../domain/memory.ts").MemoryContext;
   run: AgentRun;
   task: Task;
   workspace: string;
@@ -95,6 +96,7 @@ export class ExecutionService {
         controller.signal.throwIfAborted();
         summary = await runWithUsage(this.store, this.runner, {
           userName: this.store.getUserName(),
+          workspaceMemory: this.store.memoryContext(`${task.title} ${task.description}`),
           artifacts: artifacts?.connection,
           run,
           task,
@@ -111,7 +113,7 @@ export class ExecutionService {
           this.store.finishRun(run.id, "Complete", order.length ? `Reply order: ${order.map((agent) => agent.name).join(" → ")}.` : "No agent replies requested.", undefined, order);
           continue;
         }
-        const feedback = artifacts?.feedback ?? parseFeedback(summary);
+        const feedback = run.kind === "memory" ? undefined : artifacts?.feedback ?? parseFeedback(summary);
         this.store.finishRun(run.id, feedback ? "Waiting" : "Complete", feedback?.question ?? summary, feedback?.recommendation, undefined, artifacts?.pending, feedback?.responseType);
       } catch (error) {
         artifacts?.close();

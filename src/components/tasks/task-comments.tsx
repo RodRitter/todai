@@ -166,6 +166,7 @@ function FeedbackInput({ commentId, responseType, onAnswer }: {
   onAnswer?: (commentId: string, body: string) => Promise<void>;
 }) {
   const [body, setBody] = useState("");
+  const [custom, setCustom] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const submitting = useRef(false);
@@ -174,27 +175,31 @@ function FeedbackInput({ commentId, responseType, onAnswer }: {
     submitting.current = true;
     setBusy(true);
     setError("");
-    try { await onAnswer(commentId, answer.trim()); }
+    try { await onAnswer(commentId, responseType === "memory" && custom ? `Custom message:\n${answer.trim()}` : answer.trim()); }
     catch (error) { setError(error instanceof Error ? error.message : "Could not submit feedback."); }
     finally { submitting.current = false; setBusy(false); }
   }
   return (
     <div className="space-y-2">
-      {responseType !== "approval" && <>
+      {(responseType !== "approval" && responseType !== "memory" || custom) && <>
         <label htmlFor={`feedback-${commentId}`} className="sr-only">Your feedback</label>
-        <Textarea id={`feedback-${commentId}`} value={body} disabled={busy}
+        <Textarea id={`feedback-${commentId}`} value={body} disabled={busy} autoFocus={custom}
           placeholder="Share your feedback to continue…"
           onChange={(event) => setBody(event.target.value)}
           aria-invalid={!!error}
           aria-describedby={error ? `feedback-error-${commentId}` : undefined} />
       </>}
       {error && <p id={`feedback-error-${commentId}`} role="alert" className="text-sm text-destructive">{error}</p>}
-      <ConfirmationActions>{responseType === "approval" ? <>
+      <ConfirmationActions>{(responseType === "approval" || responseType === "memory") && !custom ? <>
+        {responseType === "memory" && <Button type="button" size="sm" variant="outline" disabled={busy || !onAnswer} onClick={() => setCustom(true)}>Custom message</Button>}
         <Button type="button" size="sm" variant="outline" disabled={busy || !onAnswer} onClick={() => void submit("Rejected")}>Reject</Button>
         <Button type="button" size="sm" disabled={busy || !onAnswer} onClick={() => void submit("Approved")}>{busy ? "Submitting…" : "Approve"}</Button>
-      </> : <Button type="button" size="sm" disabled={busy || !body.trim() || !onAnswer} onClick={() => void submit()}>
-        {busy ? "Submitting…" : "Submit feedback"}
-      </Button>}</ConfirmationActions>
+      </> : <>
+        {responseType === "memory" && <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => setCustom(false)}>Back</Button>}
+        <Button type="button" size="sm" disabled={busy || !body.trim() || !onAnswer} onClick={() => void submit()}>
+          {busy ? "Submitting…" : "Submit feedback"}
+        </Button>
+      </>}</ConfirmationActions>
     </div>
   );
 }

@@ -929,3 +929,25 @@ export const CompactRootComments: Story = {
     { ...threadRoot, id: "compact-root-3", body: "I will continue with the next task.", createdAt: "2026-11-20T10:02:00Z" },
   ] },
 };
+
+const memoryRequest: TaskComment = {
+  ...approvalRequest, responseType: "memory", authorName: "Memory",
+  body: "Review the proposed workspace memory changes. Approval changes memory only; this task remains complete.",
+  recommendation: "### Current workspace memory\n\nNo accepted entries.\n\n### Proposed workspace memory\n\n## Practices\n\nUse shared toast helpers for settings feedback. Scope: this workspace. [Source task](/?task=task)",
+};
+export const MemoryApproval: Story = { ...ApproveFeedback, args: { comments: [memoryRequest], onAnswerFeedback: fn() } };
+export const MemoryRejection: Story = { ...RejectFeedback, args: { comments: [memoryRequest], onAnswerFeedback: fn() } };
+export const MemoryCustomMessage: Story = {
+  args: { comments: [memoryRequest], onAnswerFeedback: fn() },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "Custom message" }));
+    await userEvent.type(canvas.getByLabelText("Your feedback"), "Approved");
+    await userEvent.click(canvas.getByRole("button", { name: "Submit feedback" }));
+    await expect(args.onAnswerFeedback).toHaveBeenCalledWith("request", "Custom message:\nApproved");
+  },
+};
+export const MemoryApprovalDark: Story = { args: MemoryApproval.args, globals: { theme: "dark" } };
+export const MemoryApprovalNarrow: Story = { args: MemoryApproval.args, decorators: [(Story) => <div className="max-w-80"><Story /></div>] };
+export const MemoryApprovalPending: Story = { ...ApprovalPending, args: { ...ApprovalPending.args, comments: [memoryRequest] } };
+export const MemoryApprovalError: Story = { ...ApprovalError, args: { ...ApprovalError.args, comments: [memoryRequest] } };

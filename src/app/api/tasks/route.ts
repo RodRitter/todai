@@ -62,7 +62,7 @@ export async function DELETE(request: Request) {
     return Response.json(
       {
         error:
-          "Could not delete task. Check local database access and try again.",
+          "Could not archive task. Check local database access and try again.",
       },
       { status: 500 },
     );

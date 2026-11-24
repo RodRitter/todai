@@ -223,6 +223,17 @@ process.stdin.on('end', () => {
     assert.ok(!enabled.args.includes("--tools"));
     assert.ok(!enabled.args.includes("--strict-mcp-config"));
     assert.ok(enabled.args.includes("mcp__todai_artifacts"));
+    await createClaudeRunner(executable)({ ...input, run: { ...input.run, kind: "memory" } });
+    const memory = JSON.parse(readFileSync(join(directory, "received.json"), "utf8"));
+    assert.match(memory.prompt, /Review the completed task/);
+    assert.ok(memory.args.includes("--strict-mcp-config"));
+    await createClaudeRunner(executable)({ ...input, run: { ...input.run, kind: "memory" }, artifacts: { url: "http://127.0.0.1:12345/mcp", token: "memory-token", context: [] } });
+    const searchableMemory = JSON.parse(readFileSync(join(directory, "received.json"), "utf8"));
+    assert.match(searchableMemory.prompt, /search_memory/);
+    assert.equal(searchableMemory.args.filter((arg: string) => arg === "--mcp-config").length, 1);
+    assert.equal(JSON.parse(searchableMemory.args[searchableMemory.args.indexOf("--mcp-config") + 1]).mcpServers.todai_artifacts.url, "http://127.0.0.1:12345/mcp");
+    assert.equal(searchableMemory.args[searchableMemory.args.indexOf("--tools") + 1], "");
+
     assert.match(prompt, /saved only in this chat/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });

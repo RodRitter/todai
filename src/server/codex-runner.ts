@@ -12,7 +12,7 @@ export function createCodexRunner(executable = "codex"): Runner {
     const directory = await mkdtemp(join(tmpdir(), "todai-handover-"));
     const output = join(directory, "handover.txt");
     try {
-      await runCli({ executable, label: "Codex CLI", cwd: workspace, onStart, signal, input: agentPrompt(request), timeout: run.kind === "intent" ? 60000 : 0,
+      await runCli({ executable, label: "Codex CLI", cwd: workspace, onStart, signal, input: agentPrompt(request), timeout: run.kind === "intent" ? 60000 : run.kind === "memory" ? 300000 : 0,
         onStdoutLine: (line) => {
           let event;
           try { event = JSON.parse(line); } catch { return; }
@@ -21,7 +21,7 @@ export function createCodexRunner(executable = "codex"): Runner {
           if (usage) request.onUsage?.(usage);
         }, args: [
             "exec", "--json",
-            ...(request.privateChat && !request.privateChat.toolsEnabled ? [
+            ...((run.kind === "memory" || (request.privateChat && !request.privateChat.toolsEnabled)) ? [
               "--disable", "shell_tool", "--disable", "apps", "--disable", "plugins",
               "--disable", "browser_use", "--disable", "computer_use",
               "--config", "mcp_servers={}",

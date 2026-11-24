@@ -1,4 +1,5 @@
 "use client";
+import { MemoryChangePreview } from "@/components/memory/memory-preview";
 import { isHumanComment } from "@/domain/comment-author";
 
 
@@ -11,7 +12,7 @@ import { Confirmation, ConfirmationStatus } from "@/components/ui/confirmation";
 
 export function ConversationMessageBody({ message, feedback, embedded = false }: { message: TaskComment; feedback?: ReactNode; embedded?: boolean }) {
   return message.feedbackStatus ? <Confirmation layout={embedded ? "embedded" : "default"} state={message.feedbackStatus} statusPlacement={embedded ? "header" : "body"} question={<Markdown>{message.body}</Markdown>}
-    recommendation={message.recommendation && <Markdown>{message.recommendation}</Markdown>}>
+    recommendation={<div className="space-y-3">{message.recommendation && <Markdown>{message.recommendation}</Markdown>}{message.memoryChanges && <MemoryChangePreview changes={message.memoryChanges} />}</div>}>
     {feedback}
   </Confirmation> : <Markdown>{message.body}</Markdown>;
 }

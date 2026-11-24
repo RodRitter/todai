@@ -1,3 +1,4 @@
+import { initializeMemorySchema, renameMemoryReviewer } from "./workspace-memory.ts";
 import { initializeUsageSchema } from "./usage-store.ts";
 import { initializeChatSchema } from "./chat-schema.ts";
 import { migrateBoards } from "./board-schema.ts";
@@ -150,6 +151,9 @@ export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
       db.exec("ALTER TABLE board_columns ADD COLUMN instructions TEXT NOT NULL DEFAULT ''");
     if (!db.prepare("PRAGMA table_info(runs)").all().some((field) => field.name === "columnInstructions"))
       db.exec("ALTER TABLE runs ADD COLUMN columnInstructions TEXT NOT NULL DEFAULT ''");
+    if (!db.prepare("PRAGMA table_info(tasks)").all().some((field) => field.name === "archivedAt"))
+      db.exec("ALTER TABLE tasks ADD COLUMN archivedAt TEXT");
+    initializeMemorySchema(db);
     initializeArtifactSchema(db);
     initializeChatSchema(db);
     initializeUsageSchema(db);
@@ -171,6 +175,7 @@ export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
       const legacyApproval = " Mandatory: before any repair or file edit, issue the skill’s structured feedback_request and stop. Proceed only after an explicit affirmative Human answer to that specific repair proposal; automation and column entry are not approval.";
       db.prepare("UPDATE agents SET requireApprovalBeforeEdits = 1, instructions = replace(instructions, ?, '') WHERE name = 'Bug fixer'").run(legacyApproval);
     }
+    renameMemoryReviewer(db);
     db.exec("COMMIT");
   } catch (error) {
     db.close();

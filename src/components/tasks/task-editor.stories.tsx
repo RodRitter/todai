@@ -723,3 +723,20 @@ export const ResetWhileRunning: Story = {
 };
 
 export const ResetPendingDark: Story = { ...ResetPending, globals: { theme: "dark" } };
+
+export const RetryMemoryReview: Story = {
+  args: {
+    open: true,
+    task: { ...exampleTasks[3], status: "Done", agentStatus: "Failed" },
+    completionColumn: "Done",
+    assignedColumns: [],
+    onRun: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    const run = await body.findByRole("button", { name: "Run" });
+    await expect(run).toBeEnabled();
+    await userEvent.click(run);
+    await expect(args.onRun).toHaveBeenCalledOnce();
+  },
+};

@@ -107,7 +107,7 @@ export class UsageStore {
       AND json_extract(profile, '$.tool') = 'codex' AND NOT EXISTS (SELECT 1 FROM task_usage WHERE task_usage.id = runs.id)`).all(this.workspaceId, taskId);
     for (const row of old) {
       const profile = JSON.parse(String(row.profile));
-      calls.push({ id: String(row.id), agentName: profile.name, model: profile.model, effort: profile.effort ?? null, kind: row.kind === "intent" ? "background" : row.kind === "reply" ? "reply" : "workflow",
+      calls.push({ id: String(row.id), agentName: profile.name, model: profile.model, effort: profile.effort ?? null, kind: row.kind === "intent" || row.kind === "memory" ? "background" : row.kind === "reply" ? "reply" : "workflow",
         startedAt: String(row.startedAt), finishedAt: row.finishedAt as string | null, outcome: row.status === "Running" ? "Running" : row.status === "Complete" || row.status === "Waiting" ? "Complete" : "Interrupted",
         complete: false, tokens: null, rate: null, credits: null });
     }
@@ -119,7 +119,7 @@ export class UsageStore {
 export async function runWithUsage(store: TaskStore, runner: Runner, request: RunRequest) {
   if (request.run.profile.tool !== "codex") return runner(request);
   const usage = store.usage();
-  usage.begin(request, request.run.kind === "intent" ? "background" : request.privateChat ? "chat" : request.run.kind === "reply" ? "reply" : "workflow");
+  usage.begin(request, (request.run.kind === "intent" || request.run.kind === "memory") ? "background" : request.privateChat ? "chat" : request.run.kind === "reply" ? "reply" : "workflow");
   try {
     const result = await runner({ ...request, onUsage: tokens => usage.record(request.run.id, tokens) });
     usage.finish(request.run.id, "Complete");

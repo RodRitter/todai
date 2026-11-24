@@ -5,6 +5,7 @@ import { ChevronRight, LayoutGrid, Plus } from "lucide-react";
 import type { Board } from "@/domain/task";
 import { boardApi, boardSettingsApi, type BoardSnapshot } from "@/lib/workspace-api";
 import { BreadcrumbRow, Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbLink, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
+import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -130,11 +131,11 @@ function BoardColumns({ boardId, persistence, disabled, onColumnsChange }: {
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let active = true;
-    api.load().then((result) => { if (active) setSnapshot(result); }).catch(() => { if (active) setFailed(true); });
+    api.load().then((result) => { if (active) setSnapshot(result); }).catch(() => { if (active) { setFailed(true); toast.error("Could not load board columns. Try again."); } });
     return () => { active = false; };
   }, [api, attempt]);
   if (!snapshot) return <div aria-busy={!failed} className="space-y-2">
-    <p className="text-sm text-muted-foreground">{failed ? "Could not load board columns." : "Loading columns…"}</p>
+    {!failed && <p className="text-sm text-muted-foreground">Loading columns…</p>}
     {failed && <Button variant="outline" onClick={() => { setFailed(false); setAttempt((value) => value + 1); }}>Retry</Button>}
   </div>;
   async function update(operation: () => Promise<string[]>) {
@@ -142,7 +143,7 @@ function BoardColumns({ boardId, persistence, disabled, onColumnsChange }: {
     onColumnsChange(columns);
     return columns;
   }
-  return <ColumnEditor initialInstructions={snapshot.columnInstructions} configure={(column, name, instructions) => update(() => api.rename(column, name, instructions))} initialColumns={snapshot.columns} initialTaskCounts={Object.fromEntries(snapshot.columns.map((column) => [column, snapshot.tasks.filter((task) => task.status === column).length]))}
+  return <ColumnEditor initialCompletionColumn={snapshot.completionColumn} initialInstructions={snapshot.columnInstructions} configure={(column, name, instructions, completion) => update(() => api.rename(column, name, instructions, completion))} initialColumns={snapshot.columns} initialTaskCounts={Object.fromEntries(snapshot.columns.map((column) => [column, snapshot.tasks.filter((task) => task.status === column).length]))}
     disabled={disabled} create={(name) => update(() => api.create(name))} rename={(column, name) => update(() => api.rename(column, name))}
     remove={(column) => update(() => api.remove(column))} reorder={(columns) => update(() => api.reorder(columns))} />;
 }

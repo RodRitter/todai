@@ -16,3 +16,17 @@ export function withTaskStore<T>(request: Request, operation: (store: TaskStore)
     store.close();
   }
 }
+
+// Task IDs are globally unique. Resolve the owner before reading through a scoped store.
+export function resolveTaskReference(id: string) {
+  const root = openTaskStore();
+  const workspaces = (() => { try { return root.listWorkspaces(); } finally { root.close(); } })();
+  for (const workspace of workspaces) {
+    const store = openTaskStore(workspace.id);
+    try {
+      const task = store.list(true, id)[0];
+      if (task) return { task, workspace };
+    } finally { store.close(); }
+  }
+  return null;
+}

@@ -309,3 +309,31 @@ test("MCP text feedback accepts a written answer", async () => {
     assert.ok(task.comments?.some((comment) => comment.body === "Use report.md"));
   } finally { f.close(); }
 });
+
+test("memory reviewers receive only read-only memory tools and bounded context", async () => {
+  const f = fixture();
+  try {
+    await new ExecutionService(f.store, async () => "Complete").drain();
+    f.store.renameColumn("Done", "Done", undefined, true);
+    f.store.save({ ...f.store.list()[0], status: "Done" });
+    let checked = false;
+    await new ExecutionService(f.store, async (request) => {
+      const connection = request.artifacts!;
+      assert.ok(connection);
+      const response = await fetch(connection.url, { method: "POST", headers: { Authorization: `Bearer ${connection.token}`, "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) });
+      const message = await response.json();
+      assert.deepEqual(message.result.tools.map((tool: { name: string }) => tool.name), ["search_memory", "read_memory"]);
+      assert.deepEqual(await rpc(connection, "search_memory", { query: "settings" }), { entries: [], total: 0, hasMore: false });
+      await assert.rejects(rpc(connection, "read_memory", { ids: "one" }), /Invalid argument/);
+      await assert.rejects(rpc(connection, "read_memory", { ids: ["missing"] }), /unavailable/);
+      await assert.rejects(rpc(connection, "search_memory", { query: "settings", workspaceId: "other" }), /Invalid argument/);
+      await assert.rejects(rpc(connection, "publish_artifact", { title: "No", type: "text" }), /Unknown/);
+      await assert.rejects(rpc(connection, "request_feedback", { question: "No", recommendation: "No", responseType: "approval" }), /Unknown/);
+      assert.ok(JSON.stringify(request.workspaceMemory).length <= 4000);
+      checked = true;
+      return JSON.stringify({ changes: [] });
+    }).drain();
+    assert.ok(checked);
+    assert.equal(f.store.history().at(-1)!.status, "Complete");
+  } finally { f.close(); }
+});

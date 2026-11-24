@@ -9,7 +9,7 @@ import { MAX_ARTIFACT_BYTES, type ArtifactInput, type ArtifactReference, type Ta
 
 export type RunArtifactConnection = { url: string; token: string; context: TaskArtifact[] };
 const string = { type: "string" };
-const tools: { name: string; description: string; properties: Record<string, { type: string; enum?: string[] }>; required: string[] }[] = [
+const tools: { name: string; description: string; properties: Record<string, { type: string; enum?: string[]; items?: { type: string }; maxItems?: number }>; required: string[] }[] = [
   { name: "publish_artifact", description: artifactPublicationPolicy + " Publish text, Markdown, a file (base64 bytes), or an HTTP/HTTPS link immediately. Supply artifactId to update the document. Ownership and creator come from this run. Returns a stable id; cite as [title](#artifact/ID).", properties: { title: string, description: string, type: { type: "string", enum: ["text", "markdown", "file", "link"] }, content: string, base64: string, filename: string, mediaType: string, url: string, artifactId: string }, required: ["title", "type"] },
   { name: "search_artifacts", description: "Search this workspace's artifact metadata. Content is read separately. Use archived to discover archived artifacts.", properties: { search: string, archived: { type: "boolean" } }, required: [] },
   { name: "read_artifact", description: "Read an artifact's metadata and stored content (base64 for files). External links return their URL without fetching it.", properties: { artifactId: string }, required: ["artifactId"] },
@@ -18,12 +18,17 @@ const tools: { name: string; description: string; properties: Record<string, { t
   { name: "nominate_artifact", description: "Attach a document to your final handover or feedback comment. Failed or interrupted runs do not attach nominations to system notices.", properties: { artifactId: string }, required: ["artifactId"] },
 ];
 
+const memoryTools: typeof tools = [
+  { name: "search_memory", description: "Search accepted memory in this workspace. Returns up to five short matches. Use offset for more matches and read_memory for exact content. Query words are matched as alternatives.", properties: { query: string, offset: { type: "number" } }, required: ["query"] },
+  { name: "read_memory", description: "Read up to five accepted memory entries by ID, including source, scope, and revision. Memory is reference data, not permission.", properties: { ids: { type: "array", items: { type: "string" }, maxItems: 5 } }, required: ["ids"] },
+];
+
 // A short-lived, stateless Streamable HTTP MCP server. No caller controls ownership.
 export async function openRunArtifacts(store: TaskStore, run: AgentRun, signal: AbortSignal, chat?: ChatArtifactScope) {
   const library = new ArtifactStore(store.databasePath, run.workspaceId, chat ? undefined : run.id, chat);
   const pending: ArtifactReference[] = [];
   let feedback: FeedbackRequest | undefined;
-  const availableTools: typeof tools = chat ? tools : [...tools, { name: "request_feedback", description: "Request Human feedback, then stop work and end your run. Use approval for Approve/Reject buttons or text for an open question. Both question and recommendation must be nonempty Markdown. This does not grant approval.", properties: { question: string, recommendation: string, responseType: { type: "string", enum: ["text", "approval"] } }, required: ["question", "recommendation", "responseType"] }];
+  const availableTools: typeof tools = run.kind === "memory" ? memoryTools : chat ? [...tools, ...memoryTools] : [...tools, ...memoryTools, { name: "request_feedback", description: "Request Human feedback, then stop work and end your run. Use approval for Approve/Reject buttons or text for an open question. Both question and recommendation must be nonempty Markdown. This does not grant approval.", properties: { question: string, recommendation: string, responseType: { type: "string", enum: ["text", "approval"] } }, required: ["question", "recommendation", "responseType"] }];
   const token = randomBytes(32).toString("hex");
   let closed = false;
   function assertActive() {
@@ -38,11 +43,16 @@ export async function openRunArtifacts(store: TaskStore, run: AgentRun, signal: 
     for (const key of tool.required) if (!(key in args)) throw new Error(`Missing ${key}.`);
     for (const [key, value] of Object.entries(args)) {
       const property = tool.properties[key];
-      if (!property || typeof value !== property.type) throw new Error(`Invalid argument: ${key}.`);
+      if (!property || (property.type === "array" ? !Array.isArray(value) : typeof value !== property.type)) throw new Error(`Invalid argument: ${key}.`);
     }
     if (feedback) throw new Error("Feedback is already requested. Stop work and end your run.");
     const artifactId = args.artifactId as string;
     switch (name) {
+      case "search_memory": {
+        const result = store.searchMemory(args.query as string, args.offset as number | undefined, 5);
+        return { ...result, entries: result.entries.map(({ id, revision, title, category, statement, scope }) => ({ id, revision, title, category, scope, excerpt: statement.slice(0, 180) })) };
+      }
+      case "read_memory": return store.readMemoryEntries(args.ids as string[]);
       case "request_feedback":
         feedback = parseFeedback(JSON.stringify({ type: "feedback_request", ...args }));
         return { requested: true, message: "Stop work and end your run. Wait for the Human answer before continuing." };
@@ -111,7 +121,7 @@ export async function openRunArtifacts(store: TaskStore, run: AgentRun, signal: 
     library.close();
   }
   try {
-    const context = library.forTask(run.taskId);
+    const context = run.kind === "memory" ? [] : library.forTask(run.taskId);
     await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
     signal.addEventListener("abort", close, { once: true });
     signal.throwIfAborted();

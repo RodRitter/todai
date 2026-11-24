@@ -4,7 +4,7 @@ export type Configuration = {
   format: "todai-configuration";
   version: 1;
   agents: AgentProfile[];
-  columns: { id: string; name: string; instructions?: string }[];
+  columns: { id: string; name: string; instructions?: string; completion?: boolean }[];
   assignments: { columnId: string; agentId: string }[];
 };
 
@@ -27,6 +27,8 @@ export function parseConfiguration(input: unknown): Configuration {
     return fail("Column names must contain 1–80 characters without surrounding spaces.");
   if (data.columns.some((column) => column.instructions !== undefined && (typeof column.instructions !== "string" || column.instructions.length > 20000)))
     return fail("Column instructions must contain no more than 20,000 characters.");
+  if (data.columns.some((column) => column.completion !== undefined && typeof column.completion !== "boolean") || data.columns.filter((column) => column.completion).length > 1)
+    return fail("Choose at most one completion column per board.");
   if (new Set(data.columns.map((column) => column.name.toLowerCase())).size !== data.columns.length)
     return fail("Column names must be unique.");
   if (new Set(data.columns.map((column) => column.id)).size !== data.columns.length)
@@ -38,7 +40,7 @@ export function parseConfiguration(input: unknown): Configuration {
   });
   if (new Set(assignments.map((assignment) => assignment.columnId)).size !== assignments.length)
     return fail("Each column can have only one assignment.");
-  return { format: "todai-configuration", version: 1, agents, columns: data.columns.map(({ id, name, instructions }) => ({ id, name, ...(instructions !== undefined ? { instructions } : {}) })), assignments };
+  return { format: "todai-configuration", version: 1, agents, columns: data.columns.map(({ id, name, instructions, completion }) => ({ id, name, ...(instructions !== undefined ? { instructions } : {}), ...(completion !== undefined ? { completion } : {}) })), assignments };
 }
 
 export function selectConfiguration(data: Configuration, agentIds: string[], columns: string[]): Configuration {

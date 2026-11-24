@@ -49,7 +49,7 @@ test("all activity types record independent calls, repeated snapshots replace co
     assert.equal(data.calls.find(c => c.id === "failed")!.credits, 3.7);
     assert.equal(data.calls[0].rate!.version, "2026-11-23");
     f.store.delete("task");
-    const db = new DatabaseSync(f.path); assert.equal(db.prepare("SELECT count(*) AS n FROM task_usage").get()!.n, 0); db.close();
+    const db = new DatabaseSync(f.path); assert.equal(db.prepare("SELECT count(*) AS n FROM task_usage").get()!.n, 5); db.close();
   } finally { f.close(); }
 });
 test("missing counts, unknown rates, restart recovery and workspace isolation", async () => {

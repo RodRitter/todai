@@ -2,7 +2,7 @@ import type { ComponentProps } from "react";
 import { Slot } from "radix-ui";
 import { cn } from "@/lib/utils";
 
-export type ReferenceKind = "agent" | "artifact" | "comment" | "skill" | "file";
+export type ReferenceKind = "task" | "agent" | "artifact" | "comment" | "skill" | "file";
 
 export function ReferenceChip({ asChild = false, kind = "file", children, className, ...props }: ComponentProps<"button"> & { asChild?: boolean; kind?: ReferenceKind }) {
   const Component = asChild ? Slot.Root : "button";

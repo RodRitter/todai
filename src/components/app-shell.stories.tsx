@@ -44,3 +44,10 @@ export const CollapsibleSidebar: Story = {
 export const Artifacts: Story = {
   args: { screen: "artifacts", children: <main className="p-8">Workspace artifacts</main> },
 };
+
+export const Memory: Story = {
+  args: { screen: "memory", children: <main className="p-8">Accepted workspace memory</main> },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByRole("link", { name: "Memory" })).toHaveAttribute("aria-current", "page");
+  },
+};

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type SetStateAction } from "react";
 import { Plus } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { notifyOperation, toast } from "@/components/ui/toast";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import type { BoardSnapshot } from "@/lib/workspace-api";
 import { useBoardMotion } from "@/hooks/use-board-motion";
@@ -24,6 +25,8 @@ export function TaskBoard({
   initialAgents = [],
   initialAssignments = [],
   initialColumnInstructions = {},
+  initialCompletionColumn = null,
+  initialTaskId,
   configureColumn,
   assignAgent,
   persistence,
@@ -35,7 +38,9 @@ export function TaskBoard({
   initialAgents?: AgentProfile[];
   initialAssignments?: ColumnAssignment[];
   initialColumnInstructions?: Record<string, string>;
-  configureColumn?: (column: string, name: string, instructions: string) => Promise<string[]>;
+  initialCompletionColumn?: string | null;
+  initialTaskId?: string;
+  configureColumn?: (column: string, name: string, instructions: string, completion?: boolean) => Promise<string[]>;
   assignAgent?: (
     column: Status,
     agentId: string | null,
@@ -54,6 +59,7 @@ export function TaskBoard({
 }) {
   const [agents] = useState(initialAgents);
   const [columns, setColumns] = useState(initialColumns);
+  const [completionColumn, setCompletionColumn] = useState(initialCompletionColumn);
   const [columnInstructions, setColumnInstructions] = useState(initialColumnInstructions);
   const columnFocus = useRef<string | null>(null);
   const [editingColumn, setEditingColumn] = useState<{ name: string; instructions: string } | null>(null);
@@ -62,9 +68,9 @@ export function TaskBoard({
   const revision = useRef(0);
   const [busy, setBusy] = useState(false);
   const [tasks, setTasks] = useState(initialTasks);
-  const [initialTab, setInitialTab] = useState<"detail" | "activity">("detail");
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<Task | null>(null);
+  const [initialTab, setInitialTab] = useState<"detail" | "activity">(initialTaskId ? "activity" : "detail");
+  const [open, setOpen] = useState(!!initialTaskId && initialTasks.some((task) => task.id === initialTaskId));
+  const [editing, setEditing] = useState<Task | null>(initialTasks.find((task) => task.id === initialTaskId) ?? null);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dropColumn, setDropColumn] = useState<Status | null>(null);
   const { boardRef, capturePositions } = useBoardMotion(tasks);
@@ -86,6 +92,7 @@ export function TaskBoard({
             setColumns(latest.columns);
             setAssignments(latest.assignments);
             setColumnInstructions(latest.columnInstructions ?? {});
+            setCompletionColumn(latest.completionColumn ?? null);
           }
         }
         if (active && errorToast !== undefined) {
@@ -190,7 +197,7 @@ export function TaskBoard({
                 status={column}
                 configureDisabled={busy}
                 onConfigure={configureColumn || !persistence ? () => { columnFocus.current = column; setEditingColumn({ name: column, instructions: columnInstructions[column] ?? "" }); } : undefined}
-                agentSelector={
+                agentSelector={completionColumn === column ? <Label variant="metadata">Memory</Label> :
                   <ColumnAgentPicker
                     column={column}
                     agents={agents}
@@ -245,19 +252,20 @@ export function TaskBoard({
             );
           })}
         </div>
-        {editingColumn && <ColumnSettingsDialog column={editingColumn.name} instructions={editingColumn.instructions} open
+        {editingColumn && <ColumnSettingsDialog completion={completionColumn === editingColumn.name} column={editingColumn.name} instructions={editingColumn.instructions} open
           restoreFocus={() => {
             const button = Array.from(boardRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? []).find((button) => button.getAttribute("aria-label") === `Edit ${columnFocus.current} column settings`);
             button?.focus();
           }}
           onOpenChange={(open) => { if (!open) setEditingColumn(null); }}
-          onSave={(name, instructions) => mutate(async () => {
+          onSave={(name, instructions, completion) => mutate(async () => {
             const previous = editingColumn.name;
             if (!columns.includes(previous)) throw new Error("This column changed. Close settings and try again.");
             if (columns.some((column) => column !== previous && column.toLowerCase() === name.toLowerCase()))
               throw new Error("A column with that name already exists.");
-            const next = configureColumn ? await configureColumn(previous, name, instructions) : columns.map((column) => column === previous ? name : column);
+            const next = configureColumn ? await configureColumn(previous, name, instructions, completion) : columns.map((column) => column === previous ? name : column);
             columnFocus.current = name;
+            setCompletionColumn((current) => completion ? name : current === previous ? null : current);
             setColumns(next);
             setColumnInstructions((current) => ({ ...current, [name]: instructions }));
             setAssignments((current) => current.map((assignment) => assignment.column === previous ? { ...assignment, column: name } : assignment));
@@ -292,6 +300,7 @@ export function TaskBoard({
             updateTasks((current) => current.map((task) => task.id === saved.id ? saved : task));
           }) : undefined}
           assignments={assignments}
+          completionColumn={completionColumn}
           assignedColumns={assignments.map((assignment) => assignment.column)}
           onRun={persistence?.run ? () => mutate(async () => {
             const saved = await persistence.run!(editing!.id);

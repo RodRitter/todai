@@ -228,6 +228,16 @@ process.stdin.on('end', () => {
     assert.ok(!enabled.args.includes("shell_tool"));
     assert.ok(!enabled.args.includes("mcp_servers={}"));
     assert.ok(enabled.args.includes('mcp_servers.todai_artifacts.required=true'));
+    await createCodexRunner(executable)({ ...input, run: { ...input.run, kind: "memory" } });
+    const memory = JSON.parse(readFileSync(join(directory, "received.json"), "utf8"));
+    assert.match(memory.prompt, /Review the completed task/);
+    assert.ok(memory.args.includes("mcp_servers={}"));
+    await createCodexRunner(executable)({ ...input, run: { ...input.run, kind: "memory" }, artifacts: { url: "http://127.0.0.1:12345/mcp", token: "memory-token", context: [] } });
+    const searchableMemory = JSON.parse(readFileSync(join(directory, "received.json"), "utf8"));
+    assert.match(searchableMemory.prompt, /search_memory/);
+    assert.ok(searchableMemory.args.includes('mcp_servers.todai_artifacts.url="http://127.0.0.1:12345/mcp"'));
+    assert.ok(searchableMemory.args.includes("shell_tool"));
+
     assert.match(prompt, /saved only in this chat/);
     assert.doesNotMatch(prompt, /automatically posted as a comment/);
   } finally { rmSync(directory, { recursive: true, force: true }); }

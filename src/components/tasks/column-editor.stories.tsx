@@ -62,3 +62,44 @@ export const ColumnInstructions: Story = {
   },
 };
 export const ColumnInstructionsDark: Story = { ...ColumnInstructions, globals: { theme: "dark" } };
+
+export const CompletionColumn: Story = {
+  args: { initialCompletionColumn: "Done", configure: async () => ["To do", "Done"] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole("button", { name: "Configure To do" }));
+    let dialog = within(await body.findByRole("dialog", { name: "Column settings" }));
+    const toggle = dialog.getByRole("switch", { name: "Completion column" });
+    await expect(toggle).not.toBeChecked();
+    toggle.focus();
+    await userEvent.keyboard(" ");
+    await expect(toggle).toBeChecked();
+    await userEvent.click(dialog.getByRole("button", { name: "Save settings" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Configure Done" }));
+    dialog = within(await body.findByRole("dialog", { name: "Column settings" }));
+    await expect(dialog.getByRole("switch", { name: "Completion column" })).not.toBeChecked();
+  },
+};
+export const CompletionColumnDark: Story = { ...CompletionColumn, globals: { theme: "dark" } };
+export const CompletionColumnNarrow: Story = { ...CompletionColumn, globals: { viewport: { value: "mobile1" } } };
+export const CompletionSavePending: Story = {
+  args: { configure: () => new Promise<string[]>(() => {}) },
+  play: async ({ canvasElement }) => {
+    await userEvent.click(within(canvasElement).getByRole("button", { name: "Configure To do" }));
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog", { name: "Column settings" }));
+    await userEvent.click(dialog.getByRole("button", { name: "Save settings" }));
+    await expect(dialog.getByRole("switch", { name: "Completion column" })).toBeDisabled();
+  },
+};
+export const CompletionSaveError: Story = {
+  args: { configure: async () => { throw new Error("Could not save column settings. Try again."); } },
+  play: async ({ canvasElement }) => {
+    await userEvent.click(within(canvasElement).getByRole("button", { name: "Configure To do" }));
+    const body = within(canvasElement.ownerDocument.body);
+    const dialog = within(await body.findByRole("dialog", { name: "Column settings" }));
+    await userEvent.click(dialog.getByRole("button", { name: "Save settings" }));
+    await expect(await body.findByText("Could not save column settings. Try again.")).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Save settings" })).toBeEnabled();
+  },
+};
