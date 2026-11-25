@@ -14,3 +14,11 @@ export function DropdownMenuContent({ className, sideOffset = 4, ...props }: Com
 export function DropdownMenuItem({ className, variant = "default", ...props }: ComponentProps<typeof Primitive.Item> & { variant?: "default" | "destructive" }) {
   return <Primitive.Item className={cn("flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4", variant === "destructive" && "text-destructive focus:bg-destructive/10 focus:text-destructive", className)} {...props} />;
 }
+
+export const DropdownMenuGroup = Primitive.Group;
+export const DropdownMenuRadioGroup = Primitive.RadioGroup;
+export function DropdownMenuRadioItem({ className, children, ...props }: ComponentProps<typeof Primitive.RadioItem>) {
+  return <Primitive.RadioItem className={cn("relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-7 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50", className)} {...props}>
+    <span className="absolute left-2 flex size-3 items-center justify-center"><Primitive.ItemIndicator>•</Primitive.ItemIndicator></span>{children}
+  </Primitive.RadioItem>;
+}

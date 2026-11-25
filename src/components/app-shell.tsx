@@ -1,9 +1,10 @@
 "use client";
 
+import { SidebarPanel } from "./ui/sidebar-panel";
 import { BoardNavigation } from "./tasks/board-navigation";
 import { WorkspaceLink as Link } from "@/components/workspace-selection";
 import { useState, type ReactNode } from "react";
-import { BookOpen, Bot, Brain, Files, PanelLeft, Settings } from "lucide-react";
+import { BookOpen, Bot, MessageSquare, Brain, Files, PanelLeft, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { WorkspaceSwitcher } from "@/components/workspace-selection";
 import { ExecutionActivity } from "@/components/execution-activity";
@@ -21,7 +22,7 @@ export function AppShell({
   children: ReactNode;
   headerActions?: ReactNode;
   boardName?: string;
-  screen?: "board" | "agents" | "skills" | "artifacts" | "memory" | "settings";
+  screen?: "chat" | "board" | "agents" | "skills" | "artifacts" | "memory" | "settings";
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -34,8 +35,8 @@ export function AppShell({
         inert={!sidebarOpen}
         className={`shrink-0 overflow-hidden transition-[width] duration-250 ease-in-out motion-reduce:transition-none ${sidebarOpen ? "w-16 md:w-60" : "w-0"}`}
       >
-        <div
-          className={`h-full w-16 border-r bg-muted/40 transition-[transform,opacity] duration-250 ease-in-out motion-reduce:transition-none md:w-60 ${sidebarOpen ? "translate-x-0 opacity-100" : "-translate-x-4 opacity-0"}`}
+        <SidebarPanel
+          className={`transition-[transform,opacity] duration-250 ease-in-out motion-reduce:transition-none ${sidebarOpen ? "translate-x-0 opacity-100" : "-translate-x-4 opacity-0"}`}
         >
           <div className="flex h-14 items-center justify-center border-b px-4 md:justify-start">
             <span className="font-semibold md:hidden" aria-label="Todai">
@@ -46,6 +47,9 @@ export function AppShell({
           <WorkspaceSwitcher />
           <nav className="p-3" aria-label="Main navigation">
             <BoardNavigation active={screen === "board"} />
+            <Button align="navigation" variant={screen === "chat" ? "secondary" : "ghost"} className="mt-1" asChild>
+              <Link href="/chat" aria-current={screen === "chat" ? "page" : undefined} aria-label="Chat"><MessageSquare /><span className="hidden md:inline">Chat</span></Link>
+            </Button>
             <Button align="navigation"
               variant={screen === "agents" ? "secondary" : "ghost"}
               className="mt-1"
@@ -95,7 +99,7 @@ export function AppShell({
               </Link>
             </Button>
           </nav>
-        </div>
+        </SidebarPanel>
       </aside>
       <div className="min-w-0 flex-1">
         <header className="flex h-14 items-center gap-3 border-b px-4">
@@ -110,7 +114,7 @@ export function AppShell({
             <PanelLeft />
           </Button>
           <h1 className="text-sm font-medium">
-            {screen === "settings"
+            {screen === "chat" ? "Chat" : screen === "settings"
               ? "Settings"
               : screen === "agents"
                 ? "Agents"

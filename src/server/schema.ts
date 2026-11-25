@@ -1,3 +1,4 @@
+import { initializeWorkspaceChatSchema } from "./workspace-chat-schema.ts";
 import { initializeMemorySchema, renameMemoryReviewer } from "./workspace-memory.ts";
 import { initializeUsageSchema } from "./usage-store.ts";
 import { initializeChatSchema } from "./chat-schema.ts";
@@ -156,6 +157,7 @@ export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
     initializeMemorySchema(db);
     initializeArtifactSchema(db);
     initializeChatSchema(db);
+    initializeWorkspaceChatSchema(db);
     initializeUsageSchema(db);
     db.exec(`CREATE TABLE IF NOT EXISTS run_activity (
       runId TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,

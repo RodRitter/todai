@@ -24,6 +24,13 @@ export function initializeUsageSchema(db: DatabaseSync) {
         WHERE runs.id = task_usage.runId AND runs.workspaceId = task_usage.workspaceId AND runs.taskId = task_usage.taskId
       );`);
   }
+  // Workspace chat calls have no task. Rebuild once, preserving all legacy columns and rows.
+  if (db.prepare("PRAGMA table_info(task_usage)").all().some(column => column.name === "taskId" && column.notnull)) {
+    const schema = String(db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'task_usage'").get()!.sql);
+    db.exec(schema.replace("CREATE TABLE task_usage", "CREATE TABLE task_usage_nullable").replace("taskId TEXT NOT NULL", "taskId TEXT"));
+    db.exec("INSERT INTO task_usage_nullable SELECT * FROM task_usage; DROP TABLE task_usage; ALTER TABLE task_usage_nullable RENAME TO task_usage; CREATE INDEX task_usage_task ON task_usage(workspaceId, taskId)");
+  }
+
 }
 export class UsageStore {
   private db: DatabaseSync;
@@ -34,6 +41,11 @@ export class UsageStore {
     this.db.prepare(`INSERT OR IGNORE INTO task_usage (id, workspaceId, taskId, runId, agentName, model, kind, startedAt, outcome, rate, ownerPid, ownerIdentity, effort)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Running', ?, ?, ?, ?)`).run(run.id, this.workspaceId, run.taskId, request.privateChat ? null : run.id,
       run.profile.name, run.profile.model, kind, new Date().toISOString(), JSON.stringify(creditRate(run.profile.model)), process.pid, processIdentity(process.pid) ?? null, run.profile.effort);
+  }
+  beginWorkspaceChat(id: string, model: string, effort: string) {
+    this.db.prepare(`INSERT INTO task_usage (id, workspaceId, taskId, runId, agentName, model, kind, startedAt, outcome, rate, ownerPid, ownerIdentity, effort)
+      VALUES (?, ?, NULL, NULL, 'Assistant', ?, 'chat', ?, 'Running', ?, ?, ?, ?)`)
+      .run(id, this.workspaceId, model, new Date().toISOString(), JSON.stringify(creditRate(model)), process.pid, processIdentity(process.pid) ?? null, effort);
   }
   record(id: string, tokens: TokenUsage) {
     const row = this.db.prepare("SELECT rate FROM task_usage WHERE id = ? AND workspaceId = ?").get(id, this.workspaceId);
@@ -47,6 +59,9 @@ export class UsageStore {
       .run(outcome, new Date().toISOString(), id, this.workspaceId);
   }
   workspaceCredits(): WorkspaceCredits {
+    for (const row of this.db.prepare("SELECT id, ownerPid, ownerIdentity, startedAt FROM task_usage WHERE workspaceId = ? AND taskId IS NULL AND outcome = 'Running'").all(this.workspaceId)) {
+      if (!row.ownerPid || processIdentity(Number(row.ownerPid)) !== row.ownerIdentity || Date.parse(String(row.startedAt)) + 360000 < Date.now()) this.finish(String(row.id), "Interrupted");
+    }
     const row = this.db.prepare(`SELECT COALESCE(SUM(credits), 0) AS credits, COUNT(*) AS calls,
       COUNT(credits) AS priced, COUNT(tokens) AS measured,
       COALESCE(SUM(json_extract(tokens, '$.input_tokens') - json_extract(tokens, '$.cached_input_tokens')), 0) AS uncachedInput,
@@ -79,7 +94,7 @@ export class UsageStore {
       SELECT taskId, COALESCE(SUM(credits), 0) AS credits, COUNT(*) AS calls,
         COUNT(credits) AS priced, SUM(outcome = 'Running') AS pending
       FROM (
-        SELECT taskId, credits, outcome FROM task_usage WHERE workspaceId = ?
+        SELECT taskId, credits, outcome FROM task_usage WHERE workspaceId = ? AND taskId IS NOT NULL
         UNION ALL
         SELECT taskId, NULL AS credits, status AS outcome FROM runs
         WHERE workspaceId = ? AND startedAt IS NOT NULL

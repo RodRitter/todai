@@ -103,6 +103,8 @@ export class TaskStore {
     return this.transaction(() => {
       if (!this.db.prepare("SELECT id FROM workspaces WHERE id = ?").get(id))
         throw new WorkspaceOwnershipError("Choose an existing workspace.");
+      if (archived && this.db.prepare("SELECT id FROM workspace_chats WHERE workspaceId = ? AND lease > ?").get(id, new Date().toISOString()))
+        throw new RunValidationError("Wait for workspace chats before archiving this workspace.");
       if (archived && this.db.prepare("SELECT id FROM runs WHERE workspaceId = ? AND status IN ('Queued', 'Running')").get(id))
         throw new RunValidationError("Finish queued and running jobs before archiving this workspace.");
       this.db.prepare("UPDATE workspaces SET archived = ? WHERE id = ?").run(Number(archived), id);
@@ -193,6 +195,8 @@ export class TaskStore {
     return this.transaction(() => {
       this.assertWorkspaceActive();
       if (value === this.getWorktreesEnabled()) return value;
+      if (this.db.prepare("SELECT id FROM workspace_chats WHERE workspaceId = workspace_id() AND lease > ?").get(new Date().toISOString()))
+        throw new RunValidationError("Wait for workspace chats before changing task worktrees.");
       if (this.db.prepare("SELECT id FROM runs WHERE workspaceId = workspace_id() AND status = 'Running' LIMIT 1").get() ||
           this.db.prepare("SELECT id FROM chat_sessions WHERE workspaceId = workspace_id() AND lease > ? LIMIT 1").get(new Date().toISOString()))
         throw new RunValidationError("Stop running agents and wait for chats to finish before changing task worktrees.");
@@ -211,6 +215,8 @@ export class TaskStore {
     return this.transaction(() => {
       this.assertWorkspaceActive();
       if (path === this.getWorkspacePath()) return;
+      if (this.db.prepare("SELECT id FROM workspace_chats WHERE workspaceId = workspace_id() AND lease > ?").get(new Date().toISOString()))
+        throw new RunValidationError("Wait for workspace chats before changing this directory.");
       const state = this.executionState();
       if (state.active) throw new RunValidationError("Stop the running agent before changing a directory.");
       if (!state.paused && this.history().some((run) => run.status === "Queued"))

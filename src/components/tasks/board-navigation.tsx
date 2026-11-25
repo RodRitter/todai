@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, FolderOpen, LayoutGrid } from "lucide-react";
+import { LayoutGrid } from "lucide-react";
 import type { Board } from "@/domain/task";
 import { boardApi } from "@/lib/workspace-api";
 import { selectedBoardId, selectedWorkspaceId } from "@/lib/workspace-fetch";
 import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { NavigationTree } from "@/components/ui/navigation-tree";
 
 export function boardHref(id: string, settings = false) {
   const params = new URLSearchParams({ board: id });
@@ -18,7 +18,6 @@ export function boardHref(id: string, settings = false) {
 
 export function BoardNavigation({ active, initialBoards }: { active: boolean; initialBoards?: Board[] }) {
   const [boards, setBoards] = useState(initialBoards ?? []);
-  const [open, setOpen] = useState(true);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -32,15 +31,7 @@ export function BoardNavigation({ active, initialBoards }: { active: boolean; in
     window.addEventListener("todai:boards-changed", refresh);
     return () => window.removeEventListener("todai:boards-changed", refresh);
   }, []);
-  return <Collapsible open={open} onOpenChange={setOpen}>
-    <CollapsibleTrigger asChild>
-      <Button variant="ghost" align="navigation" aria-label="Boards">
-        <FolderOpen /><span className="hidden min-w-0 flex-1 text-left md:inline">Boards</span>
-        <span className="hidden md:inline">{open ? <ChevronDown /> : <ChevronRight />}</span>
-      </Button>
-    </CollapsibleTrigger>
-    <CollapsibleContent>
-      <div className="space-y-1 border-l border-border md:ml-4 md:pl-2">
+  return <NavigationTree label="Boards" compactOnMobile>
         {boards.map((board, index) => {
           const current = active && board.id === (selectedBoardId() ?? boards[0]?.id);
           return <Button key={board.id} variant={current ? "secondary" : "ghost"} align="navigation" size="sm" asChild>
@@ -51,7 +42,5 @@ export function BoardNavigation({ active, initialBoards }: { active: boolean; in
           </Button>;
         })}
         {failed && <Button size="sm" variant="ghost" onClick={() => setAttempt((value) => value + 1)}>Retry boards</Button>}
-      </div>
-    </CollapsibleContent>
-  </Collapsible>;
+  </NavigationTree>;
 }
