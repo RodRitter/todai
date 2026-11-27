@@ -1,9 +1,12 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { SettingsScope } from "./settings-scope";
+import { SettingsSections } from "./settings-sections";
+import { WorkspaceSettingsTab } from "./workspace-settings-tab";
+import { CreateWorkspace } from "./create-workspace";
+import { WorkspaceArchive } from "./workspace-archive";
 import { ColumnEditor } from "./column-editor";
 
 export function ColumnSettings({
@@ -15,18 +18,22 @@ export function ColumnSettings({
   rename,
   remove,
   workspaceSettings,
-  transferSettings,
   generalSettings,
   executorSettings,
+  transferSettings,
+  workspaceSection,
+  onWorkspaceSectionChange,
   tab,
   onTabChange,
 }: {
   boardSettings?: ReactNode;
   tab?: "general" | "workspaces" | "board" | "executors" | "transfer";
   executorSettings?: ReactNode;
+  transferSettings?: ReactNode;
+  workspaceSection?: string;
+  onWorkspaceSectionChange?: (value: string) => void;
   onTabChange?: (value: string) => void;
   workspaceSettings?: ReactNode;
-  transferSettings?: ReactNode;
   generalSettings?: ReactNode;
   initialColumns: string[];
   initialTaskCounts?: Record<string, number>;
@@ -35,32 +42,29 @@ export function ColumnSettings({
   rename: (column: string, name: string) => Promise<string[]>;
   remove: (column: string) => Promise<string[]>;
 }) {
+  const [busy, setBusy] = useState(false);
   return (
     <AppShell screen="settings">
-      <Tabs defaultValue="general" value={tab} onValueChange={onTabChange} asChild>
-        <main className="mx-auto max-w-2xl space-y-8 p-4 md:p-8">
-          <header className="space-y-2">
-            <h1 className="text-lg font-semibold">Settings</h1>
-            <p className="text-sm text-muted-foreground">Click a value to edit it. Leave the field to save, or press Enter in single-line fields. Escape cancels edits. Switches and selections save immediately.</p>
-          </header>
+      <Tabs defaultValue="general" value={tab && tab !== "general" ? "workspaces" : tab} onValueChange={onTabChange} asChild>
+        <main className="mx-auto w-full max-w-7xl space-y-8 p-4 md:p-8">
+          <h1 className="sr-only">Settings</h1>
           <TabsList layout="wrap" aria-label="Settings sections">
             <TabsTrigger value="general">Global</TabsTrigger>
-            {workspaceSettings && <TabsTrigger value="workspaces">Workspace</TabsTrigger>}
-            <TabsTrigger value="board">Board</TabsTrigger>
-            {transferSettings && <TabsTrigger value="transfer">Import and export</TabsTrigger>}
-            {executorSettings && <TabsTrigger value="executors">Executors</TabsTrigger>}
+            <TabsTrigger value="workspaces">Workspace</TabsTrigger>
           </TabsList>
           <TabsContent value="general" forceMount className="space-y-8">
-            <SettingsScope scope="global" />
-            {generalSettings}
+            <SettingsSections label="Global categories" disabled={busy} sections={[
+              { id: "identity", label: "Identity", content: generalSettings },
+              { id: "new", label: "New workspace", content: <CreateWorkspace onBusyChange={setBusy} /> },
+              { id: "archived", label: "Archived workspaces", content: <WorkspaceArchive allowArchive={false} onBusyChange={setBusy} /> },
+            ]} />
           </TabsContent>
-          {workspaceSettings && <TabsContent value="workspaces" forceMount className="space-y-8"><SettingsScope scope="workspace" />{workspaceSettings}</TabsContent>}
-          {transferSettings && <TabsContent value="transfer" forceMount className="space-y-8"><SettingsScope scope="workspace" />{transferSettings}</TabsContent>}
-          {executorSettings && <TabsContent value="executors" forceMount className="space-y-8"><SettingsScope scope="workspace" />{executorSettings}</TabsContent>}
-          <TabsContent value="board" forceMount className="space-y-8">
-            <SettingsScope scope="workspace" />
-            {boardSettings ?? <ColumnEditor initialColumns={initialColumns} initialTaskCounts={initialTaskCounts}
-              create={create} reorder={reorder} rename={rename} remove={remove} />}
+          <TabsContent value="workspaces" forceMount>
+            <WorkspaceSettingsTab directorySettings={workspaceSettings} transferSettings={transferSettings} executorSettings={executorSettings}
+              section={workspaceSection} onSectionChange={onWorkspaceSectionChange}
+              initialSection={tab === "board" ? "boards" : tab === "executors" || tab === "transfer" ? tab : undefined}
+              boardSettings={boardSettings ?? <ColumnEditor initialColumns={initialColumns} initialTaskCounts={initialTaskCounts}
+                create={create} reorder={reorder} rename={rename} remove={remove} />} />
           </TabsContent>
         </main>
       </Tabs>

@@ -6,7 +6,6 @@ import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { GeneralSettings } from "./general-settings";
 import { ConfigurationTransfer } from "./configuration-transfer";
-import { WorkspaceSettingsTab } from "./workspace-settings-tab";
 import { ExecutorSettings } from "./executor-settings";
 import { ColumnSettings } from "./column-settings";
 import { AgentLibrary } from "./agent-library";
@@ -86,7 +85,7 @@ export function PersistentWorkspace({
     return (
       <UrlColumnSettings
         key={attempt}
-        boardSettings={<BoardSettings boards={boards} initialBoardId={typeof window === "undefined" ? undefined : new URL(window.location.href).searchParams.get("board") ?? undefined} />}
+        boardSettings={<BoardSettings boards={boards} />}
         initialColumns={columns}
         initialTaskCounts={Object.fromEntries(
           columns.map((column) => [
@@ -96,7 +95,6 @@ export function PersistentWorkspace({
         )}
         executorSettings={<ExecutorSettings />}
         generalSettings={<GeneralSettings />}
-        workspaceSettings={<WorkspaceSettingsTab />}
         transferSettings={<ConfigurationTransfer onImported={() => setAttempt((value) => value + 1)} />}
         {...columnApi}
       />
@@ -140,6 +138,13 @@ function UrlColumnSettings(props: ComponentProps<typeof ColumnSettings>) {
     <ColumnSettings
       {...props}
       tab={tab}
+      workspaceSection={requestedTab === "board" ? "boards" : requestedTab === "executors" || requestedTab === "transfer" ? requestedTab : ["directory", "boards", "executors", "credits", "transfer", "cleanup", "archive"].includes(searchParams.get("section") ?? "") ? searchParams.get("section")! : "directory"}
+      onWorkspaceSectionChange={(value) => {
+        const url = new URL(window.location.href);
+        url.searchParams.set("tab", "workspaces");
+        url.searchParams.set("section", value);
+        window.history.pushState(null, "", url);
+      }}
       onTabChange={(value) => {
         if (value === tab) return;
         const url = new URL(window.location.href);

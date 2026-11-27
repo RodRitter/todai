@@ -1,18 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, LayoutGrid, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import type { Board } from "@/domain/task";
 import { boardApi, boardSettingsApi, type BoardSnapshot } from "@/lib/workspace-api";
-import { BreadcrumbRow, Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbLink, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
-import { selectedWorkspaceId } from "@/lib/workspace-fetch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { selectedBoardId, selectedWorkspaceId } from "@/lib/workspace-fetch";
 import { notifyOperation, toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { EditableSetting } from "@/components/ui/editable-setting";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { SettingField } from "@/components/ui/setting-field";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { ColumnEditor } from "./column-editor";
@@ -24,19 +23,28 @@ export function BoardSettings({ boards: initialBoards, initialBoardId, persisten
   columnsForBoard?: typeof boardSettingsApi;
 }) {
   const [boards, setBoards] = useState(initialBoards);
-  const initialBoard = initialBoards.find((board) => board.id === initialBoardId);
-  const [selectedId, setSelectedId] = useState<string | null>(initialBoard?.id ?? null);
+  const requestedBoard = initialBoardId ?? (typeof window === "undefined" ? undefined : new URL(window.location.href).searchParams.get("settingsBoard")) ?? selectedBoardId();
+  const initialBoard = initialBoards.find((board) => board.id === requestedBoard);
+  const [selectedId, setSelectedId] = useState<string | null>(initialBoard?.id ?? initialBoards[0]?.id ?? null);
   const selected = boards.find((board) => board.id === selectedId);
   const [newDescription, setNewDescription] = useState("");
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
   const saving = useRef(false);
+  const [editingColumns, setEditingColumns] = useState(false);
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState(false);
   function select(board?: Board) {
     setSelectedId(board?.id ?? null);
+    setEditingColumns(false);
     setError("");
+    if (selectedWorkspaceId()) {
+      const url = new URL(window.location.href);
+      if (board) url.searchParams.set("settingsBoard", board.id);
+      else url.searchParams.delete("settingsBoard");
+      window.history.replaceState(null, "", url);
+    }
   }
   async function save(operation: () => Promise<void>) {
     if (saving.current) return;
@@ -61,52 +69,36 @@ export function BoardSettings({ boards: initialBoards, initialBoardId, persisten
     } finally { saving.current = false; setBusy(false); }
   }
   return <section className="space-y-6" aria-label="Board settings">
-    <BreadcrumbRow actions={!selected && <Button size="sm" onClick={() => { setError(""); setNewName(""); setNewDescription(""); setCreating(true); }}><Plus />New</Button>}>
-      <Breadcrumb aria-label="Board breadcrumbs" className="min-w-0">
-        <BreadcrumbList>
-          <BreadcrumbItem>{selected
-            ? <BreadcrumbLink asChild><button type="button" disabled={busy} onClick={() => select()}>All boards</button></BreadcrumbLink>
-            : <BreadcrumbPage>All boards</BreadcrumbPage>}
-          </BreadcrumbItem>
-          {selected && <>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem><BreadcrumbPage>{selected.name}</BreadcrumbPage></BreadcrumbItem>
-          </>}
-        </BreadcrumbList>
-      </Breadcrumb>
-    </BreadcrumbRow>
-    {selected ? <>
-      <div className="space-y-4">
-        <div className="space-y-2"><Label htmlFor="board-name">Board name</Label>
-          <EditableSetting id="board-name" label="Board name" value={selected.name} maxLength={80} disabled={busy}
-            onSave={value => updateBoard(value, selected.description ?? "Organize and track tasks on this board.")} />
-        </div>
-        <div className="space-y-2"><Label htmlFor="board-description">Description</Label>
-          <EditableSetting id="board-description" label="Description" multiline value={selected.description ?? "Organize and track tasks on this board."} maxLength={500} disabled={busy}
-            onSave={value => updateBoard(selected.name, value)} />
-        </div>
-        <Button type="button" variant="ghost-destructive" disabled={busy || selected.id === (selectedWorkspaceId() ?? initialBoards[0]?.id)} onClick={() => setDeleting(true)}>Delete board</Button>
+    <div className="flex items-end gap-3">
+      <div className="min-w-0 flex-1">
+        <SettingField htmlFor="settings-board" label="Board">
+          <Select value={selectedId ?? ""} disabled={busy || editingColumns || !boards.length}
+            onValueChange={id => select(boards.find(board => board.id === id))}>
+            <SelectTrigger id="settings-board" className="w-full"><SelectValue placeholder="No boards" /></SelectTrigger>
+            <SelectContent>{boards.map(board => <SelectItem key={board.id} value={board.id}>{board.name}</SelectItem>)}</SelectContent>
+          </Select>
+        </SettingField>
       </div>
-      <BoardColumns key={selected.id} boardId={selected.id} persistence={columnsForBoard} disabled={busy} onColumnsChange={(columns) => setBoards((current) => current.map((board) => board.id === selected.id ? { ...board, columns } : board))} />
+      <Button disabled={busy || editingColumns} onClick={() => { setError(""); setNewName(""); setNewDescription(""); setCreating(true); }}><Plus />New board</Button>
+    </div>
+    {selected && <div key={selected.id} className="space-y-6">
+      <div className="space-y-4">
+        <SettingField htmlFor="board-name" label="Board name"><EditableSetting id="board-name" label="Board name" value={selected.name} maxLength={80} disabled={busy}
+            onSave={value => updateBoard(value, selected.description ?? "Organize and track tasks on this board.")} />
+        </SettingField>
+        <SettingField htmlFor="board-description" label="Description"><EditableSetting id="board-description" label="Description" multiline value={selected.description ?? "Organize and track tasks on this board."} maxLength={500} disabled={busy}
+            onSave={value => updateBoard(selected.name, value)} />
+        </SettingField>
+        <Button type="button" variant="ghost-destructive" disabled={busy || editingColumns || selected.id === (selectedWorkspaceId() ?? initialBoards[0]?.id)} onClick={() => setDeleting(true)}>Delete board</Button>
+      </div>
+      <BoardColumns key={selected.id} boardId={selected.id} persistence={columnsForBoard} disabled={busy} onBusyChange={setBusy} onEditingChange={setEditingColumns} onColumnsChange={(columns) => setBoards((current) => current.map((board) => board.id === selected.id ? { ...board, columns } : board))} />
       <DeleteConfirmation open={deleting} onOpenChange={setDeleting} busy={busy} title={`Delete ${selected.name}?`} description="Move all tasks out of this board first. Its columns and agent assignments will be removed; shared agents will remain." onConfirm={() => void save(async () => {
         await persistence.remove(selected.id);
         setBoards((current) => current.filter((board) => board.id !== selected.id));
         setDeleting(false);
-        select();
+        select(boards.find(board => board.id !== selected.id));
       })} />
-    </> : <>
-      <Card variant="flush" elevation="flat">
-        <ul className="divide-y" aria-label="Boards">
-          {boards.map((board) => <li key={board.id}>
-            <Button variant="ghost" size="row" onClick={() => select(board)}>
-              <LayoutGrid />
-              <span className="min-w-0 flex-1 break-words">{board.name}</span>
-              <ChevronRight />
-            </Button>
-          </li>)}
-        </ul>
-      </Card>
-    </>}
+    </div>}
     <Dialog open={creating} onOpenChange={(open) => { if (!busy) setCreating(open); }}>
       <DialogContent closeDisabled={busy} aria-describedby={undefined}>
         <DialogHeader><DialogTitle>New board</DialogTitle></DialogHeader>
@@ -119,12 +111,10 @@ export function BoardSettings({ boards: initialBoards, initialBoardId, persisten
             select(board);
           });
         }}>
-          <div className="space-y-2"><Label htmlFor="new-board-name">Board name</Label>
-            <Input id="new-board-name" autoFocus maxLength={80} disabled={busy} value={newName} onChange={(event) => setNewName(event.target.value)} aria-invalid={!!error} />
-          </div>
-          <div className="space-y-2"><Label htmlFor="new-board-description">Description</Label>
-            <Textarea id="new-board-description" required maxLength={500} disabled={busy} value={newDescription} onChange={(event) => setNewDescription(event.target.value)} />
-          </div>
+          <SettingField htmlFor="new-board-name" label="Board name"><Input id="new-board-name" autoFocus maxLength={80} disabled={busy} value={newName} onChange={(event) => setNewName(event.target.value)} aria-invalid={!!error} />
+          </SettingField>
+          <SettingField htmlFor="new-board-description" label="Description"><Textarea id="new-board-description" required maxLength={500} disabled={busy} value={newDescription} onChange={(event) => setNewDescription(event.target.value)} />
+          </SettingField>
           <DialogFooter><Button size="sm" type="button" variant="outline" disabled={busy} onClick={() => setCreating(false)}>Cancel</Button><Button size="sm" disabled={busy || !newName.trim() || !newDescription.trim()}>{busy ? "Creating…" : "Create board"}</Button></DialogFooter>
         </form>
       </DialogContent>
@@ -132,11 +122,13 @@ export function BoardSettings({ boards: initialBoards, initialBoardId, persisten
   </section>;
 }
 
-function BoardColumns({ boardId, persistence, disabled, onColumnsChange }: {
+function BoardColumns({ boardId, persistence, disabled, onColumnsChange, onBusyChange, onEditingChange }: {
   boardId: string;
   persistence: typeof boardSettingsApi;
   disabled: boolean;
   onColumnsChange: (columns: string[]) => void;
+  onBusyChange: (busy: boolean) => void;
+  onEditingChange: (editing: boolean) => void;
 }) {
   const api = useMemo(() => persistence(boardId), [persistence, boardId]);
   const [snapshot, setSnapshot] = useState<BoardSnapshot | null>(null);
@@ -152,11 +144,14 @@ function BoardColumns({ boardId, persistence, disabled, onColumnsChange }: {
     {failed && <Button variant="outline" onClick={() => { setFailed(false); setAttempt((value) => value + 1); }}>Retry</Button>}
   </div>;
   async function update(operation: () => Promise<string[]>) {
-    const columns = await operation();
-    onColumnsChange(columns);
-    return columns;
+    onBusyChange(true);
+    try {
+      const columns = await operation();
+      onColumnsChange(columns);
+      return columns;
+    } finally { onBusyChange(false); }
   }
-  return <ColumnEditor initialCompletionColumn={snapshot.completionColumn} initialInstructions={snapshot.columnInstructions} configure={(column, name, instructions, completion) => update(() => api.rename(column, name, instructions, completion))} initialColumns={snapshot.columns} initialTaskCounts={Object.fromEntries(snapshot.columns.map((column) => [column, snapshot.tasks.filter((task) => task.status === column).length]))}
+  return <ColumnEditor onEditingChange={onEditingChange} initialCompletionColumn={snapshot.completionColumn} initialInstructions={snapshot.columnInstructions} configure={(column, name, instructions, completion) => update(() => api.rename(column, name, instructions, completion))} initialColumns={snapshot.columns} initialTaskCounts={Object.fromEntries(snapshot.columns.map((column) => [column, snapshot.tasks.filter((task) => task.status === column).length]))}
     disabled={disabled} create={(name) => update(() => api.create(name))} rename={(column, name) => update(() => api.rename(column, name))}
     remove={(column) => update(() => api.remove(column))} reorder={(columns) => update(() => api.reorder(columns))} />;
 }

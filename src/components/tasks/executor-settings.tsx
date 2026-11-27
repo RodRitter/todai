@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { FlaskConical, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { FieldHelp } from "@/components/ui/field-help";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -58,16 +57,12 @@ export function ExecutorSettings({ test = executorApi.test, load = executorApi.g
   }
 
   return (
-    <section className="space-y-6" aria-labelledby="executor-heading" aria-busy={loading}>
-      <div>
-        <h2 id="executor-heading" className="text-lg font-semibold">Executors</h2>
-        <p className="text-sm text-muted-foreground">Connect coding tools and choose which one new agents start with.</p>
-      </div>
+    <section className="space-y-6" aria-label="Executors" aria-busy={loading}>
       <div className="space-y-2">
         <div className="flex items-center gap-2"><Label htmlFor="default-executor">Default executor</Label>
-        <FieldHelp id="default-executor-hint" label="Default executor">Changes save immediately for this workspace. New agents use this executor. Existing agents and queued runs keep their executor.</FieldHelp></div>
+        </div>
         <NativeSelect id="default-executor" value={data?.defaultExecutor ?? "codex"} disabled={!data || loading || busy !== null}
-          onChange={(event) => void changeDefault(event.target.value as ExecutionTool)} aria-describedby="default-executor-hint">
+          onChange={(event) => void changeDefault(event.target.value as ExecutionTool)}>
           {executionTools.map((tool) => <option key={tool.value} value={tool.value}>{tool.label}</option>)}
         </NativeSelect>
 
@@ -81,8 +76,6 @@ export function ExecutorSettings({ test = executorApi.test, load = executorApi.g
               <h3 className="font-medium">{tool.label}</h3>
               <span className="text-xs text-muted-foreground">{loading ? "Checking…" : !status ? "Status unavailable" : !status.installed ? "Unavailable" : status.signedIn ? "Signed in" : "Sign-in required"}</span>
             </div>
-            <p className="text-sm text-muted-foreground">{status?.message ?? "Install and sign in to this CLI on the machine running Todai."}</p>
-            {tool.value === "claude" && <p className="text-xs text-muted-foreground">Requires Claude Code 2.1.259 or newer for unattended permission handling. Model and effort availability depend on your account.</p>}
             <Button variant="outline" disabled={busy !== null || loading} onClick={() => void runTest(tool.value)}>
               {busy === tool.value ? <LoaderCircle className="animate-spin" /> : <FlaskConical />}
               {busy === tool.value ? "Testing…" : `Test ${tool.label}`}
@@ -90,7 +83,6 @@ export function ExecutorSettings({ test = executorApi.test, load = executorApi.g
           </section></CardContent></Card>;
         })}
       </div>
-      <p className="text-sm text-muted-foreground">Tool installation and sign-in are shared across workspaces. Connection tests make a model request and can take three minutes.</p>
     </section>
   );
 }

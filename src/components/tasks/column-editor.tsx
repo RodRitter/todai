@@ -128,13 +128,6 @@ export function ColumnEditor({ initialInstructions = {}, initialCompletionColumn
                 <h2 id={`${id}-heading`} className={compact ? "text-sm font-semibold" : "text-lg font-semibold"}>
                   Board columns
                 </h2>
-                {!compact && <><p className="text-sm text-muted-foreground">
-                  Drag columns to the divider line to reorder them, or use the
-                  arrows. Select the edit button to change column settings.
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Move tasks out of a column before deleting it.
-                </p></>}
               </div>
               <TooltipProvider>
                 <ol

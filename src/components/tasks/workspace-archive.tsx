@@ -5,6 +5,7 @@ import type { Workspace } from "@/domain/workspace";
 import { workspaceApi } from "@/lib/workspace-api";
 import { selectedWorkspaceId } from "@/lib/workspace-fetch";
 import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
+import { notifyOperation, toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 
 export function WorkspaceArchive({ allowArchive = true, allowRestore = true, onBusyChange }: { allowArchive?: boolean; allowRestore?: boolean; onBusyChange?: (busy: boolean) => void }) {
@@ -16,7 +17,7 @@ export function WorkspaceArchive({ allowArchive = true, allowRestore = true, onB
     if (!allowRestore) return;
     let active = true;
     workspaceApi.archived().then((items) => { if (active) { setArchived(items); setError(""); } })
-      .catch((error) => { if (active) setError(error.message); });
+      .catch((error) => { if (active) { setError(error.message); toast.error(error.message); } });
     return () => { active = false; };
   }, [attempt, allowRestore]);
 
@@ -25,7 +26,7 @@ export function WorkspaceArchive({ allowArchive = true, allowRestore = true, onB
     onBusyChange?.(true);
     setError("");
     try {
-      const result = await workspaceApi.setArchived(id, archive);
+      const result = await notifyOperation(() => workspaceApi.setArchived(id, archive), { loading: archive ? "Archiving workspace…" : "Restoring workspace…", success: archive ? "Workspace archived." : "Workspace restored.", error: error => error instanceof Error ? error.message : "Could not update workspace." });
       const selected = selectedWorkspaceId();
       const next = !archive ? id : result.workspaces.find((item) => item.id === selected)?.id ?? result.workspaces[0]?.id;
       window.location.assign(`/settings?tab=workspaces${next ? `&workspace=${encodeURIComponent(next)}` : ""}`);
@@ -52,11 +53,7 @@ export function WorkspaceArchiveView({ archived, error = "", busy = false, allow
   onRefresh: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
-  return <section className="space-y-4" aria-labelledby="archive-heading">
-    <div>
-      <h2 id="archive-heading" className="text-lg font-semibold">{allowArchive ? (allowRestore ? "Archive and restore" : "Archive workspace") : "Archived workspaces"}</h2>
-      <p className="text-sm text-muted-foreground">{allowArchive ? "Archiving hides an idle workspace from the selector. Tasks, history, configuration, and files are preserved. Finish queued jobs first." : "Restore an archived workspace to return it to the workspace selector."}</p>
-    </div>
+  return <section className="space-y-4" aria-label="Archive and restore">
     {allowArchive && <Button size="sm" variant="destructive" disabled={busy} onClick={() => setConfirming(true)}>Archive this workspace</Button>}
     {allowRestore && <ul className="space-y-3">
       {archived.map((workspace) => <li key={workspace.id} className="flex items-center justify-between gap-4">
@@ -65,8 +62,8 @@ export function WorkspaceArchiveView({ archived, error = "", busy = false, allow
       </li>)}
     </ul>}
     {allowRestore && !archived.length && !error && <p className="text-sm text-muted-foreground">No archived workspaces.</p>}
-    {error && !confirming && <div role="alert" className="space-y-2 text-sm text-destructive"><p>{error}</p>{allowRestore && <Button variant="outline" disabled={busy} onClick={onRefresh}>Refresh archived workspaces</Button>}</div>}
-    <DeleteConfirmation open={confirming} onOpenChange={setConfirming} busy={busy} error={error}
+    {error && allowRestore && <Button variant="outline" disabled={busy} onClick={onRefresh}>Refresh archived workspaces</Button>}
+    <DeleteConfirmation open={confirming} onOpenChange={setConfirming} busy={busy}
       title="Archive this workspace?" description="This workspace will be hidden from the selector. Tasks, history, configuration, and files will be preserved. You can restore it from Archived."
       confirmLabel="Archive workspace" busyLabel="Archiving…" onConfirm={onArchive} />
   </section>;

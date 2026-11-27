@@ -1,14 +1,13 @@
 "use client";
 
-import { FieldHelp } from "@/components/ui/field-help";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useId, useRef, useState } from "react";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { notifyOperation, toast } from "@/components/ui/toast";
-import { Label } from "@/components/ui/label";
+import { SettingField } from "@/components/ui/setting-field";
 import { NativeSelect } from "@/components/ui/native-select";
 import { exportFilename } from "@/lib/export-filename";
 import { selectedBoardId, selectedWorkspaceId } from "@/lib/workspace-fetch";
@@ -79,7 +78,6 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
     operation === "export" ? source.columns.map((column) => column.id) : mode === "agents" ? [] : columns,
     memory);
 
-
   const conflicts = operation === "import" && selected && existing ? [
     ...selected.agents.filter((agent) => existing.agents.some((item) => item.id === agent.id)).map((agent) => `Agent: ${agent.name} (${agent.id})`),
     ...selected.columns.filter((column) => existing.columns.some((item) => item.id === column.id)).map((column) => `Column: ${column.name} (${column.id})`),
@@ -88,13 +86,11 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
   const selection = source && selected && !source.boards && (
         <fieldset disabled={busy} className="space-y-4 rounded-lg border p-4">
           <legend className="px-1 text-sm font-semibold">{operation === "export" ? "Export selection" : "Import selection"}</legend>
-          {operation === "export" && <div className="space-y-2">
-            <Label htmlFor={`${id}-board`}>Board to export</Label>
-            <NativeSelect id={`${id}-board`} value={exportBoardId} onChange={(event) => { void run(() => selectExportBoard(event.target.value)); }} aria-describedby={`${id}-columns-help`}>
+          {operation === "export" && <SettingField htmlFor={`${id}-board`} label="Board to export"><NativeSelect id={`${id}-board`} value={exportBoardId} onChange={(event) => { void run(() => selectExportBoard(event.target.value)); }}>
               {boards.map((board) => <option key={board.id} value={board.id}>{board.name}</option>)}
             </NativeSelect>
-            <p id={`${id}-columns-help`} className="text-sm text-muted-foreground">All columns from this board are included.</p>
-          </div>}
+
+          </SettingField>}
           {operation === "import" && <div className="flex flex-wrap gap-4" role="radiogroup" aria-label="Configuration contents">
             {([['agents', 'Agents'], ['columns', 'Columns'], ['both', 'Agents and columns']] as const).map(([value, label]) => (
               <label key={value} className="flex items-center gap-2 text-sm">
@@ -107,23 +103,22 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
             {operation === "import" && mode !== "agents" && <Selection title="Columns" items={source.columns.map((column) => ({ id: column.id, label: column.name, detail: column.id }))} selected={columns} onChange={setColumns} />}
           </div>
           {source.memory && <Selection title="Memory" items={source.memory.entries.map((entry) => ({ id: entry.id, label: entry.title }))} selected={memory} onChange={setMemory} />}
-          {source.memory && <p className="text-sm text-muted-foreground">Memory includes linked source tasks, comments, and artifacts. Import creates archived copies of these records. Existing records stay unchanged.</p>}
-          <p className="text-sm text-muted-foreground">{operation === "export" ? "Assignments are included for selected agents. Other columns remain unassigned." : "Assignments are included only when both the column and its agent are selected. Other selected columns remain unassigned."}</p>
+
           {operation === "import" && selected.columns.length > 0 && (
             <fieldset className="space-y-2">
               <legend className="text-sm font-medium">How should columns be imported?</legend>
               <label className="flex items-center gap-2 text-sm"><input type="radio" name="column-import-mode" checked={columnMode === "add"} onChange={() => setColumnMode("add")} />Add imported columns</label>
               <label className="flex items-center gap-2 text-sm"><input type="radio" name="column-import-mode" checked={columnMode === "replace"} onChange={() => setColumnMode("replace")} />Replace all existing columns</label>
-              {columnMode === "replace" && <p className="text-sm text-muted-foreground">All existing columns and their assignments will be removed. Existing tasks will move to “{selected.columns[0].name}” without starting agents. Queued or active runs must finish first. Existing agents will be kept.</p>}
+
             </fieldset>
           )}
-          {operation === "import" && columnMode !== "replace" && conflictMode !== "overwrite" && <p className="text-sm text-muted-foreground">Import creates new agents and appends columns in file order. Conflicting column names receive an “imported” suffix. Existing agents, columns, tasks, and assignments stay unchanged.</p>}
+
           {conflicts.length > 0 && <fieldset className="space-y-2 rounded border p-3">
             <legend className="text-sm font-medium">Matching IDs found — overwrite existing entries?</legend>
             <ScrollArea className="max-h-40"><ul className="text-xs text-muted-foreground">{conflicts.map((conflict) => <li key={conflict}>{conflict}</li>)}</ul></ScrollArea>
             <label className="flex items-center gap-2 text-sm"><input type="radio" name="conflicts" checked={conflictMode === "copy"} onChange={() => setConflictMode("copy")} />Keep existing entries and import new copies</label>
             <label className="flex items-center gap-2 text-sm"><input type="radio" name="conflicts" checked={conflictMode === "overwrite"} onChange={() => setConflictMode("overwrite")} />Overwrite entries with matching IDs</label>
-            {conflictMode === "overwrite" && <p className="text-sm text-muted-foreground">Matching agents will receive the imported settings. Matching columns will receive the imported names and selected assignments; omitted assignments will be cleared. Replace all columns still removes every existing column.</p>}
+
           </fieldset>}
           <p className="text-sm" role="status">{selected.agents.length} agents, {selected.columns.length} columns, {selected.assignments.length} assignments, {selected.memory?.entries.length ?? 0} memory entries selected.</p>
           <div className="flex gap-2">
@@ -145,12 +140,8 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
 
   return (
     <Dialog open={source !== null && operation === "export"} onOpenChange={(open) => { if (!open && !pending.current) setSource(null); }}>
-    <section className="space-y-4" aria-labelledby="transfer-heading">
-      <div>
-        <div className="flex items-center gap-2"><h2 id="transfer-heading" className="text-lg font-semibold">Import and export</h2>
-        <FieldHelp id="transfer-help" label="Import and export">Transfer agents, columns, and memory with a JSON file. Select entries before you apply the transfer.</FieldHelp></div>
-      </div>
-      <div className="flex flex-wrap items-end gap-4">
+    <section className="space-y-4" aria-label="Import and export">
+      <div className="space-y-4">
         <DialogTrigger asChild><Button variant="outline" disabled={busy} onClick={() => run(async () => {
           const available = await boardApi.list();
           if (!available.length) throw new Error("No boards are available to export.");
@@ -163,9 +154,8 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
           if (!workspace) throw new Error("Could not find the workspace title. Reload the page and try again.");
           downloadConfiguration(data, exportFilename("workspace", workspace.name));
         }, true)}>Export workspace</Button>
-        <FieldHelp id="workspace-export-help" label="Export workspace">Export all board settings, agents, and memory for import into another workspace. Active tasks and run history are not included.</FieldHelp>
-        <div className="space-y-2">
-          <label htmlFor="configuration-file" className="text-sm font-medium">Import configuration file</label>
+
+        <SettingField htmlFor="configuration-file" label="Import configuration file">
           <Input id="configuration-file" type="file" accept=".json,application/json" disabled={busy} onChange={(event) => {
             const file = event.target.files?.[0];
             event.target.value = "";
@@ -180,11 +170,11 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
               prepare(parsed, "import");
             });
           }} />
-        </div>
+        </SettingField>
       </div>
       {operation === "import" && source?.boards && <fieldset disabled={busy} className="space-y-4">
         <legend className="text-sm font-semibold">Import workspace</legend>
-        <p className="text-sm text-muted-foreground">Add all boards, agents, and memory from this file to the current workspace. Matching board names receive an “imported” suffix.</p>
+
         <ScrollArea className="max-h-60"><ul className="space-y-2">{source.boards.map((board) => <li key={board.id}>{board.name} · {board.columns.length} {board.columns.length === 1 ? "column" : "columns"}</li>)}</ul></ScrollArea>
         <div className="flex gap-2">
           <Button disabled={busy} onClick={() => run(async () => {
@@ -197,10 +187,9 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
         </div>
       </fieldset>}
       {operation === "import" && selection}
-      <DialogContent size="wide" closeDisabled={busy} onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onInteractOutside={(event) => { if (busy) event.preventDefault(); }}>
+      <DialogContent aria-describedby={undefined} size="wide" closeDisabled={busy} onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onInteractOutside={(event) => { if (busy) event.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle>Export board configuration</DialogTitle>
-          <DialogDescription>Choose a board to export all its columns. Select shared agents and memory to include in your JSON file.</DialogDescription>
         </DialogHeader>
         {operation === "export" && selection}
       </DialogContent>

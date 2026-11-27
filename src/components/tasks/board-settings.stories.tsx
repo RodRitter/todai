@@ -28,41 +28,36 @@ export const Manage: Story = {};
 export const LocalNavigation: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole("navigation", { name: "Board breadcrumbs" })).toHaveTextContent("All boards");
-    await expect(canvas.queryByRole("heading", { name: "Board columns" })).not.toBeInTheDocument();
-    await userEvent.click(canvas.getByRole("button", { name: "Research" }));
-    await expect(await canvas.findByRole("heading", { name: "Board columns" })).toBeVisible();
-    await expect(canvas.getByRole("navigation", { name: "Board breadcrumbs" })).toHaveTextContent("All boardsResearch");
-    await expect(canvas.queryByRole("list", { name: "Boards" })).not.toBeInTheDocument();
-    await expect(canvas.getByText("Ideas", { exact: true })).toBeVisible();
-    await userEvent.click(canvas.getByRole("button", { name: "All boards" }));
-    await expect(canvas.getByRole("list", { name: "Boards" })).toBeVisible();
-    await expect(canvas.getByRole("navigation", { name: "Board breadcrumbs" })).toHaveTextContent("All boards");
-    await expect(canvas.queryByRole("heading", { name: "Board columns" })).not.toBeInTheDocument();
-    await userEvent.click(canvas.getByRole("button", { name: "Product" }));
+    const body = within(canvasElement.ownerDocument.body);
     await expect(await canvas.findByText("Backlog", { exact: true })).toBeVisible();
-    await expect(canvas.queryByText("Ideas", { exact: true })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("navigation", { name: "Board breadcrumbs" })).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("combobox", { name: "Board" }));
+    await userEvent.click(body.getByRole("option", { name: "Research" }));
+    await expect(await canvas.findByText("Ideas", { exact: true })).toBeVisible();
+    await expect(canvas.queryByText("Backlog", { exact: true })).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("combobox", { name: "Board" }));
+    await userEvent.click(body.getByRole("option", { name: "Product" }));
+    await expect(await canvas.findByText("Backlog", { exact: true })).toBeVisible();
   },
 };
 export const Create: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole("button", { name: "New" }));
+    await userEvent.click(canvas.getByRole("button", { name: "New board" }));
     const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
     await userEvent.type(dialog.getByLabelText("Board name"), "Marketing");
     await userEvent.type(dialog.getByLabelText("Description"), "Plan marketing tasks.");
     await userEvent.click(dialog.getByRole("button", { name: "Create board" }));
     await expect(args.persistence?.create).toHaveBeenCalledWith("Marketing", "Plan marketing tasks.");
-    await expect(await canvas.findByRole("navigation", { name: "Board breadcrumbs" })).toHaveTextContent("Marketing");
-    await userEvent.click(canvas.getByRole("button", { name: "All boards" }));
-    await expect(canvas.getByRole("button", { name: "Marketing" })).toBeVisible();
+    await expect(canvas.getByRole("combobox", { name: "Board" })).toHaveTextContent("Marketing");
+    await expect(canvas.getByRole("button", { name: "Edit board name: Marketing" })).toBeVisible();
   },
 };
 export const DuplicateName: Story = {
   args: { persistence: { ...meta.args.persistence, create: fn(async () => { throw new Error("A board with that name already exists."); }) } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole("button", { name: "New" }));
+    await userEvent.click(canvas.getByRole("button", { name: "New board" }));
     const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
     await userEvent.type(dialog.getByLabelText("Board name"), "Product");
     await userEvent.type(dialog.getByLabelText("Description"), "Plan marketing tasks.");
@@ -75,10 +70,8 @@ export const LoadingFailure: Story = {
   args: { columnsForBoard: (id) => ({ ...meta.args.columnsForBoard(id), load: async () => { throw new Error("Offline"); } }) },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole("button", { name: "Research" }));
     await expect(await canvas.findByRole("button", { name: "Retry" })).toBeVisible();
-    await userEvent.click(canvas.getByRole("button", { name: "All boards" }));
-    await expect(canvas.getByRole("list", { name: "Boards" })).toBeVisible();
+    await expect(canvas.getByRole("combobox", { name: "Board" })).toBeEnabled();
   },
 };
 
@@ -90,3 +83,6 @@ export const SelectedBoard: Story = {
     await expect(canvas.getByLabelText("Description")).toBeVisible();
   },
 };
+
+export const Narrow: Story = { decorators: [(Story) => <div className="w-80"><Story /></div>] };
+export const Dark: Story = { globals: { theme: "dark" } };

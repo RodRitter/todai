@@ -3,7 +3,7 @@
 import { GetStarted } from "./tasks/get-started";
 import { WorkspaceArchive } from "./tasks/workspace-archive";
 import Link from "next/link";
-import { createContext, useContext, useSyncExternalStore, type ComponentProps, type ReactNode } from "react";
+import { createContext, useId, useContext, useSyncExternalStore, type ComponentProps, type ReactNode } from "react";
 
 import { selectedWorkspaceId, selectedBoardId } from "@/lib/workspace-fetch";
 import type { Workspace } from "@/domain/workspace";
@@ -37,18 +37,20 @@ export function WorkspaceLink({ href, ...props }: Omit<ComponentProps<typeof Lin
   return <Link {...props} href={`${path}${params.size ? `?${params}` : ""}`} />;
 }
 
-export function WorkspaceSwitcher() {
+export function WorkspaceSwitcher({ layout = "shell", disabled = false }: { layout?: "shell" | "settings"; disabled?: boolean }) {
+  const id = useId();
   const selection = useContext(Selection);
   if (!selection) return null;
-  return <div className="border-b px-2 py-4 md:px-4">
-    <Label htmlFor="workspace-switcher" variant="caption" className="mb-2">Workspace</Label>
-    <Select value={selection.workspace.id} onValueChange={(workspaceId) => {
+  return <div className={layout === "shell" ? "border-b px-2 py-4 md:px-4" : "min-w-0"}>
+    <Label htmlFor={id} variant="caption" className="mb-2">Workspace</Label>
+    <Select disabled={disabled} value={selection.workspace.id} onValueChange={(workspaceId) => {
       const url = new URL(window.location.href);
       url.searchParams.set("workspace", workspaceId);
       url.searchParams.delete("board");
+      url.searchParams.delete("settingsBoard");
       window.location.assign(url.href);
     }}>
-      <SelectTrigger id="workspace-switcher" className="w-full min-w-0" title={selection.workspace.path}>
+      <SelectTrigger id={id} className="w-full min-w-0" title={selection.workspace.path}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent position="popper" align="start">

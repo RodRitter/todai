@@ -1,14 +1,12 @@
 "use client";
 
-import { FieldHelp } from "@/components/ui/field-help";
-
 import { useEffect, useId, useState } from "react";
 import { notifyOperation, toast } from "@/components/ui/toast";
 import { ResetCreditTrackingDialog } from "@/components/reset-credit-tracking-dialog";
 import { Button } from "@/components/ui/button";
 import { InputActionRow } from "@/components/ui/input-action-row";
 import { EditableSetting } from "@/components/ui/editable-setting";
-import { Label } from "@/components/ui/label";
+import { SettingField } from "@/components/ui/setting-field";
 import { generalSettingsApi } from "@/lib/workspace-api";
 import { formatCredits } from "@/lib/usage-format";
 import { workspaceFetch } from "@/lib/workspace-fetch";
@@ -49,16 +47,13 @@ export function CreditSettings() {
     finally { setBusy(false); }
   }
   return <section className="space-y-4" aria-label="Credit settings">
-    <h2 className="text-lg font-semibold">Credits</h2>
-    <div className="space-y-2">
-      <div className="flex items-center gap-2"><Label htmlFor={`${id}-limit`}>Maximum credits</Label><FieldHelp id={`${id}-limit-hint`} label="Maximum credits">Zero disables alerts. Usage above 80% of this workspace limit appears in red.</FieldHelp></div>
-      <EditableSetting id={`${id}-limit`} label="Maximum credits" type="number" min={0} value={limit} disabled={!ready || busy} describedBy={`${id}-limit-hint`}
+    <SettingField htmlFor={`${id}-limit`} label="Maximum credits">
+      <EditableSetting id={`${id}-limit`} label="Maximum credits" type="number" min={0} value={limit} disabled={!ready || busy}
         onSave={async value => { const data = await generalSettingsApi.setCreditLimit(Number(value)); setLimit(String(data.creditLimit)); }} />
-    </div>
-    <div className="space-y-2">
-      <div className="flex items-center gap-2"><Label htmlFor={`${id}-credits`}>Current tracked credits</Label><FieldHelp id={`${id}-credits-hint`} label="Current tracked credits">New usage adds to this workspace total. Reset sets the total to zero and keeps task history.</FieldHelp></div>
+    </SettingField>
+    <SettingField htmlFor={`${id}-credits`} label="Current tracked credits">
       <InputActionRow actions={<Button type="button" aria-label="Reset tracking" variant="outline" disabled={!ready || busy} onClick={() => setConfirmReset(true)}>Reset</Button>}>
-        <EditableSetting id={`${id}-credits`} label="Current tracked credits" type="number" min={0} value={credits} disabled={!ready || busy} describedBy={`${id}-credits-hint`}
+        <EditableSetting id={`${id}-credits`} label="Current tracked credits" type="number" min={0} value={credits} disabled={!ready || busy}
           onSave={async value => {
             setBusy(true);
             try {
@@ -69,7 +64,7 @@ export function CreditSettings() {
           }} />
       </InputActionRow>
       {taskCredits !== null && <Button type="button" variant="ghost-muted" size="xs" disabled={!ready || busy} onClick={() => void save("sync")}>Use task total: {formatCredits(taskCredits)} credits</Button>}
-    </div>
+    </SettingField>
     {error && !ready && <Button onClick={() => { setError(""); setAttempt(value => value + 1); }}>Retry loading credits</Button>}
     <ResetCreditTrackingDialog open={confirmReset} busy={busy} onOpenChange={setConfirmReset} onConfirm={() => void save("reset")} />
   </section>;

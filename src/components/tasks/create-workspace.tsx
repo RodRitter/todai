@@ -7,7 +7,7 @@ import { useDirectorySuggestions } from "./use-directory-suggestions";
 import { notifyOperation } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { SettingField } from "@/components/ui/setting-field";
 import { workspaceApi } from "@/lib/workspace-api";
 import { statuses } from "@/domain/task";
 import { parseWorkspaceSetup, starterAgents } from "@/domain/workspace-setup";
@@ -33,8 +33,7 @@ export function CreateWorkspace({ firstRun = false, onBusyChange }: { firstRun?:
   }
 
   return <section className="space-y-6" aria-label="Create workspace">
-    {!firstRun && <h2 className="text-lg font-semibold">Add workspace</h2>}
-    <form id={`${id}-form`} className="grid gap-4 sm:grid-cols-2" onSubmit={async (event) => {
+    <form id={`${id}-form`} className="space-y-4" onSubmit={async (event) => {
       event.preventDefault();
       if (saving.current || editingColumns) return;
       saving.current = true;
@@ -53,14 +52,10 @@ export function CreateWorkspace({ firstRun = false, onBusyChange }: { firstRun?:
         onBusyChange?.(false);
       }
     }}>
-      {firstRun && <div className="sm:col-span-2"><UserNameField id={`${id}-user-name`} value={userName} onChange={setUserName} disabled={busy} /></div>}
-      <div className="space-y-2">
-        <Label htmlFor={`${id}-name`}>Workspace name</Label>
-        <Input id={`${id}-name`} value={name} onChange={(event) => setName(event.target.value)} required disabled={busy} placeholder="My project" />
-      </div>
-      <div className="min-w-0 space-y-2">
-        <Label htmlFor={`${id}-path`}>Project folder</Label>
-        <Combobox
+      {firstRun && <div><UserNameField id={`${id}-user-name`} value={userName} onChange={setUserName} disabled={busy} /></div>}
+      <SettingField htmlFor={`${id}-name`} label="Workspace name"><Input id={`${id}-name`} value={name} onChange={(event) => setName(event.target.value)} required disabled={busy} placeholder="My project" />
+      </SettingField>
+      <SettingField htmlFor={`${id}-path`} label="Project folder"><Combobox
           id={`${id}-path`}
           value={path}
           options={suggestions}
@@ -76,7 +71,7 @@ export function CreateWorkspace({ firstRun = false, onBusyChange }: { firstRun?:
           aria-describedby={directoryError ? `${id}-directory-error` : undefined}
         />
         {directoryError && <p id={`${id}-directory-error`} className="text-xs text-destructive" role="status">{directoryError}</p>}
-      </div>
+      </SettingField>
     </form>
     <ColumnEditor
       compact

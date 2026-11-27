@@ -6,19 +6,19 @@ import { cn } from "@/lib/utils";
 
 const Tabs = TabsPrimitive.Root;
 
-function TabsList({ className, layout = "default", ...props }: ComponentProps<typeof TabsPrimitive.List> & { layout?: "default" | "wrap" }) {
+function TabsList({ className, layout = "default", ...props }: ComponentProps<typeof TabsPrimitive.List> & { layout?: "default" | "wrap" | "sidebar" }) {
   return (
     <TabsPrimitive.List
-      className={cn("inline-flex h-10 items-center gap-1 rounded-lg bg-muted p-1 text-muted-foreground", layout === "wrap" && "h-auto flex-wrap", className)}
+      className={cn("inline-flex h-10 items-center gap-1 rounded-lg bg-muted p-1 text-muted-foreground", layout === "wrap" && "h-auto flex-wrap", layout === "sidebar" && "flex h-auto w-full flex-col items-stretch bg-transparent p-0", className)}
       {...props}
     />
   );
 }
 
-function TabsTrigger({ className, ...props }: ComponentProps<typeof TabsPrimitive.Trigger>) {
+function TabsTrigger({ className, layout = "default", ...props }: ComponentProps<typeof TabsPrimitive.Trigger> & { layout?: "default" | "sidebar" }) {
   return (
     <TabsPrimitive.Trigger
-      className={cn("inline-flex cursor-pointer items-center justify-center gap-2 rounded-md px-4 py-1.5 text-sm font-medium transition-colors hover:bg-background/60 hover:text-foreground motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:hover:bg-background/80", className)}
+      className={cn("inline-flex cursor-pointer items-center justify-center gap-2 rounded-md px-4 py-1.5 text-sm font-medium transition-colors hover:bg-background/60 hover:text-foreground motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:hover:bg-background/80", layout === "sidebar" && "justify-start whitespace-normal text-left data-[state=active]:bg-muted data-[state=active]:shadow-none", className)}
       {...props}
     />
   );
