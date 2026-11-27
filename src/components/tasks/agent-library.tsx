@@ -101,7 +101,7 @@ export function AgentLibrary({
                       </h2>
                       <p className="pointer-events-none relative col-start-1 min-w-0 break-words text-xs text-muted-foreground md:col-start-auto">
                         {executorLabel(agent.tool)} · {agent.model} · {agent.effort}
-                        {executorStatuses.some((status) => status.tool === agent.tool && (!status.installed || !status.signedIn)) && <span className="block">Executor unavailable — check Settings → Executors</span>}
+                        {executorStatuses.some((status) => status.tool === agent.tool && (!status.installed || !status.signedIn)) && <span className="block">Executor unavailable — check Settings → AI tools</span>}
                       </p>
                       <p className="pointer-events-none relative col-start-1 text-xs text-muted-foreground md:col-start-auto">
                         {columns.length ? columns.join(", ") : "Unassigned"}

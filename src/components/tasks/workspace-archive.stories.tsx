@@ -7,7 +7,7 @@ const archived = [{ id: "project", name: "Earlier project", path: "/projects/ear
 const meta = {
   title: "Settings/Workspace archive",
   component: WorkspaceArchiveView,
-  args: { archived, onArchive: () => {}, onRestore: () => {}, onRefresh: () => {} },
+  args: { archived, onArchive: () => {}, onRestore: () => {}, onRefresh: () => {}, onDelete: fn(async () => true) },
 } satisfies Meta<typeof WorkspaceArchiveView>;
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -34,7 +34,7 @@ export const ConfirmArchive: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "Archive this workspace" }));
     let dialog = within(await page.findByRole("dialog", { name: /^(Delete|Clear|Archive)/ }));
     await expect(args.onArchive).not.toHaveBeenCalled();
-    await expect(dialog.getByText(/You can restore it from Archived/)).toBeVisible();
+    await expect(dialog.getByText(/You can restore it from Archive/)).toBeVisible();
     await userEvent.click(dialog.getByRole("button", { name: "Cancel" }));
     await expect(page.queryByRole("dialog", { name: /^(Delete|Clear|Archive)/ })).not.toBeInTheDocument();
     await expect(args.onArchive).not.toHaveBeenCalled();
@@ -44,3 +44,18 @@ export const ConfirmArchive: Story = {
     await expect(args.onArchive).toHaveBeenCalledTimes(1);
   },
 };
+
+export const ConfirmDelete: Story = {
+  args: { allowArchive: false, onDelete: fn(async () => true) },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole("button", { name: "Delete Earlier project" }));
+    const dialog = within(await page.findByRole("dialog", { name: "Permanently delete Earlier project?" }));
+    await expect(args.onDelete).not.toHaveBeenCalled();
+    await userEvent.click(dialog.getByRole("button", { name: "Delete permanently" }));
+    await expect(args.onDelete).toHaveBeenCalledWith("project");
+  },
+};
+export const DeleteFailure: Story = { args: { onDelete: fn(async () => false) } };
+export const Dark: Story = { globals: { theme: "dark" } };

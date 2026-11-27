@@ -5,7 +5,6 @@ import { AppShell } from "@/components/app-shell";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SettingsSections } from "./settings-sections";
 import { WorkspaceSettingsTab } from "./workspace-settings-tab";
-import { CreateWorkspace } from "./create-workspace";
 import { WorkspaceArchive } from "./workspace-archive";
 import { ColumnEditor } from "./column-editor";
 
@@ -55,8 +54,7 @@ export function ColumnSettings({
           <TabsContent value="general" forceMount className="space-y-8">
             <SettingsSections label="Global categories" disabled={busy} sections={[
               { id: "identity", label: "Identity", content: generalSettings },
-              { id: "new", label: "New workspace", content: <CreateWorkspace onBusyChange={setBusy} /> },
-              { id: "archived", label: "Archived workspaces", content: <WorkspaceArchive allowArchive={false} onBusyChange={setBusy} /> },
+              { id: "archived", label: "Archive", content: <WorkspaceArchive allowArchive={false} onBusyChange={setBusy} /> },
             ]} />
           </TabsContent>
           <TabsContent value="workspaces" forceMount>

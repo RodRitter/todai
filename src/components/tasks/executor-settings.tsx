@@ -57,7 +57,7 @@ export function ExecutorSettings({ test = executorApi.test, load = executorApi.g
   }
 
   return (
-    <section className="space-y-6" aria-label="Executors" aria-busy={loading}>
+    <section className="space-y-6" aria-label="AI tools" aria-busy={loading}>
       <div className="space-y-2">
         <div className="flex items-center gap-2"><Label htmlFor="default-executor">Default executor</Label>
         </div>

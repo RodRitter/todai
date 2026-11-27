@@ -27,14 +27,20 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const CurrentWorkspace: Story = {};
-export const ArchiveNavigation: Story = {
+export const CurrentWorkspace: Story = {
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByRole("heading", { name: "Environment", level: 2 })).toBeVisible();
+  },
+};
+export const MaintenanceNavigation: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole("tab", { name: "Archive workspace" }));
+    await userEvent.click(canvas.getByRole("tab", { name: "Maintenance" }));
+    await expect(canvas.getByRole("heading", { name: "Maintenance", level: 2 })).toBeVisible();
     await expect(canvas.getByRole("button", { name: "Archive this workspace" })).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "Preview cleanup" })).toBeVisible();
     await expect(canvas.queryByRole("switch", { name: "Use task worktrees" })).not.toBeInTheDocument();
-    await userEvent.click(canvas.getByRole("tab", { name: "Directory and worktrees" }));
+    await userEvent.click(canvas.getByRole("tab", { name: "Environment" }));
     await expect(await canvas.findByRole("switch", { name: "Use task worktrees" })).toBeVisible();
   },
 };
@@ -43,10 +49,11 @@ export const ImportExport: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const navigation = canvas.getByRole("tablist", { name: "Workspace categories" });
-    await userEvent.click(within(navigation).getByRole("tab", { name: "Import and export" }));
+    await expect(within(navigation).queryByRole("tab", { name: "Import and export" })).not.toBeInTheDocument();
+    await userEvent.click(within(navigation).getByRole("tab", { name: "Tracking" }));
     await expect(canvas.getByRole("heading", { name: "Transfer configuration files" })).toBeVisible();
     await userEvent.keyboard("{ArrowDown}");
-    await expect(within(navigation).getByRole("tab", { name: "Cleanup" })).toHaveFocus();
+    await expect(within(navigation).getByRole("tab", { name: "Maintenance" })).toHaveFocus();
   },
 };
 export const WorktreeSetting: Story = {
@@ -64,3 +71,28 @@ export const WorktreeSetting: Story = {
 
 export const Narrow: Story = { decorators: [(Story) => <div className="w-80"><Story /></div>] };
 export const Dark: Story = { globals: { theme: "dark" } };
+
+export const MaintenanceNarrow: Story = { args: { initialSection: "maintenance" }, decorators: Narrow.decorators };
+export const MaintenanceDark: Story = { args: { initialSection: "maintenance" }, globals: { theme: "dark" } };
+
+export const NewWorkspace: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "New workspace" }));
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await expect(dialog.getByRole("heading", { name: "New workspace" })).toBeVisible();
+    await expect(dialog.getByLabelText("Workspace name")).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Create workspace" })).toBeDisabled();
+  },
+};
+
+export const WorkspaceImportMenu: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole("button", { name: "More workspace actions" }));
+    await userEvent.click(await body.findByRole("menuitem", { name: "Import configuration" }));
+    const dialog = within(await body.findByRole("dialog"));
+    await expect(dialog.getByLabelText("Import configuration file")).toBeVisible();
+  },
+};

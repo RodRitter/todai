@@ -95,7 +95,7 @@ export function PersistentWorkspace({
         )}
         executorSettings={<ExecutorSettings />}
         generalSettings={<GeneralSettings />}
-        transferSettings={<ConfigurationTransfer onImported={() => setAttempt((value) => value + 1)} />}
+        transferSettings={<ConfigurationTransfer scope="workspace" onImported={() => setAttempt((value) => value + 1)} />}
         {...columnApi}
       />
     );
@@ -132,13 +132,15 @@ export function PersistentWorkspace({
 function UrlColumnSettings(props: ComponentProps<typeof ColumnSettings>) {
   const searchParams = useSearchParams();
   const requestedTab = searchParams.get("tab");
+  const requestedSection = searchParams.get("section");
+  const workspaceSection = requestedSection === "cleanup" || requestedSection === "archive" ? "maintenance" : requestedSection;
   const tab = requestedTab === "board" || requestedTab === "executors" || requestedTab === "workspaces" || requestedTab === "transfer" ? requestedTab : "general";
 
   return (
     <ColumnSettings
       {...props}
       tab={tab}
-      workspaceSection={requestedTab === "board" ? "boards" : requestedTab === "executors" || requestedTab === "transfer" ? requestedTab : ["directory", "boards", "executors", "credits", "transfer", "cleanup", "archive"].includes(searchParams.get("section") ?? "") ? searchParams.get("section")! : "directory"}
+      workspaceSection={requestedTab === "board" ? "boards" : requestedTab === "executors" || requestedTab === "transfer" ? requestedTab : ["directory", "boards", "executors", "credits", "transfer", "maintenance"].includes(workspaceSection ?? "") ? workspaceSection! : "directory"}
       onWorkspaceSectionChange={(value) => {
         const url = new URL(window.location.href);
         url.searchParams.set("tab", "workspaces");

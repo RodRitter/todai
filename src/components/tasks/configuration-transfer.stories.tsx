@@ -128,3 +128,18 @@ export const WorkspaceImportFailure: Story = {
   },
 };
 export const WorkspaceImportDark: Story = { ...WorkspaceImportFailure, globals: { theme: "dark" } };
+
+export const WorkspaceActions: Story = {
+  args: { scope: "workspace" },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByRole("button", { name: "Export board" })).not.toBeInTheDocument();
+    await expect(canvas.getByRole("button", { name: "Export workspace" })).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Import configuration" }));
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await expect(dialog.getByLabelText("Import configuration file")).toBeVisible();
+  },
+};
+export const BoardAction: Story = { args: { scope: "board" } };
+
+export const WorkspaceActionsDark: Story = { args: { scope: "workspace" }, globals: { theme: "dark" } };

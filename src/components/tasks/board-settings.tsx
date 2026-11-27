@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus } from "lucide-react";
+import { ChevronDown, Plus, Upload } from "lucide-react";
 import type { Board } from "@/domain/task";
 import { boardApi, boardSettingsApi, type BoardSnapshot } from "@/lib/workspace-api";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -14,6 +14,8 @@ import { Input } from "@/components/ui/input";
 import { SettingField } from "@/components/ui/setting-field";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { ConfigurationTransfer } from "./configuration-transfer";
 import { ColumnEditor } from "./column-editor";
 
 export function BoardSettings({ boards: initialBoards, initialBoardId, persistence = boardApi, columnsForBoard = boardSettingsApi }: {
@@ -22,6 +24,7 @@ export function BoardSettings({ boards: initialBoards, initialBoardId, persisten
   persistence?: typeof boardApi;
   columnsForBoard?: typeof boardSettingsApi;
 }) {
+  const [importRevision, setImportRevision] = useState(0);
   const [boards, setBoards] = useState(initialBoards);
   const requestedBoard = initialBoardId ?? (typeof window === "undefined" ? undefined : new URL(window.location.href).searchParams.get("settingsBoard")) ?? selectedBoardId();
   const initialBoard = initialBoards.find((board) => board.id === requestedBoard);
@@ -79,7 +82,17 @@ export function BoardSettings({ boards: initialBoards, initialBoardId, persisten
           </Select>
         </SettingField>
       </div>
-      <Button disabled={busy || editingColumns} onClick={() => { setError(""); setNewName(""); setNewDescription(""); setCreating(true); }}><Plus />New board</Button>
+      <ConfigurationTransfer scope="import" boardId={selectedId ?? undefined} disabled={busy || editingColumns}
+        onImported={() => { setImportRevision(value => value + 1); void persistence.list().then(next => { setBoards(next); setSelectedId(current => next.some(board => board.id === current) ? current : next[0]?.id ?? null); }).catch(() => toast.error("Could not load boards. Reload the page.")); }}
+        importTrigger={(open, importing) => <div role="group" aria-label="New board actions" className="flex">
+          <Button segment="start" disabled={importing} onClick={() => { setError(""); setNewName(""); setNewDescription(""); setCreating(true); }}><Plus />New board</Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild><Button segment="end" size="icon" disabled={importing} aria-label="More board actions"><ChevronDown aria-hidden="true" /></Button></DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => { requestAnimationFrame(open); }}><Upload aria-hidden="true" />Import configuration</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>} />
     </div>
     {selected && <div key={selected.id} className="space-y-6">
       <div className="space-y-4">
@@ -89,9 +102,12 @@ export function BoardSettings({ boards: initialBoards, initialBoardId, persisten
         <SettingField htmlFor="board-description" label="Description"><EditableSetting id="board-description" label="Description" multiline value={selected.description ?? "Organize and track tasks on this board."} maxLength={500} disabled={busy}
             onSave={value => updateBoard(selected.name, value)} />
         </SettingField>
+      </div>
+      <BoardColumns key={`${selected.id}:${importRevision}`} boardId={selected.id} persistence={columnsForBoard} disabled={busy} onBusyChange={setBusy} onEditingChange={setEditingColumns} onColumnsChange={(columns) => setBoards((current) => current.map((board) => board.id === selected.id ? { ...board, columns } : board))} />
+      <div className="flex flex-wrap items-center gap-2">
+        <ConfigurationTransfer scope="board" boardId={selected.id} disabled={busy || editingColumns} onImported={() => {}} />
         <Button type="button" variant="ghost-destructive" disabled={busy || editingColumns || selected.id === (selectedWorkspaceId() ?? initialBoards[0]?.id)} onClick={() => setDeleting(true)}>Delete board</Button>
       </div>
-      <BoardColumns key={selected.id} boardId={selected.id} persistence={columnsForBoard} disabled={busy} onBusyChange={setBusy} onEditingChange={setEditingColumns} onColumnsChange={(columns) => setBoards((current) => current.map((board) => board.id === selected.id ? { ...board, columns } : board))} />
       <DeleteConfirmation open={deleting} onOpenChange={setDeleting} busy={busy} title={`Delete ${selected.name}?`} description="Move all tasks out of this board first. Its columns and agent assignments will be removed; shared agents will remain." onConfirm={() => void save(async () => {
         await persistence.remove(selected.id);
         setBoards((current) => current.filter((board) => board.id !== selected.id));

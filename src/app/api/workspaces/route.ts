@@ -46,3 +46,19 @@ export async function PATCH(request: Request) {
     return Response.json({ error: invalid ? error.message : "Could not update workspace." }, { status: invalid ? 409 : 500 });
   } finally { store.close(); }
 }
+
+export async function DELETE(request: Request) {
+  let input: unknown;
+  try { input = await request.json(); }
+  catch { return Response.json({ error: "Send workspace details as JSON." }, { status: 400 }); }
+  if (!input || typeof input !== "object" || !("id" in input) || typeof input.id !== "string" || !input.id.trim())
+    return Response.json({ error: "Choose an archived workspace to delete." }, { status: 400 });
+  const store = openTaskStore();
+  try {
+    store.deleteArchivedWorkspace(input.id);
+    return Response.json({ archived: store.listArchivedWorkspaces() });
+  } catch (error) {
+    const invalid = error instanceof RunValidationError || error instanceof WorkspaceOwnershipError;
+    return Response.json({ error: invalid ? error.message : "Could not delete workspace. No changes were saved." }, { status: invalid ? 409 : 500 });
+  } finally { store.close(); }
+}

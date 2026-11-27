@@ -117,11 +117,10 @@ export const TransferSection: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole("tab", { name: "Workspace" }));
-    await userEvent.click(canvas.getByRole("tab", { name: "Import and export" }));
-    await expect(canvas.getByRole("tab", { name: "Import and export" })).toHaveAttribute("aria-selected", "true");
+    await expect(canvas.queryByRole("tab", { name: "Import and export" })).not.toBeInTheDocument();
     await expect(canvas.getByRole("heading", { name: "Transfer configuration files" })).toBeVisible();
-    await userEvent.click(canvas.getByRole("tab", { name: "Directory and worktrees" }));
-    await expect(canvas.queryByRole("heading", { name: "Transfer configuration files" })).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("tab", { name: "Environment" }));
+    await expect(canvas.getByRole("heading", { name: "Transfer configuration files" })).toBeVisible();
   },
 };
 
@@ -129,9 +128,10 @@ export const GlobalWorkspaceManagement: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole("tablist", { name: "Settings sections" })).toHaveTextContent("GlobalWorkspace");
-    await userEvent.click(canvas.getByRole("tab", { name: "New workspace" }));
-    await expect(canvas.getByLabelText("Workspace name")).toBeVisible();
+    await expect(canvas.queryByRole("tab", { name: "New workspace" })).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("tab", { name: "Archive" }));
+    await expect(canvas.getByRole("heading", { name: "Archive" })).toBeVisible();
     await userEvent.click(canvas.getByRole("tab", { name: "Identity" }));
-    await expect(canvas.queryByLabelText("Workspace name")).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("heading", { name: "Archive" })).not.toBeInTheDocument();
   },
 };

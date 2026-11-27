@@ -86,3 +86,14 @@ export const SelectedBoard: Story = {
 
 export const Narrow: Story = { decorators: [(Story) => <div className="w-80"><Story /></div>] };
 export const Dark: Story = { globals: { theme: "dark" } };
+
+export const ImportMenu: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole("button", { name: "More board actions" }));
+    await userEvent.click(await body.findByRole("menuitem", { name: "Import configuration" }));
+    const dialog = within(await body.findByRole("dialog"));
+    await expect(dialog.getByLabelText("Import configuration file")).toBeVisible();
+  },
+};

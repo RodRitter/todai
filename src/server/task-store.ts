@@ -124,6 +124,25 @@ export class TaskStore {
     });
   }
 
+  deleteArchivedWorkspace(id: string) {
+    return this.transaction(() => {
+      const workspace = this.db.prepare("SELECT archived FROM workspaces WHERE id = ?").get(id);
+      if (!workspace) throw new WorkspaceOwnershipError("Choose an existing workspace.");
+      if (!workspace.archived) throw new WorkspaceOwnershipError("Archive the workspace before deleting it.");
+      if (this.db.prepare("SELECT id FROM runs WHERE workspaceId = ? AND status IN ('Queued', 'Running')").get(id))
+        throw new RunValidationError("Finish queued and running jobs before deleting this workspace.");
+      for (const table of ["workspace_chats", "chat_sessions"]) {
+        if (this.db.prepare(`SELECT id FROM ${table} WHERE workspaceId = ? AND lease > ?`).get(id, new Date().toISOString()))
+          throw new RunValidationError("Wait for chats to finish before deleting this workspace.");
+      }
+      // Delete dependents first. Foreign-key cascades remove task history and chat messages.
+      for (const table of ["tasks", "comments", "runs", "artifacts", "column_assignments", "board_columns", "boards", "agents", "settings", "memory_versions", "memory_entries", "memory_entry_migrations", "workspace_memory", "workspace_chats", "chat_sessions", "task_usage"]) {
+        this.db.prepare(`DELETE FROM ${table} WHERE workspaceId = ?`).run(id);
+      }
+      this.db.prepare("DELETE FROM workspaces WHERE id = ?").run(id);
+    });
+  }
+
   private assertWorkspaceActive() {
     if (this.db.prepare("SELECT archived FROM workspaces WHERE id = workspace_id()").get()?.archived)
       throw new WorkspaceOwnershipError("This workspace is archived. Restore it before making changes.");

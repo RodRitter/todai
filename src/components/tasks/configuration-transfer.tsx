@@ -1,8 +1,8 @@
 "use client";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useId, useRef, useState } from "react";
-import { Download } from "lucide-react";
+import { useId, useRef, useState, type ReactNode } from "react";
+import { Download, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -28,7 +28,8 @@ function downloadConfiguration(data: Configuration, filename: string) {
 
 type Mode = "agents" | "columns" | "both";
 
-export function ConfigurationTransfer({ onImported }: { onImported: () => void }) {
+export function ConfigurationTransfer({ onImported, scope = "all", boardId, disabled = false, importTrigger }: { onImported: () => void; scope?: "all" | "board" | "workspace" | "import"; boardId?: string; disabled?: boolean; importTrigger?: (open: () => void, busy: boolean) => ReactNode }) {
+  const [importOpen, setImportOpen] = useState(false);
   const id = useId();
   const [boards, setBoards] = useState<Board[]>([]);
   const [exportBoardId, setExportBoardId] = useState("");
@@ -124,9 +125,10 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
           <div className="flex gap-2">
             <Button disabled={busy || (conflicts.length > 0 && conflictMode === null) || (!selected.agents.length && !selected.columns.length && !selected.memory?.entries.length) || (operation === "import" && selected.columns.length > 0 && columnMode === null)} onClick={() => run(async () => {
               if (operation === "import") {
-                await configurationApi.import(selected, columnMode ?? "add", conflicts.length ? conflictMode ?? "copy" : "copy");
+                await configurationApi.import(selected, columnMode ?? "add", conflicts.length ? conflictMode ?? "copy" : "copy", boardId);
                 setSource(null);
                 window.dispatchEvent(new Event("todai:boards-changed"));
+                setImportOpen(false);
                 onImported();
               } else {
                 downloadConfiguration(selected, exportFilename("board", boards.find((board) => board.id === exportBoardId)!.name));
@@ -138,23 +140,7 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
         </fieldset>
       );
 
-  return (
-    <Dialog open={source !== null && operation === "export"} onOpenChange={(open) => { if (!open && !pending.current) setSource(null); }}>
-    <section className="space-y-4" aria-label="Import and export">
-      <div className="space-y-4">
-        <DialogTrigger asChild><Button variant="outline" disabled={busy} onClick={() => run(async () => {
-          const available = await boardApi.list();
-          if (!available.length) throw new Error("No boards are available to export.");
-          setBoards(available);
-          await selectExportBoard(available.find((board) => board.id === selectedBoardId())?.id ?? available[0].id);
-        })}><Download className="size-4" aria-hidden="true" />Export board</Button></DialogTrigger>
-        <Button variant="outline" disabled={busy} onClick={() => run(async () => {
-          const [data, workspaces] = await Promise.all([configurationApi.exportWorkspace(), workspaceApi.list()]);
-          const workspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId());
-          if (!workspace) throw new Error("Could not find the workspace title. Reload the page and try again.");
-          downloadConfiguration(data, exportFilename("workspace", workspace.name));
-        }, true)}>Export workspace</Button>
-
+  const importControls = <>
         <SettingField htmlFor="configuration-file" label="Import configuration file">
           <Input id="configuration-file" type="file" accept=".json,application/json" disabled={busy} onChange={(event) => {
             const file = event.target.files?.[0];
@@ -166,12 +152,11 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
               try { data = JSON.parse(await file.text()); }
               catch { throw new Error("Choose a valid JSON file."); }
               const parsed = parseConfiguration(data);
-              setExisting(parsed.boards ? null : await configurationApi.get());
+              setExisting(parsed.boards ? null : await configurationApi.get(boardId));
               prepare(parsed, "import");
             });
           }} />
         </SettingField>
-      </div>
       {operation === "import" && source?.boards && <fieldset disabled={busy} className="space-y-4">
         <legend className="text-sm font-semibold">Import workspace</legend>
 
@@ -181,12 +166,40 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
             await configurationApi.import(source);
             setSource(null);
             window.dispatchEvent(new Event("todai:boards-changed"));
+            setImportOpen(false);
             onImported();
           }, true)}>{busy ? "Importing workspace…" : "Import workspace"}</Button>
           <Button variant="ghost" disabled={busy} onClick={() => setSource(null)}>Cancel</Button>
         </div>
       </fieldset>}
       {operation === "import" && selection}
+  </>;
+
+  return (
+    <Dialog open={source !== null && operation === "export"} onOpenChange={(open) => { if (!open && !pending.current) setSource(null); }}>
+    <section className={scope === "workspace" ? "space-y-1" : "space-y-4"} aria-label="Import and export">
+      {scope !== "import" && <div className="space-y-4">
+        {(scope === "all" || scope === "board") && <DialogTrigger asChild><Button variant="outline" disabled={busy || disabled} onClick={() => run(async () => {
+          const available = await boardApi.list();
+          if (!available.length) throw new Error("No boards are available to export.");
+          setBoards(available);
+          await selectExportBoard(available.find((board) => board.id === (boardId ?? selectedBoardId()))?.id ?? available[0].id);
+        })}><Download className="size-4" aria-hidden="true" />Export board</Button></DialogTrigger>}
+        {(scope === "all" || scope === "workspace") && <Button variant={scope === "workspace" ? "sidebar" : "outline"} size={scope === "workspace" ? "sidebar" : "default"} disabled={busy || disabled} onClick={() => run(async () => {
+          const [data, workspaces] = await Promise.all([configurationApi.exportWorkspace(), workspaceApi.list()]);
+          const workspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId());
+          if (!workspace) throw new Error("Could not find the workspace title. Reload the page and try again.");
+          downloadConfiguration(data, exportFilename("workspace", workspace.name));
+        }, true)}><Download aria-hidden="true" />Export workspace</Button>}
+
+      </div>}
+      {scope !== "board" && (scope !== "all" ? <Dialog open={importOpen} onOpenChange={open => { if (!pending.current) setImportOpen(open); }}>
+        {importTrigger ? importTrigger(() => { setSource(null); setImportOpen(true); }, busy || disabled) : <DialogTrigger asChild><Button variant={scope === "workspace" ? "sidebar" : "outline"} size={scope === "workspace" ? "sidebar" : "default"} disabled={busy || disabled} onClick={() => { setSource(null); setImportOpen(true); }}><Upload aria-hidden="true" />Import configuration</Button></DialogTrigger>}
+        <DialogContent size="wide" aria-describedby={undefined} closeDisabled={busy}>
+          <DialogHeader><DialogTitle>Import configuration</DialogTitle></DialogHeader>
+          {importControls}
+        </DialogContent>
+      </Dialog> : importControls)}
       <DialogContent aria-describedby={undefined} size="wide" closeDisabled={busy} onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onInteractOutside={(event) => { if (busy) event.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle>Export board configuration</DialogTitle>

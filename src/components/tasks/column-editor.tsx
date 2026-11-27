@@ -125,7 +125,7 @@ export function ColumnEditor({ initialInstructions = {}, initialCompletionColumn
   return <>
             <section className="space-y-4" aria-labelledby={`${id}-heading`}>
               <div>
-                <h2 id={`${id}-heading`} className={compact ? "text-sm font-semibold" : "text-lg font-semibold"}>
+                <h2 id={`${id}-heading`} className="text-sm font-medium">
                   Board columns
                 </h2>
               </div>
@@ -221,7 +221,7 @@ export function ColumnEditor({ initialInstructions = {}, initialCompletionColumn
                             }} />
 
                         ) : (
-                          <span className="min-w-0 flex-1 break-words font-medium">
+                          <span className="min-w-0 flex-1 break-words text-sm font-medium">
                             {column}
                           </span>
                         )}
