@@ -159,3 +159,19 @@ Old pending memory approvals are cancelled and replaced with fresh automatic rev
 Select **Archive task** from the task actions menu to remove a task from its board. Its ID, comments, chats, artifacts, usage, and task history remain stored. Tasks with queued or running work must finish or stop before archiving.
 
 Select **Copy task reference** to copy a reference based on the task ID. References use `[Task ID](#task/ID)`. They open a read-only task page, including archived tasks. Existing local task links continue to resolve. Archived tasks cannot be edited or reused as new tasks.
+
+## Workspace cleanup
+
+Open **Settings → Workspaces → Cleanup** to remove old archived records from the current workspace.
+Choose a retention period of 30, 90, or 180 days. The default is 90 days.
+Select **Preview cleanup** to inspect removal counts, record lists, and reasons for keeping records.
+Select **Remove eligible records**, then confirm permanent removal. Cleanup also removes the associated task history and retired memory versions.
+
+Cleanup keeps active records and records needed by retained content, including references from other workspaces.
+An isolated archived group can be removed even when its records reference each other.
+Active memories keep their source evidence. Cleanup checks supported text artifacts, but does not scan binary files, repository files, or external documents.
+Stop active runs and chats and clear queued runs before cleanup. Tasks with unresolved worktree records remain available.
+If records change after the preview, generate a new preview before removal. Previews expire after 15 minutes.
+
+Existing artifacts and retired memories with unknown archive dates start their retention period when this feature is installed.
+Cleanup preserves usage totals and task-number reservations. SQLite reuses freed space; cleanup does not shrink the database file.

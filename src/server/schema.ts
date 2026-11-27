@@ -1,3 +1,4 @@
+import { initializeCleanupSchema } from "./cleanup-schema.ts";
 import { initializeWorkspaceChatSchema } from "./workspace-chat-schema.ts";
 import { initializeMemorySchema, renameMemoryReviewer } from "./workspace-memory.ts";
 import { initializeUsageSchema } from "./usage-store.ts";
@@ -190,6 +191,7 @@ export function initializeSchema(db: DatabaseSync, seedWorkspace = true) {
       db.exec("ALTER TABLE tasks ADD COLUMN worktree TEXT");
     if (!db.prepare("PRAGMA table_info(tasks)").all().some((field) => field.name === "branchName"))
       db.exec("ALTER TABLE tasks ADD COLUMN branchName TEXT");
+    initializeCleanupSchema(db);
     renameMemoryReviewer(db);
     db.exec("COMMIT");
   } catch (error) {

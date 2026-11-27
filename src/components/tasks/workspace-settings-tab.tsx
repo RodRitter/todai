@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Archive, Plus } from "lucide-react";
 import { BreadcrumbRow, Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbLink, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
+import { WorkspaceCleanup } from "./workspace-cleanup";
 import { WorkspaceSettings } from "./workspace-settings";
 import { WorkspaceArchive } from "./workspace-archive";
 import { CreateWorkspace } from "./create-workspace";
@@ -32,6 +33,6 @@ export function WorkspaceSettingsTab() {
     </BreadcrumbRow>
     {view === "new" ? <CreateWorkspace onBusyChange={setBusy} />
       : view === "archive" ? <WorkspaceArchive key="restore" allowArchive={false} onBusyChange={setBusy} />
-      : <><WorkspaceSettings /><WorkspaceArchive key="archive" allowRestore={false} onBusyChange={setBusy} /></>}
+      : <><WorkspaceSettings /><WorkspaceCleanup onBusyChange={setBusy} /><WorkspaceArchive key="archive" allowRestore={false} onBusyChange={setBusy} /></>}
   </section>;
 }

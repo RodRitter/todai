@@ -1,3 +1,5 @@
+import { previewCleanup, executeCleanup } from "./workspace-cleanup.ts";
+import type { CleanupConfirmation } from "../domain/workspace-cleanup.ts";
 import { exportMemory, importMemory } from "./memory-transfer.ts";
 import { discardWorktree, closeWorktree, openWorktree, planWorktree, validateBranchName, worktreeHead } from "./task-worktree.ts";
 import type { TaskWorktree } from "../domain/task.ts";
@@ -90,6 +92,14 @@ export class TaskStore {
     this.db.function("board_id", () => this.boardId);
     try { if (options.boardId) this.requireBoard(options.boardId); }
     catch (error) { this.db.close(); throw error; }
+  }
+
+  previewCleanup(retentionDays: number) {
+    return this.transaction(() => previewCleanup(this.db, this.workspaceId, retentionDays));
+  }
+
+  executeCleanup(confirmation: CleanupConfirmation) {
+    return this.transaction(() => executeCleanup(this.db, this.workspaceId, confirmation));
   }
 
   listWorkspaces(): Workspace[] {
