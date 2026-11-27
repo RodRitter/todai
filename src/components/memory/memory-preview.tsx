@@ -7,6 +7,11 @@ import type { MemoryChange, MemoryEntry } from "@/domain/memory";
 export function MemoryEntryDetails({ entry }: { entry: MemoryEntry }) {
   return <div className="space-y-2">
     <Markdown>{entry.statement}</Markdown>
+    {entry.retired && <TraceDescription>Retired. Excluded from task context.</TraceDescription>}
+    {!entry.retired && entry.stale && <TraceDescription>This record has not been updated for six months. Check its source before use.</TraceDescription>}
+    {entry.needsReview && <TraceDescription>Needs review. Excluded from automatic task context.</TraceDescription>}
+    {entry.details && <Markdown>{entry.details}</Markdown>}
+    {entry.supersedes && <TraceDescription>Replaces record {entry.supersedes}</TraceDescription>}
     <Markdown>{`Scope: ${entry.scope}\n\nSource: ${entry.source}`}</Markdown>
     <TraceDescription>{entry.category} · Revision {entry.revision}</TraceDescription>
   </div>;

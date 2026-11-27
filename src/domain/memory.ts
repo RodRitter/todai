@@ -16,6 +16,11 @@ export type MemoryEntry = {
   category: MemoryCategory;
   title: string;
   statement: string;
+  details?: string;
+  retired?: boolean;
+  stale?: boolean;
+  needsReview?: boolean;
+  supersedes?: string;
   scope: string;
   source: string;
   updatedAt: string;

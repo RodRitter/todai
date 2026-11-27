@@ -146,3 +146,25 @@ test("memory endpoints require workspace scope and explicit clear confirmation",
     f.close();
   }
 });
+
+test("memory corrections require workspace ownership and current revisions", async () => {
+  const { GET, PATCH } = await import("../app/api/memory/route.ts");
+  const f = setup(); const previous = process.env.TODAI_DB_PATH; process.env.TODAI_DB_PATH = f.path;
+  try {
+    complete(f.store); review(f.store);
+    const entry = f.store.searchMemory().entries[0];
+    const request = (body: unknown, workspace = f.store.workspaceId) => new Request("http://localhost/api/memory", { method: "PATCH", headers: { "X-Todai-Workspace": workspace }, body: JSON.stringify(body) });
+    const correction = { ...entry, operation: "update", statement: "Corrected summary.", details: "Supporting evidence.", reason: "Checked the original task." };
+    assert.equal((await PATCH(request(correction, "missing"))).status, 400);
+    assert.equal((await PATCH(request(correction))).status, 200);
+    assert.equal((await PATCH(request(correction))).status, 400);
+    const response = GET(new Request(`http://localhost/api/memory?view=history&id=${entry.id}`, { headers: { "X-Todai-Workspace": f.store.workspaceId } }));
+    const versions = await response.json();
+    assert.equal(versions.length, 2);
+    assert.equal(versions[0].entry.details, "Supporting evidence.");
+    assert.match(f.store.memorySnapshot().current!.document, /Corrected summary/);
+  } finally {
+    if (previous === undefined) delete process.env.TODAI_DB_PATH; else process.env.TODAI_DB_PATH = previous;
+    f.close();
+  }
+});

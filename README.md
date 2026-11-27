@@ -58,3 +58,15 @@ npm run dev
 ```
 
 Open **[Todai →](http://127.0.0.1:3000)**, connect a project folder, and give your first agent a task.
+
+### Workspace memory
+
+Memory records have a short summary and optional details of up to 12,000 characters. Keep critical exceptions in the summary or scope. Agents can read the details and original source tasks through the memory tools.
+
+Search ranks matching words and a local list of related concepts. For example, a search for “login” can find “authentication”. Search also includes detailed evidence. This is deterministic concept matching, not embedding-based semantic search.
+
+Automatic task context uses an 8,000-character budget for record summaries. Set `TODAI_MEMORY_CONTEXT_CHARACTERS` to change this budget, from 0 to 64,000 characters. Agents can retrieve more records through the memory tools. Run history lists records supplied during setup and records read through those tools. These events show access, not proof that a record influenced a decision.
+
+Use the memory page to correct records, mark them for review, inspect history, or retire them. The **Include retired records** control gives access to retired history. Review flags exclude records from automatic context. The page marks records older than 180 days for a source check; age alone does not invalidate a record.
+
+Memory rejects normalized duplicates. Different statements with the same title and scope trigger review flags on both records. This detects likely conflicts, not every contradiction. An explicit replacement can retire the previous decision and preserve its history. Clear memory deletes these saved versions too.

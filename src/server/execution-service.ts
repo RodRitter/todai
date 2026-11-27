@@ -102,7 +102,7 @@ export class ExecutionService {
         let workspaceMemory: RunRequest["workspaceMemory"];
         try {
           workspaceMemory = this.store.memoryContext(`${task.title} ${task.description}`);
-          onActivity({ ...memoryStep, status: "complete" });
+          onActivity({ ...memoryStep, status: "complete", detail: workspaceMemory.entries.map((entry) => `${entry.title} (${entry.id}, revision ${entry.revision})`).join("\n") || "No matching memory was supplied." });
         } catch (error) {
           onActivity({ ...memoryStep, status: "error" });
           throw error;

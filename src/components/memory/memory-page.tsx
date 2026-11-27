@@ -10,6 +10,7 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/
 import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { notifyOperation, toast } from "@/components/ui/toast";
 import { memoryApi } from "@/lib/workspace-api";
+import { MemoryControls } from "./memory-controls";
 import { MemoryEntryDetails } from "./memory-preview";
 import type { MemorySearchResult } from "@/domain/memory";
 
@@ -17,12 +18,13 @@ export function MemoryPage() {
   return <AppShell screen="memory"><MemoryContent /></AppShell>;
 }
 
-export function MemoryContent({ load = memoryApi.search, clear = memoryApi.clear }: { clear?: () => Promise<{ cleared: number }>; load?: (query: string, offset: number, signal?: AbortSignal) => Promise<MemorySearchResult> }) {
+export function MemoryContent({ load = memoryApi.search, clear = memoryApi.clear }: { clear?: () => Promise<{ cleared: number }>; load?: (query: string, offset: number, signal?: AbortSignal, retired?: boolean) => Promise<MemorySearchResult> }) {
   const [confirmClear, setConfirmClear] = useState(false);
   const [clearing, setClearing] = useState(false);
   const clearingRef = useRef(false);
   const clearTrigger = useRef<HTMLButtonElement>(null);
   const [result, setResult] = useState<MemorySearchResult | null>(null);
+  const [includeRetired, setIncludeRetired] = useState(false);
   const [query, setQuery] = useState("");
   const [offset, setOffset] = useState(0);
   const [openEntry, setOpenEntry] = useState("");
@@ -32,7 +34,7 @@ export function MemoryContent({ load = memoryApi.search, clear = memoryApi.clear
   useEffect(() => {
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      load(query, offset, controller.signal).then((data) => {
+      load(query, offset, controller.signal, includeRetired).then((data) => {
         if (controller.signal.aborted) return;
         if (offset > 0 && offset >= data.total) {
           setOffset(Math.floor(Math.max(0, data.total - 1) / 20) * 20);
@@ -46,7 +48,7 @@ export function MemoryContent({ load = memoryApi.search, clear = memoryApi.clear
       });
     }, query ? 200 : 0);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [load, query, offset, attempt]);
+  }, [load, query, offset, attempt, includeRetired]);
 
   async function clearMemory() {
     if (clearingRef.current) return;
@@ -85,13 +87,14 @@ export function MemoryContent({ load = memoryApi.search, clear = memoryApi.clear
       <Input disabled={clearing} type="search" aria-label="Search memory" placeholder="Search memory" value={query} onChange={(event) => {
         setLoading(true); setFailed(false); setOffset(0); setOpenEntry(""); setQuery(event.target.value);
       }} />
+      <Button variant="outline" size="sm" aria-pressed={includeRetired} disabled={clearing} onClick={() => { setIncludeRetired(!includeRetired); setOffset(0); reload(); }}>Include retired records</Button>
       {loading && <p role="status" className="text-sm text-muted-foreground">Loading memory…</p>}
       {!loading && !failed && result && <>
         <TraceDescription>{result.total} {result.total === 1 ? "entry" : "entries"}{query ? " found" : " recorded"}</TraceDescription>
         {result.entries.length ? <Accordion type="single" collapsible value={openEntry} onValueChange={setOpenEntry}>
           {result.entries.map((entry) => <AccordionItem key={entry.id} value={entry.id}>
             <AccordionTrigger metadata={entry.category}>{entry.title}</AccordionTrigger>
-            <AccordionContent><MemoryEntryDetails entry={entry} /></AccordionContent>
+            <AccordionContent><MemoryEntryDetails entry={entry} /><MemoryControls key={`${entry.id}-${entry.revision}`} entry={entry} onChange={reload} /></AccordionContent>
           </AccordionItem>)}
         </Accordion> : <p className="text-sm text-muted-foreground">{query ? "No matching memory entries." : "No memory has been recorded yet."}</p>}
         {(offset > 0 || result.hasMore) && <nav aria-label="Memory pages" className="flex items-center gap-2">

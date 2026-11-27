@@ -322,7 +322,7 @@ test("memory reviewers receive only read-only memory tools and bounded context",
       assert.ok(connection);
       const response = await fetch(connection.url, { method: "POST", headers: { Authorization: `Bearer ${connection.token}`, "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) });
       const message = await response.json();
-      assert.deepEqual(message.result.tools.map((tool: { name: string }) => tool.name), ["search_memory", "read_memory"]);
+      assert.deepEqual(message.result.tools.map((tool: { name: string }) => tool.name), ["read_memory_source", "search_memory", "read_memory"]);
       assert.deepEqual(await rpc(connection, "search_memory", { query: "settings" }), { entries: [], total: 0, hasMore: false });
       await assert.rejects(rpc(connection, "read_memory", { ids: "one" }), /Invalid argument/);
       await assert.rejects(rpc(connection, "read_memory", { ids: ["missing"] }), /unavailable/);

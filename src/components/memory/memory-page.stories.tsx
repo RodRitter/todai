@@ -108,3 +108,18 @@ export const Clearing: Story = {
     await expect(dialog.getByRole("button", { name: "Cancel" })).toBeDisabled();
   },
 };
+
+export const DetailedReview: Story = {
+  args: { load: async () => ({ ...snapshot, entries: [{ ...snapshot.entries[0], needsReview: true, stale: true, details: "Keep the retry control accessible after a failed save.\n\n" + "Supporting evidence and exceptions. ".repeat(100) }] }) },
+};
+export const RetiredHistory: Story = {
+  args: { load: async (_query, _offset, _signal, retired) => retired ? { ...snapshot, entries: [{ ...snapshot.entries[0], retired: true }] } : { entries: [], total: 0, hasMore: false } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText("No memory has been recorded yet.");
+    await userEvent.click(canvas.getByRole("button", { name: "Include retired records" }));
+    await userEvent.click(await canvas.findByRole("button", { name: "Settings feedback" }));
+    await expect(canvas.getByRole("button", { name: "Correct" })).toBeDisabled();
+    await expect(canvas.getByRole("button", { name: "History" })).toBeEnabled();
+  },
+};

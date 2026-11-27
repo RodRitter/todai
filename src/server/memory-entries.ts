@@ -24,6 +24,30 @@ export function initializeMemoryEntries(db: DatabaseSync) {
   CREATE TABLE IF NOT EXISTS memory_entry_migrations (workspaceId TEXT PRIMARY KEY);`);
   if (!db.prepare("PRAGMA table_info(memory_reviews)").all().some((field) => field.name === "changes"))
     db.exec("ALTER TABLE memory_reviews ADD COLUMN changes TEXT");
+  for (const [name, definition] of Object.entries({ details: "TEXT NOT NULL DEFAULT ''", needsReview: "INTEGER NOT NULL DEFAULT 0", supersedes: "TEXT NOT NULL DEFAULT ''" })) {
+    if (!db.prepare("PRAGMA table_info(memory_entries)").all().some((column) => column.name === name))
+      db.exec(`ALTER TABLE memory_entries ADD COLUMN ${name} ${definition}`);
+  }
+  if (!db.prepare("PRAGMA table_info(memory_search)").all().some((column) => column.name === "details")) {
+    db.exec(`DROP TRIGGER memory_search_insert; DROP TRIGGER memory_search_delete; DROP TRIGGER memory_search_update;
+      DROP TABLE memory_search;
+      CREATE VIRTUAL TABLE memory_search USING fts5(title, statement, scope, details, content='memory_entries', content_rowid='rowid');
+      CREATE TRIGGER memory_search_insert AFTER INSERT ON memory_entries BEGIN
+        INSERT INTO memory_search(rowid, title, statement, scope, details) VALUES (new.rowid, new.title, new.statement, new.scope, new.details);
+      END;
+      CREATE TRIGGER memory_search_delete AFTER DELETE ON memory_entries BEGIN
+        INSERT INTO memory_search(memory_search, rowid, title, statement, scope, details) VALUES ('delete', old.rowid, old.title, old.statement, old.scope, old.details);
+      END;
+      CREATE TRIGGER memory_search_update AFTER UPDATE ON memory_entries BEGIN
+        INSERT INTO memory_search(memory_search, rowid, title, statement, scope, details) VALUES ('delete', old.rowid, old.title, old.statement, old.scope, old.details);
+        INSERT INTO memory_search(rowid, title, statement, scope, details) VALUES (new.rowid, new.title, new.statement, new.scope, new.details);
+      END;
+      INSERT INTO memory_search(memory_search) VALUES ('rebuild');`);
+  }
+  db.exec(`CREATE TABLE IF NOT EXISTS memory_versions (
+    workspaceId TEXT NOT NULL, entryId TEXT NOT NULL, revision INTEGER NOT NULL, snapshot TEXT NOT NULL,
+    reason TEXT NOT NULL, PRIMARY KEY(workspaceId, entryId, revision)
+  );`);
   for (const row of db.prepare(`SELECT m.* FROM workspace_memory m WHERE revision = (SELECT MAX(revision) FROM workspace_memory WHERE workspaceId = m.workspaceId)
     AND NOT EXISTS (SELECT 1 FROM memory_entry_migrations WHERE workspaceId = m.workspaceId)`).all()) {
     replaceLegacyEntries(db, String(row.workspaceId), String(row.document));
@@ -32,7 +56,7 @@ export function initializeMemoryEntries(db: DatabaseSync) {
 
 function entry(row: Record<string, unknown>): MemoryEntry {
   const { id, revision, category, title, statement, scope, source, updatedAt } = row;
-  return { id, revision, category, title, statement: normalizeTaskReferences(String(statement)), scope, source: normalizeTaskReferences(String(source)), updatedAt } as MemoryEntry;
+  return { id, revision, category, title, stale: Date.now() - Date.parse(String(updatedAt)) > 180 * 86400000, retired: Boolean(row.removed), details: String(row.details ?? ""), needsReview: Boolean(row.needsReview), supersedes: String(row.supersedes ?? ""), statement: normalizeTaskReferences(String(statement)), scope, source: normalizeTaskReferences(String(source)), updatedAt } as MemoryEntry;
 }
 
 export function readMemoryEntries(db: DatabaseSync, workspaceId: string, ids: string[]): MemoryEntry[] {
@@ -44,30 +68,66 @@ export function readMemoryEntries(db: DatabaseSync, workspaceId: string, ids: st
   });
 }
 
-export function searchMemoryEntries(db: DatabaseSync, workspaceId: string, query = "", offset = 0, limit = 20): MemorySearchResult {
-  const terms = query.slice(0, 1000).match(/[\p{L}\p{N}_]+/gu)?.slice(0, 30) ?? [];
-  const match = terms.map((term) => `"${term}"`).join(" OR ");
-  const from = match ? "memory_entries m JOIN memory_search ON memory_search.rowid = m.rowid" : "memory_entries m";
-  const where = `m.workspaceId = ? AND m.removed = 0${match ? " AND memory_search MATCH ?" : ""}`;
-  const args = match ? [workspaceId, match] : [workspaceId];
-  const total = Number(db.prepare(`SELECT COUNT(*) AS count FROM ${from} WHERE ${where}`).get(...args)!.count);
+// Local concept expansion is deterministic and does not send workspace text to a service.
+const concepts = [
+  ["authentication", "login", "signin", "credentials"], ["authorization", "permissions", "access"],
+  ["notification", "notifications", "toast", "feedback"], ["database", "storage", "persistence", "sqlite"],
+  ["test", "tests", "testing", "verification", "validation"], ["slow", "latency", "performance"],
+  ["delete", "remove", "retire", "removal"], ["settings", "configuration", "preferences"],
+  ["error", "failure", "failed", "exception"], ["concurrency", "parallel", "simultaneous"],
+];
+const stopWords = new Set("a an the to for in on of and or is are be use with this that how should we".split(" "));
+function words(text: string): string[] {
+  return [...new Set((text.toLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? []).filter((word) => !stopWords.has(word)))];
+}
+function rankedMemory(db: DatabaseSync, workspaceId: string, query: string, includeRetired = false) {
+  const terms = words(query.slice(0, 1000)).slice(0, 30);
+  const related = new Set(concepts.filter((group) => group.some((term) => terms.includes(term))).flat());
+  const match = [...new Set([...terms, ...related])].map((term) => `"${term}"`).join(" OR ");
+  if (query.trim() && !match) return [];
+  const rows = match
+    ? db.prepare("SELECT m.* FROM memory_entries m JOIN memory_search ON memory_search.rowid = m.rowid WHERE m.workspaceId = ? AND (? OR m.removed = 0) AND memory_search MATCH ?").all(workspaceId, includeRetired ? 1 : 0, match)
+    : db.prepare("SELECT * FROM memory_entries WHERE workspaceId = ? AND (? OR removed = 0)").all(workspaceId, includeRetired ? 1 : 0);
+  const ranked = rows.map(entry).map((item) => {
+    const fields = [[item.title, 4], [item.scope, 2], [item.statement, 1], [item.details ?? "", 0.5]] as const;
+    let score = 0;
+    for (const [text, weight] of fields) {
+      const tokens = new Set(words(text));
+      score += terms.filter((term) => tokens.has(term)).length * weight * 4;
+      score += [...related].filter((term) => tokens.has(term) && !terms.includes(term)).length * weight;
+    }
+    return { item, score };
+  }).filter(({ score }) => !query.trim() || score > 0)
+    .sort((a, b) => b.score - a.score || a.item.title.localeCompare(b.item.title) || a.item.id.localeCompare(b.item.id));
+  return ranked.map(({ item }) => item);
+}
+export function searchMemoryEntries(db: DatabaseSync, workspaceId: string, query = "", offset = 0, limit = 20, includeRetired = false): MemorySearchResult {
+  const ranked = rankedMemory(db, workspaceId, query, includeRetired);
   const start = Number.isSafeInteger(offset) && offset >= 0 ? offset : 0;
-  const size = Math.max(1, Math.min(50, limit));
-  const entries = db.prepare(`SELECT m.* FROM ${from} WHERE ${where} ORDER BY ${match ? "bm25(memory_search, 4, 1, 2), " : ""}m.title, m.id LIMIT ? OFFSET ?`).all(...args, size, start).map(entry);
-  return { entries, total, hasMore: start + entries.length < total };
+  const size = Number.isSafeInteger(limit) ? Math.max(1, Math.min(50, limit)) : 20;
+  return { entries: ranked.slice(start, start + size), total: ranked.length, hasMore: start + size < ranked.length };
 }
 
-export function memoryContext(db: DatabaseSync, workspaceId: string, query: string): MemoryContext {
-  const result = searchMemoryEntries(db, workspaceId, query, 0, 5);
+export function memoryContext(db: DatabaseSync, workspaceId: string, query: string, budget = Number(process.env.TODAI_MEMORY_CONTEXT_CHARACTERS ?? 8000)): MemoryContext {
   const entries: MemoryEntry[] = [];
-  let remaining = 3950;
-  for (const item of result.entries) {
-    const size = JSON.stringify(item).length;
+  let remaining = (Number.isFinite(budget) ? Math.max(0, Math.min(64000, budget)) : 8000) - 2;
+  for (const item of rankedMemory(db, workspaceId, query)) {
+    if (item.needsReview) continue;
+    const summary = { ...item, details: "" };
+    const size = JSON.stringify(summary).length + (entries.length ? 1 : 0);
     if (size > remaining) continue;
-    entries.push(item); remaining -= size;
+    entries.push(summary); remaining -= size;
   }
   const total = Number(db.prepare("SELECT COUNT(*) AS count FROM memory_entries WHERE workspaceId = ? AND removed = 0").get(workspaceId)!.count);
   return { entries, total };
+}
+
+export function memoryHistory(db: DatabaseSync, workspaceId: string, id: string) {
+  return db.prepare("SELECT snapshot, reason FROM memory_versions WHERE workspaceId = ? AND entryId = ? ORDER BY revision DESC").all(workspaceId, id)
+    .map((row) => ({ entry: JSON.parse(String(row.snapshot)) as MemoryEntry, reason: String(row.reason) }));
+}
+function saveVersion(db: DatabaseSync, workspaceId: string, item: MemoryEntry, reason: string) {
+  db.prepare("INSERT OR IGNORE INTO memory_versions VALUES (?, ?, ?, ?, ?)").run(workspaceId, item.id, item.revision, JSON.stringify(item), reason);
 }
 
 function writeEntry(db: DatabaseSync, workspaceId: string, value: MemoryEntry) {
@@ -76,6 +136,8 @@ function writeEntry(db: DatabaseSync, workspaceId: string, value: MemoryEntry) {
     category=excluded.category, title=excluded.title, statement=excluded.statement, scope=excluded.scope,
     source=excluded.source, updatedAt=excluded.updatedAt, removed=0`).run(value.id, workspaceId, value.revision,
       value.category, value.title, value.statement, value.scope, value.source, value.updatedAt);
+  db.prepare("UPDATE memory_entries SET details = ?, needsReview = ?, supersedes = ? WHERE workspaceId = ? AND id = ?")
+    .run(value.details ?? "", value.needsReview ? 1 : 0, value.supersedes ?? "", workspaceId, value.id);
 }
 
 // Preserve legacy Markdown exactly within entries. No model rewrites accepted knowledge during migration.
@@ -128,7 +190,15 @@ export function prepareMemoryChanges(db: DatabaseSync, workspaceId: string, inpu
     if (!memoryCategories.includes(raw.category)) throw new Error("Select a valid memory category.");
     const after: MemoryEntry = { id: before?.id ?? randomUUID(), revision: (before?.revision ?? 0) + 1,
       category: raw.category, title: field(raw.title, "title", 100), statement: field(raw.statement, "statement", 600),
+      details: raw.details === undefined ? before?.details ?? "" : raw.details === "" ? "" : field(raw.details, "details", 12000),
+      needsReview: raw.needsReview === undefined ? before?.needsReview ?? false : raw.needsReview,
+      supersedes: raw.supersedes === undefined ? before?.supersedes ?? "" : raw.supersedes === "" ? "" : field(raw.supersedes, "supersedes", 100),
       scope: field(raw.scope, "scope", 160), source: normalizeTaskReferences(field(raw.source, "source", 500)), updatedAt: new Date().toISOString() };
+    if (typeof after.needsReview !== "boolean") throw new Error("Memory review status must be a boolean.");
+    if (after.supersedes && after.supersedes !== before?.supersedes) {
+      if (after.supersedes === after.id) throw new Error("A memory cannot replace itself.");
+      readMemoryEntries(db, workspaceId, [after.supersedes]);
+    }
     return { operation, reason, before, after };
   });
 }
@@ -140,18 +210,43 @@ export function applyMemoryChanges(db: DatabaseSync, workspaceId: string, change
       const row = db.prepare("SELECT revision FROM memory_entries WHERE workspaceId = ? AND id = ? AND removed = 0").get(workspaceId, change.before.id);
       if (row?.revision !== change.before.revision) throw new Error("Workspace memory changed after this review. Run the memory review again.");
     }
+    if (change.before) saveVersion(db, workspaceId, change.before, "Previous accepted version.");
     if (change.after) {
       const duplicate = db.prepare("SELECT id FROM memory_entries WHERE workspaceId = ? AND removed = 0 AND statement = ? AND scope = ? AND id != ?").get(workspaceId, change.after.statement, change.after.scope, change.after.id);
       if (duplicate) throw new Error("This memory entry already exists. Run the memory review again.");
+      const normalized = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+      const peers = db.prepare("SELECT * FROM memory_entries WHERE workspaceId = ? AND removed = 0 AND id != ?").all(workspaceId, change.after.id).map(entry);
+      if (peers.some((peer) => normalized(peer.statement) === normalized(change.after!.statement) && normalized(peer.scope) === normalized(change.after!.scope)))
+        throw new Error("This memory entry already exists. Update the existing entry.");
+      const conflict = peers.some((peer) => normalized(peer.title) === normalized(change.after!.title) && normalized(peer.scope) === normalized(change.after!.scope) && peer.id !== change.after!.supersedes);
+      if (conflict) {
+        change.after.needsReview = true;
+        for (const peer of peers.filter((peer) => !peer.needsReview && normalized(peer.title) === normalized(change.after!.title) && normalized(peer.scope) === normalized(change.after!.scope))) {
+          saveVersion(db, workspaceId, peer, "Previous accepted version.");
+          const flagged = { ...peer, needsReview: true, revision: peer.revision + 1 };
+          writeEntry(db, workspaceId, flagged);
+          saveVersion(db, workspaceId, flagged, "A record with the same title and scope needs conflict review.");
+        }
+      }
+      if (change.after.supersedes && change.after.supersedes !== change.before?.supersedes) {
+        const replaced = readMemoryEntries(db, workspaceId, [change.after.supersedes])[0];
+        saveVersion(db, workspaceId, replaced, "Previous accepted version.");
+        db.prepare("UPDATE memory_entries SET removed = 1, revision = revision + 1 WHERE workspaceId = ? AND id = ?").run(workspaceId, replaced.id);
+        saveVersion(db, workspaceId, { ...replaced, retired: true, revision: replaced.revision + 1 }, `Replaced by ${change.after.id}.`);
+      }
       writeEntry(db, workspaceId, change.after);
-    } else if (change.before) db.prepare("UPDATE memory_entries SET removed = 1, revision = revision + 1 WHERE workspaceId = ? AND id = ?").run(workspaceId, change.before.id);
+      saveVersion(db, workspaceId, change.after, change.reason);
+    } else if (change.before) {
+      db.prepare("UPDATE memory_entries SET removed = 1, revision = revision + 1 WHERE workspaceId = ? AND id = ?").run(workspaceId, change.before.id);
+      saveVersion(db, workspaceId, { ...change.before, retired: true, revision: change.before.revision + 1 }, change.reason);
+    }
   }
   db.prepare("INSERT OR IGNORE INTO memory_entry_migrations(workspaceId) VALUES (?)").run(workspaceId);
 }
 
 export function memoryDocument(db: DatabaseSync, workspaceId: string): string {
   const entries = db.prepare("SELECT * FROM memory_entries WHERE workspaceId = ? AND removed = 0 ORDER BY category, title, id").all(workspaceId).map(entry);
-  return memoryCategories.map((category) => `## ${category}\n\n${entries.filter((item) => item.category === category).map((item) => item.statement + (item.scope === "See the accepted text." ? "" : `\n\nScope: ${item.scope}\n\nSource: ${item.source}`)).join("\n\n")}`.trim()).join("\n\n");
+  return memoryCategories.map((category) => `## ${category}\n\n${entries.filter((item) => item.category === category).map((item) => item.statement + (item.details ? `\n\n${item.details}` : "") + (item.scope === "See the accepted text." ? "" : `\n\nScope: ${item.scope}\n\nSource: ${item.source}`)).join("\n\n")}`.trim()).join("\n\n");
 }
 
 export function memoryChangesSummary(changes: MemoryChange[]): string {

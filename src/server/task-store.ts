@@ -1,6 +1,6 @@
 import { discardWorktree, closeWorktree, openWorktree, planWorktree, validateBranchName, worktreeHead } from "./task-worktree.ts";
 import type { TaskWorktree } from "../domain/task.ts";
-import { searchMemoryEntries, readMemoryEntries, memoryContext, prepareMemoryChanges, applyMemoryChanges, memoryDocument, memoryChangesSummary } from "./memory-entries.ts";
+import { searchMemoryEntries, readMemoryEntries, memoryContext, memoryHistory, prepareMemoryChanges, applyMemoryChanges, memoryDocument, memoryChangesSummary } from "./memory-entries.ts";
 import { readMemory, readMemorySnapshot, memoryProfile } from "./workspace-memory.ts";
 import { parseCredits } from "../domain/credit-settings.ts";
 import { UsageStore } from "./usage-store.ts";
@@ -370,9 +370,26 @@ export class TaskStore {
     return this.db.prepare("SELECT name FROM board_columns WHERE workspaceId = workspace_id() AND boardId = ? AND completion = 1").get(boardId)?.name as string | undefined ?? null;
   }
 
-  searchMemory(query = "", offset = 0, limit = 20) { return searchMemoryEntries(this.db, this.workspaceId, query, offset, limit); }
+  searchMemory(query = "", offset = 0, limit = 20, includeRetired = false) { return searchMemoryEntries(this.db, this.workspaceId, query, offset, limit, includeRetired); }
   readMemoryEntries(ids: string[]) { return readMemoryEntries(this.db, this.workspaceId, ids); }
   memoryContext(query: string) { return memoryContext(this.db, this.workspaceId, query); }
+
+  memoryHistory(id: string) { return memoryHistory(this.db, this.workspaceId, id); }
+  changeMemory(input: unknown) {
+    return this.transaction(() => {
+      const changes = prepareMemoryChanges(this.db, this.workspaceId, [input]);
+      applyMemoryChanges(this.db, this.workspaceId, changes);
+      const revision = readMemory(this.db, this.workspaceId).revision + 1;
+      this.db.prepare("INSERT INTO workspace_memory (workspaceId, revision, document, sourceTaskId, createdAt) VALUES (?, ?, ?, '', ?)")
+        .run(this.workspaceId, revision, memoryDocument(this.db, this.workspaceId), new Date().toISOString());
+      return { changed: true };
+    });
+  }
+  memoryEvidence(id: string) {
+    const item = this.readMemoryEntries([id])[0];
+    const ids = [...item.source.matchAll(/#task\/([^\s)]+)/g)].map((match) => match[1]);
+    return ids.map((taskId) => this.readTask(taskId)).filter((task) => task !== undefined);
+  }
 
   workspaceMemory() { return readMemory(this.db, this.workspaceId); }
 
@@ -388,6 +405,7 @@ export class TaskStore {
       this.db.prepare(`UPDATE runs SET status = 'Stopped', finishedAt = ?, summary = 'Memory review cancelled because workspace memory was cleared.'
         WHERE workspaceId = workspace_id() AND kind = 'memory' AND status IN ('Queued', 'Waiting')`).run(now);
       const cleared = Number(this.db.prepare("SELECT COUNT(*) AS count FROM memory_entries WHERE workspaceId = workspace_id() AND removed = 0").get()!.count);
+      this.db.prepare("DELETE FROM memory_versions WHERE workspaceId = workspace_id()").run();
       this.db.prepare("DELETE FROM memory_entries WHERE workspaceId = workspace_id()").run();
       this.db.prepare("DELETE FROM workspace_memory WHERE workspaceId = workspace_id()").run();
       // Keep the migration marker so old document data cannot be imported again.

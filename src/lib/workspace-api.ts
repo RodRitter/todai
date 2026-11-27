@@ -164,7 +164,9 @@ export const generalSettingsApi = {
 
 
 export const memoryApi = {
+  change: (change: unknown) => request<{ changed: boolean }>("/api/memory", { method: "PATCH", body: change }),
+  history: (id: string) => request<{ entry: import("@/domain/memory").MemoryEntry; reason: string }[]>(`/api/memory?view=history&id=${encodeURIComponent(id)}`),
   clear: () => request<{ cleared: number }>("/api/memory", { method: "DELETE", body: { confirmation: "clear-memory" } }, "Could not clear workspace memory. Try again."),
-  search: (query = "", offset = 0, signal?: AbortSignal) => request<import("@/domain/memory").MemorySearchResult>(`/api/memory?view=entries&query=${encodeURIComponent(query)}&offset=${offset}`, { signal }, "Could not load workspace memory. Try again."),
+  search: (query = "", offset = 0, signal?: AbortSignal, retired = false) => request<import("@/domain/memory").MemorySearchResult>(`/api/memory?view=entries&query=${encodeURIComponent(query)}&offset=${offset}&retired=${retired}`, { signal }, "Could not load workspace memory. Try again."),
   get: (signal?: AbortSignal) => request<import("@/domain/memory").MemorySnapshot>("/api/memory", { signal }, "Could not load workspace memory. Try again."),
 };

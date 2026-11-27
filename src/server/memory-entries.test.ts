@@ -41,8 +41,8 @@ test("memory pages and initial context stay bounded as the store grows", () => {
     assert.equal(new Set([...first.entries, ...second.entries, ...third.entries].map((item) => item.id)).size, 45);
     const context = memoryContext(db, "one", "Settings");
     assert.equal(context.total, 45);
-    assert.ok(context.entries.length > 0 && context.entries.length <= 5);
-    assert.ok(JSON.stringify(context.entries).length <= 4010);
+    assert.ok(context.entries.length > 0 && context.entries.length > 5);
+    assert.ok(JSON.stringify(context.entries).length <= 8000);
     assert.deepEqual(memoryContext(db, "one", "unrelated").entries, []);
   } finally { db.close(); }
 });
@@ -100,5 +100,94 @@ test("automatic memory updates are atomic, reject stale revisions, and support r
     review("five", [{ operation: "remove", id: current.id, revision: 2, reason: "Retired rule." }]);
     assert.equal(store.searchMemory().total, 1);
     assert.throws(() => store.readMemoryEntries([current.id]), /unavailable/);
+  } finally { store.close(); }
+});
+
+
+test("concept retrieval finds related terms and searches detailed evidence", () => {
+  const db = setup();
+  try {
+    applyMemoryChanges(db, "one", prepareMemoryChanges(db, "one", [
+      { ...addition, details: "The retry control remains available after a timeout." },
+      { ...addition, title: "Sign in", statement: "Validate credentials.", scope: "Authentication" },
+    ]));
+    assert.equal(searchMemoryEntries(db, "one", "notifications").entries[0].title, "Settings feedback");
+    assert.equal(searchMemoryEntries(db, "one", "login").entries[0].title, "Sign in");
+    assert.equal(searchMemoryEntries(db, "one", "timeout").entries[0].title, "Settings feedback");
+    assert.equal(searchMemoryEntries(db, "two", "login").total, 0);
+    assert.equal(searchMemoryEntries(db, "one", "gardening").total, 0);
+    assert.ok(JSON.stringify(memoryContext(db, "one", "settings", 500).entries).length <= 500);
+  } finally { db.close(); }
+});
+
+test("review flags exclude uncertain records and details survive updates", () => {
+  const db = setup();
+  try {
+    const changes = prepareMemoryChanges(db, "one", [{ ...addition, details: "Evidence. ".repeat(500), needsReview: true }]);
+    applyMemoryChanges(db, "one", changes);
+    const saved = changes[0].after!;
+    assert.equal(memoryContext(db, "one", "settings").entries.length, 0);
+    applyMemoryChanges(db, "one", prepareMemoryChanges(db, "one", [{ ...addition, operation: "update", id: saved.id, revision: 1, needsReview: false }]));
+    assert.equal(readMemoryEntries(db, "one", [saved.id])[0].details, saved.details);
+    assert.equal(memoryContext(db, "one", "settings").entries.length, 1);
+    assert.equal(memoryContext(db, "one", "settings").entries[0].details, "");
+  } finally { db.close(); }
+});
+
+test("replacement retains history and rejects cross-workspace replacement", () => {
+  const store = new TaskStore(":memory:");
+  try {
+    store.changeMemory(addition);
+    const original = store.searchMemory().entries[0];
+    store.changeMemory({ ...addition, statement: "Use the new helper.", supersedes: original.id });
+    assert.equal(store.searchMemory().total, 1);
+    assert.equal(store.memoryHistory(original.id).length, 2);
+    assert.match(store.memoryHistory(original.id)[0].reason, /Replaced by/);
+    assert.throws(() => store.changeMemory({ ...addition, supersedes: "missing" }), /unavailable/);
+    const replacement = store.searchMemory().entries[0];
+    store.changeMemory({ operation: "remove", id: replacement.id, revision: replacement.revision, reason: "Outdated." });
+    assert.equal(store.searchMemory().total, 0);
+    assert.equal(store.memoryHistory(replacement.id).length, 2);
+    store.clearMemory();
+    assert.equal(store.memoryHistory(original.id).length, 0);
+  } finally { store.close(); }
+});
+
+test("conflicting records are both withheld until reviewed", () => {
+  const store = new TaskStore(":memory:");
+  try {
+    store.changeMemory(addition);
+    store.changeMemory({ ...addition, statement: "Use inline status messages." });
+    assert.ok(store.searchMemory().entries.every((entry) => entry.needsReview));
+    assert.equal(store.memoryContext("settings").entries.length, 0);
+    const conflict = store.searchMemory().entries.find((entry) => entry.statement.includes("inline"))!;
+    store.changeMemory({ operation: "remove", id: conflict.id, revision: conflict.revision, reason: "Contradicts the current rule." });
+    const accepted = store.searchMemory().entries[0];
+    store.changeMemory({ ...accepted, operation: "update", needsReview: false, reason: "Checked the source." });
+    assert.equal(store.memoryContext("settings").entries.length, 1);
+    assert.equal(store.searchMemory("", 0, 20, true).total, 2);
+  } finally { store.close(); }
+});
+
+test("normalized duplicates and invalid details do not alter accepted memory", () => {
+  const store = new TaskStore(":memory:");
+  try {
+    store.changeMemory(addition);
+    assert.throws(() => store.changeMemory({ ...addition, statement: "USE shared toast helpers!" }), /already exists/);
+    assert.throws(() => store.changeMemory({ ...addition, details: "x".repeat(12001) }), /details/);
+    assert.throws(() => store.changeMemory({ ...addition, needsReview: "yes" }), /boolean/);
+    assert.equal(store.searchMemory().total, 1);
+  } finally { store.close(); }
+});
+
+test("memory evidence returns original tasks and omits unavailable sources", () => {
+  const store = new TaskStore(":memory:");
+  try {
+    store.save({ id: "source", title: "Source decision", description: "Verified evidence.", status: "To do" });
+    store.changeMemory({ ...addition, source: "[Task source](#task/source)" });
+    const entry = store.searchMemory().entries[0];
+    assert.equal(store.memoryEvidence(entry.id)[0].description, "Verified evidence.");
+    store.changeMemory({ ...entry, operation: "update", source: "[Missing](#task/foreign)", reason: "Test source ownership." });
+    assert.deepEqual(store.memoryEvidence(entry.id), []);
   } finally { store.close(); }
 });
