@@ -172,7 +172,7 @@ function field(value: unknown, name: string, max: number): string {
 }
 
 export function prepareMemoryChanges(db: DatabaseSync, workspaceId: string, input: unknown): MemoryChange[] {
-  if (!Array.isArray(input) || input.length > 20) throw new Error("Propose at most 20 memory changes.");
+  if (!Array.isArray(input)) throw new Error("Memory changes must be an array.");
   const seen = new Set<string>();
   return input.map((raw) => {
     if (!raw || typeof raw !== "object") throw new Error("Invalid memory change.");

@@ -47,6 +47,23 @@ test("memory pages and initial context stay bounded as the store grows", () => {
   } finally { db.close(); }
 });
 
+test("one completed-task review records more than 20 useful memories", () => {
+  const store = new TaskStore(":memory:");
+  try {
+    store.setWorkspacePath("/private/tmp");
+    store.renameColumn("Done", "Done", undefined, true);
+    store.save({ id: "many-memories", title: "Settings", description: "", status: "Done" });
+    const run = store.claimRun()!;
+    const changes = Array.from({ length: 45 }, (_, index) => ({
+      ...addition, title: `Setting ${index}`, statement: `Setting ${index} uses shared toast helpers.`,
+    }));
+    store.finishRun(run.id, "Complete", JSON.stringify({ changes }));
+    assert.equal(store.searchMemory().total, 45);
+    assert.equal(store.searchMemory("", 40).entries.length, 5);
+    assert.match(store.list().find((task) => task.id === "many-memories")!.comments!.at(-1)!.body, /45 added/);
+  } finally { store.close(); }
+});
+
 test("migration preserves accepted text, indexes it once, and retains source links", () => {
   const db = setup();
   try {
@@ -66,6 +83,7 @@ test("migration preserves accepted text, indexes it once, and retains source lin
 test("structured proposals reject malformed fields, unknown IDs, and repeated changes", () => {
   const db = setup();
   try {
+    assert.throws(() => prepareMemoryChanges(db, "one", {}), /must be an array/);
     assert.throws(() => prepareMemoryChanges(db, "one", [{ ...addition, statement: "x".repeat(601) }]), /statement/);
     assert.throws(() => prepareMemoryChanges(db, "one", [{ ...addition, category: "Invalid" }]), /category/);
     assert.throws(() => prepareMemoryChanges(db, "one", [{ ...addition, operation: "remove", id: "missing", revision: 1 }]), /unavailable/);
