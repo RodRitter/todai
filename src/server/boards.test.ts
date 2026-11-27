@@ -114,28 +114,21 @@ test("board order persists, appends new boards, and rejects incomplete or foreig
   } finally { f.cleanup(); }
 });
 
-test("configuration restores board order by ID or name and keeps unmatched boards at the end", () => {
+test("board exports omit board order and board imports do not reorder the workspace", () => {
   const f = fixture();
   try {
     const ids = [f.second.boardId, f.first.boardId];
     f.first.reorderBoards(ids);
     const exported = f.first.exportConfiguration();
-    assert.deepEqual(exported.boardOrder?.map((board) => board.id), ids);
-    assert.deepEqual(parseConfiguration(exported).boardOrder, exported.boardOrder);
-    assert.deepEqual(selectConfiguration(exported, [], []).boardOrder, exported.boardOrder);
-    assert.equal(selectConfiguration(exported, [], [], [], false).boardOrder, undefined);
-    f.first.reorderBoards([...ids].reverse());
-    const orderOnly = { ...exported, agents: [], columns: [], assignments: [] };
-    f.first.importConfiguration(orderOnly);
+    assert.equal(exported.boardOrder, undefined);
+    assert.equal(exported.boards, undefined);
+    const legacy = { ...exported, boardOrder: [{ id: f.first.boardId, name: "Board" }, { id: f.second.boardId, name: "Product" }] };
+    assert.equal(selectConfiguration(parseConfiguration(legacy), [], []).boardOrder, undefined);
+    f.first.importConfiguration(legacy);
     assert.deepEqual(f.first.listBoards().map((board) => board.id), ids);
-    const last = f.first.saveBoard("Last");
-    f.first.importConfiguration({ ...orderOnly, boardOrder: [{ id: "other-workspace", name: "Last" }, { id: "missing", name: "Missing" }] });
-    assert.deepEqual(f.first.listBoards().map((board) => board.id), [last.id, ...ids]);
-    const before = f.first.exportConfiguration();
-    assert.throws(() => f.first.importConfiguration({ ...orderOnly, boardOrder: [{ id: "bad", name: "Last" }, { id: "bad", name: "Board" }] }), /unique/);
-    assert.deepEqual(f.first.exportConfiguration(), before);
-    f.first.importConfiguration({ format: "todai-configuration", version: 1, agents: [], columns: [{ id: "legacy", name: "Legacy" }], assignments: [] });
-    assert.deepEqual(f.first.listBoards().map((board) => board.id), [last.id, ...ids]);
+    const workspace = f.first.exportConfiguration(true);
+    assert.equal(workspace.boardOrder, undefined);
+    assert.deepEqual(workspace.boards?.map((board) => board.id), ids);
   } finally { f.cleanup(); }
 });
 

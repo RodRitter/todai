@@ -2,25 +2,43 @@
 
 import { FieldHelp } from "@/components/ui/field-help";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { notifyOperation, toast } from "@/components/ui/toast";
-import { configurationApi } from "@/lib/workspace-api";
+import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
+import { exportFilename } from "@/lib/export-filename";
+import { selectedBoardId, selectedWorkspaceId } from "@/lib/workspace-fetch";
+import type { Board } from "@/domain/task";
+import { boardApi, configurationApi, workspaceApi } from "@/lib/workspace-api";
 import { parseConfiguration, selectConfiguration, type Configuration } from "@/domain/configuration";
+
+function downloadConfiguration(data: Configuration, filename: string) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 type Mode = "agents" | "columns" | "both";
 
 export function ConfigurationTransfer({ onImported }: { onImported: () => void }) {
+  const id = useId();
+  const [boards, setBoards] = useState<Board[]>([]);
+  const [exportBoardId, setExportBoardId] = useState("");
   const [existing, setExisting] = useState<Configuration | null>(null);
   const [conflictMode, setConflictMode] = useState<"copy" | "overwrite" | null>(null);
   const [source, setSource] = useState<Configuration | null>(null);
   const [operation, setOperation] = useState<"export" | "import">("export");
   const [mode, setMode] = useState<Mode>("both");
   const [agents, setAgents] = useState<string[]>([]);
-  const [includeBoardOrder, setIncludeBoardOrder] = useState(true);
   const [memory, setMemory] = useState<string[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
   const [columnMode, setColumnMode] = useState<"add" | "replace" | null>(null);
@@ -28,7 +46,6 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
   const pending = useRef(false);
 
   function prepare(data: Configuration, operation: "export" | "import") {
-    setIncludeBoardOrder(true);
     setConflictMode(null);
     setColumnMode(null);
     setSource(data);
@@ -51,7 +68,17 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
     finally { pending.current = false; setBusy(false); }
   }
 
-  const selected = source && selectConfiguration(source, mode === "columns" ? [] : agents, mode === "agents" ? [] : columns, memory, includeBoardOrder);
+  async function selectExportBoard(boardId: string) {
+    const data = await configurationApi.get(boardId);
+    prepare(data, "export");
+    setExportBoardId(boardId);
+  }
+
+  const selected = source && selectConfiguration(source,
+    operation === "export" || mode !== "columns" ? agents : [],
+    operation === "export" ? source.columns.map((column) => column.id) : mode === "agents" ? [] : columns,
+    memory);
+
 
   const conflicts = operation === "import" && selected && existing ? [
     ...selected.agents.filter((agent) => existing.agents.some((item) => item.id === agent.id)).map((agent) => `Agent: ${agent.name} (${agent.id})`),
@@ -61,25 +88,27 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
   const selection = source && selected && (
         <fieldset disabled={busy} className="space-y-4 rounded-lg border p-4">
           <legend className="px-1 text-sm font-semibold">{operation === "export" ? "Export selection" : "Import selection"}</legend>
-          <div className="flex flex-wrap gap-4" role="radiogroup" aria-label="Configuration contents">
+          {operation === "export" && <div className="space-y-2">
+            <Label htmlFor={`${id}-board`}>Board to export</Label>
+            <NativeSelect id={`${id}-board`} value={exportBoardId} onChange={(event) => { void run(() => selectExportBoard(event.target.value)); }} aria-describedby={`${id}-columns-help`}>
+              {boards.map((board) => <option key={board.id} value={board.id}>{board.name}</option>)}
+            </NativeSelect>
+            <p id={`${id}-columns-help`} className="text-sm text-muted-foreground">All columns from this board are included.</p>
+          </div>}
+          {operation === "import" && <div className="flex flex-wrap gap-4" role="radiogroup" aria-label="Configuration contents">
             {([['agents', 'Agents'], ['columns', 'Columns'], ['both', 'Agents and columns']] as const).map(([value, label]) => (
               <label key={value} className="flex items-center gap-2 text-sm">
                 <input type="radio" name="transfer-mode" value={value} checked={mode === value} onChange={() => setMode(value)} />{label}
               </label>
             ))}
-          </div>
-          <div className="flex flex-col gap-6">
-            {mode !== "columns" && <Selection title="Agents" items={source.agents.map((agent) => ({ id: agent.id, label: agent.name }))} selected={agents} onChange={setAgents} />}
-            {mode !== "agents" && <Selection title="Columns" items={source.columns.map((column) => ({ id: column.id, label: column.name, detail: column.id }))} selected={columns} onChange={setColumns} />}
-          </div>
-          {!!source.boardOrder?.length && <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={includeBoardOrder} onChange={(event) => setIncludeBoardOrder(event.target.checked)} />Board order</label>
-            <p className="text-sm text-muted-foreground">{source.boardOrder.map((board) => board.name).join(" → ")}</p>
-            <p className="text-sm text-muted-foreground">Import matches existing boards by ID, then by name. Other boards stay at the end. Missing boards are skipped.</p>
           </div>}
+          <div className="flex flex-col gap-6">
+            {(operation === "export" || mode !== "columns") && <Selection title="Agents" items={source.agents.map((agent) => ({ id: agent.id, label: agent.name }))} selected={agents} onChange={setAgents} />}
+            {operation === "import" && mode !== "agents" && <Selection title="Columns" items={source.columns.map((column) => ({ id: column.id, label: column.name, detail: column.id }))} selected={columns} onChange={setColumns} />}
+          </div>
           {source.memory && <Selection title="Memory" items={source.memory.entries.map((entry) => ({ id: entry.id, label: entry.title }))} selected={memory} onChange={setMemory} />}
           {source.memory && <p className="text-sm text-muted-foreground">Memory includes linked source tasks, comments, and artifacts. Import creates archived copies of these records. Existing records stay unchanged.</p>}
-          <p className="text-sm text-muted-foreground">Assignments are included only when both the column and its agent are selected. Other selected columns remain unassigned.</p>
+          <p className="text-sm text-muted-foreground">{operation === "export" ? "Assignments are included for selected agents. Other columns remain unassigned." : "Assignments are included only when both the column and its agent are selected. Other selected columns remain unassigned."}</p>
           {operation === "import" && selected.columns.length > 0 && (
             <fieldset className="space-y-2">
               <legend className="text-sm font-medium">How should columns be imported?</legend>
@@ -98,21 +127,14 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
           </fieldset>}
           <p className="text-sm" role="status">{selected.agents.length} agents, {selected.columns.length} columns, {selected.assignments.length} assignments, {selected.memory?.entries.length ?? 0} memory entries selected.</p>
           <div className="flex gap-2">
-            <Button disabled={busy || (conflicts.length > 0 && conflictMode === null) || (!selected.agents.length && !selected.columns.length && !selected.memory?.entries.length && !selected.boardOrder?.length) || (operation === "import" && selected.columns.length > 0 && columnMode === null)} onClick={() => run(async () => {
+            <Button disabled={busy || (conflicts.length > 0 && conflictMode === null) || (!selected.agents.length && !selected.columns.length && !selected.memory?.entries.length) || (operation === "import" && selected.columns.length > 0 && columnMode === null)} onClick={() => run(async () => {
               if (operation === "import") {
                 await configurationApi.import(selected, columnMode ?? "add", conflicts.length ? conflictMode ?? "copy" : "copy");
                 setSource(null);
                 window.dispatchEvent(new Event("todai:boards-changed"));
                 onImported();
               } else {
-                const url = URL.createObjectURL(new Blob([JSON.stringify(selected, null, 2)], { type: "application/json" }));
-                const link = document.createElement("a");
-                link.href = url;
-                link.download = "todai-configuration.json";
-                document.body.appendChild(link);
-                link.click();
-                link.remove();
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                downloadConfiguration(selected, exportFilename("board", boards.find((board) => board.id === exportBoardId)!.name));
                 setSource(null);
               }
             }, true)}>{busy ? "Working…" : operation === "export" ? "Export selected" : "Import selected"}</Button>
@@ -126,10 +148,22 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
     <section className="space-y-4" aria-labelledby="transfer-heading">
       <div>
         <div className="flex items-center gap-2"><h2 id="transfer-heading" className="text-lg font-semibold">Import and export</h2>
-        <FieldHelp id="transfer-help" label="Import and export">Transfer agents, columns, memory, and board order with a JSON file. Select entries before you apply the transfer.</FieldHelp></div>
+        <FieldHelp id="transfer-help" label="Import and export">Transfer agents, columns, and memory with a JSON file. Select entries before you apply the transfer.</FieldHelp></div>
       </div>
       <div className="flex flex-wrap items-end gap-4">
-        <DialogTrigger asChild><Button variant="outline" disabled={busy} onClick={() => run(async () => prepare(await configurationApi.get(), "export"))}><Download className="size-4" aria-hidden="true" />Export</Button></DialogTrigger>
+        <DialogTrigger asChild><Button variant="outline" disabled={busy} onClick={() => run(async () => {
+          const available = await boardApi.list();
+          if (!available.length) throw new Error("No boards are available to export.");
+          setBoards(available);
+          await selectExportBoard(available.find((board) => board.id === selectedBoardId())?.id ?? available[0].id);
+        })}><Download className="size-4" aria-hidden="true" />Export board</Button></DialogTrigger>
+        <Button variant="outline" disabled={busy} onClick={() => run(async () => {
+          const [data, workspaces] = await Promise.all([configurationApi.exportWorkspace(), workspaceApi.list()]);
+          const workspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId());
+          if (!workspace) throw new Error("Could not find the workspace title. Reload the page and try again.");
+          downloadConfiguration(data, exportFilename("workspace", workspace.name));
+        }, true)}>Export workspace</Button>
+        <FieldHelp id="workspace-export-help" label="Export workspace">Export all board settings, agents, and memory for a new workspace. Active tasks and run history are not included.</FieldHelp>
         <div className="space-y-2">
           <label htmlFor="configuration-file" className="text-sm font-medium">Import configuration file</label>
           <Input id="configuration-file" type="file" accept=".json,application/json" disabled={busy} onChange={(event) => {
@@ -142,6 +176,7 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
               try { data = JSON.parse(await file.text()); }
               catch { throw new Error("Choose a valid JSON file."); }
               const parsed = parseConfiguration(data);
+              if (parsed.boards) throw new Error("Import this workspace file when creating a new workspace.");
               setExisting(await configurationApi.get());
               prepare(parsed, "import");
             });
@@ -151,8 +186,8 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
       {operation === "import" && selection}
       <DialogContent size="wide" closeDisabled={busy} onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onInteractOutside={(event) => { if (busy) event.preventDefault(); }}>
         <DialogHeader>
-          <DialogTitle>Export configuration</DialogTitle>
-          <DialogDescription>Choose the agents, columns, memory, and board order to include in your JSON file.</DialogDescription>
+          <DialogTitle>Export board configuration</DialogTitle>
+          <DialogDescription>Choose a board to export all its columns. Select shared agents and memory to include in your JSON file.</DialogDescription>
         </DialogHeader>
         {operation === "export" && selection}
       </DialogContent>

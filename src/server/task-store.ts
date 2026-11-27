@@ -136,10 +136,10 @@ export class TaskStore {
     return this.transaction(() => {
       this.db.prepare("INSERT INTO workspaces (id, name, path) VALUES (?, ?, ?)").run(workspace.id, workspace.name, workspace.path);
       this.db.prepare("INSERT INTO boards (id, workspaceId, name) VALUES (?, ?, 'Board')").run(workspace.id, workspace.id);
-      for (const [position, column] of setup.columns.entries()) {
+      for (const [position, column] of (setup.columns ?? []).entries()) {
         this.db.prepare("INSERT INTO board_columns (id, name, position, workspaceId, boardId) VALUES (?, ?, ?, ?, ?)").run(randomUUID(), column, position, workspace.id, workspace.id);
       }
-      for (const id of setup.starterAgentIds) {
+      for (const id of setup.starterAgentIds ?? []) {
         const agent = starterAgentProfile(id, randomUUID());
         this.db.prepare("INSERT INTO agents (workspaceId, id, name, tool, model, effort, instructions, permissions) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
           .run(workspace.id, agent.id, agent.name, agent.tool, agent.model, agent.effort, agent.instructions, agent.permissions);
@@ -151,7 +151,7 @@ export class TaskStore {
         try {
           this.workspaceScope = workspace.id;
           this.boardScope = workspace.id;
-          this.applyConfiguration(setup.configuration, "replace", "copy");
+          this.applyWorkspaceConfiguration(setup.configuration);
         } finally {
           this.workspaceScope = previousWorkspace;
           this.boardScope = previousBoard;
@@ -325,21 +325,70 @@ export class TaskStore {
     }));
   }
 
-  exportConfiguration(): Configuration {
+  exportConfiguration(workspace = false): Configuration {
     return this.transaction(() => {
-      const columns = this.db.prepare("SELECT id, name, instructions, completion FROM board_columns WHERE board_columns.workspaceId = workspace_id() AND board_columns.boardId = board_id() ORDER BY position").all() as { id: string; name: string; instructions: string; completion: number }[];
       const memory = exportMemory(this.db, this.workspaceId);
-      return {
-        ...(memory ? { memory } : {}),
+      const selected: Configuration = {
         format: "todai-configuration", version: 1,
-        boardOrder: this.listBoards().map(({ id, name }) => ({ id, name })),
-        agents: this.listAgents(), columns: columns.map(({ completion, ...column }) => ({ ...column, ...(completion ? { completion: true } : {}) })),
-        assignments: this.listColumnAgents().map((assignment) => ({
-          columnId: columns.find((column) => column.name === assignment.column)!.id,
-          agentId: assignment.agentId,
-        })),
+        ...(memory ? { memory } : {}),
+        agents: this.listAgents(),
+        ...this.exportBoardConfiguration(),
       };
+      if (!workspace) return selected;
+      const previousBoard = this.boardScope;
+      try {
+        const boards = this.listBoards().map((board) => {
+          this.boardScope = board.id;
+          const content = this.exportBoardConfiguration();
+          return { id: board.id, name: board.name, description: board.description, columns: content.columns, assignments: content.assignments };
+        });
+        return { ...selected, boards, defaultBoardId: this.workspaceId };
+      } finally { this.boardScope = previousBoard; }
     });
+  }
+
+  private exportBoardConfiguration(): Pick<Configuration, "columns" | "assignments"> {
+    const columns = this.db.prepare("SELECT id, name, instructions, completion FROM board_columns WHERE board_columns.workspaceId = workspace_id() AND board_columns.boardId = board_id() ORDER BY position").all() as { id: string; name: string; instructions: string; completion: number }[];
+    return {
+      columns: columns.map(({ completion, ...column }) => ({ ...column, ...(completion ? { completion: true } : {}) })),
+      assignments: this.listColumnAgents().map((assignment) => ({
+        columnId: columns.find((column) => column.name === assignment.column)!.id,
+        agentId: assignment.agentId,
+      })),
+    };
+  }
+
+  private applyWorkspaceConfiguration(data: Configuration) {
+    const legacyBoards = data.boardOrder?.length ? data.boardOrder : [{ id: "default", name: "Board" }];
+    const defaultColumns = ["To do", "In progress", "In review", "Done"].map((name) => ({ id: randomUUID(), name }));
+    const boards: NonNullable<Configuration["boards"]> = data.boards ?? legacyBoards.map((board, index) => ({
+      ...board,
+      columns: index === 0 && data.columns.length ? data.columns : defaultColumns,
+      assignments: index === 0 ? data.assignments : [],
+    }));
+    const defaultId = data.defaultBoardId ?? boards[0].id;
+    // Copy agents once so all imported boards share the same profiles.
+    const agentIds = new Map<string, string>();
+    for (const agent of data.agents) {
+      const id = randomUUID();
+      this.saveAgent({ ...agent, id });
+      agentIds.set(agent.id, id);
+    }
+    for (const [position, board] of boards.entries()) {
+      const id = board.id === defaultId ? this.workspaceId : randomUUID();
+      if (id === this.workspaceId) {
+        this.db.prepare("UPDATE boards SET name = ?, description = ?, position = ? WHERE id = ?").run(board.name, board.description ?? "", position, id);
+      } else {
+        this.db.prepare("INSERT INTO boards (id, workspaceId, name, description, position) VALUES (?, ?, ?, ?, ?)").run(id, this.workspaceId, board.name, board.description ?? "", position);
+      }
+      this.boardScope = id;
+      this.applyConfiguration({ format: data.format, version: data.version, agents: [], columns: board.columns, assignments: [] }, "replace", "copy");
+      for (const assignment of board.assignments) {
+        this.assignColumnAgent({ column: board.columns.find((column) => column.id === assignment.columnId)!.name, agentId: agentIds.get(assignment.agentId)! });
+      }
+    }
+    this.boardScope = this.workspaceId;
+    if (data.memory?.entries.length) importMemory(this.db, this.workspaceId, this.boardId, data.memory);
   }
 
   importConfiguration(input: unknown, columnMode: unknown = "add", conflictMode: unknown = "copy") {
@@ -348,8 +397,9 @@ export class TaskStore {
     if (conflictMode !== "copy" && conflictMode !== "overwrite")
       throw new ConfigurationValidationError("Choose whether to overwrite matching IDs or create copies.");
     const data = parseConfiguration(input);
-    if (!data.agents.length && !data.columns.length && !data.memory?.entries.length && !data.boardOrder?.length)
-      throw new ConfigurationValidationError("Select at least one agent, column, memory entry, or board order.");
+    if (data.boards) throw new ConfigurationValidationError("Import this workspace file when creating a new workspace.");
+    if (!data.agents.length && !data.columns.length && !data.memory?.entries.length)
+      throw new ConfigurationValidationError("Select at least one agent, column, or memory entry.");
     return this.transaction(() => this.applyConfiguration(data, columnMode, conflictMode));
   }
 
@@ -403,16 +453,6 @@ export class TaskStore {
     if (columnMode === "replace" && data.columns.length) {
       this.db.prepare("UPDATE comments SET feedbackStatus = 'cancelled' WHERE comments.workspaceId = workspace_id() AND taskId IN (SELECT id FROM tasks WHERE boardId = board_id()) AND feedbackStatus = 'pending'").run();
       this.db.prepare("UPDATE tasks SET status = ?, agentStatus = 'Not started' WHERE tasks.workspaceId = workspace_id() AND tasks.boardId = board_id()").run(columnNames.get(data.columns[0].id)!);
-    }
-    if (data.boardOrder?.length) {
-      const boards = this.listBoards();
-      const ordered: string[] = [];
-      for (const imported of data.boardOrder) {
-        const board = boards.find((board) => board.id === imported.id) ??
-          boards.find((board) => board.name.toLowerCase() === imported.name.toLowerCase());
-        if (board && !ordered.includes(board.id)) ordered.push(board.id);
-      }
-      this.writeBoardOrder([...ordered, ...boards.filter((board) => !ordered.includes(board.id)).map((board) => board.id)]);
     }
     const memory = data.memory?.entries.length ? importMemory(this.db, this.workspaceId, this.boardId, data.memory) : 0;
     return { agents: data.agents.length, columns: data.columns.length, assignments: data.assignments.length, memory };

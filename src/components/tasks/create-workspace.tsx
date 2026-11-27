@@ -9,6 +9,7 @@ import { FieldHelp } from "@/components/ui/field-help";
 import { notifyOperation } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Label } from "@/components/ui/label";
 import { workspaceApi } from "@/lib/workspace-api";
 import { statuses } from "@/domain/task";
@@ -26,33 +27,35 @@ export function CreateWorkspace({ firstRun = false, onBusyChange }: { firstRun?:
   const [path, setPath] = useState("");
   const { suggestions, directoryError, clearSuggestions } = useDirectorySuggestions(path);
   const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState<"manual" | "import">("manual");
   const [importFile, setImportFile] = useState<File | null>(null);
   const saving = useRef(false);
 
   async function updateColumns(next: string[]) {
     const setup = parseWorkspaceSetup({ columns: next, starterAgentIds });
-    setColumns(setup.columns);
-    return setup.columns;
+    setColumns(setup.columns!);
+    return setup.columns!;
   }
 
   return <section className="space-y-6" aria-label="Create workspace">
     {!firstRun && <h2 className="text-lg font-semibold">Add workspace</h2>}
     <form id={`${id}-form`} className="grid gap-4 sm:grid-cols-2" onSubmit={async (event) => {
       event.preventDefault();
-      if (saving.current || editingColumns) return;
+      if (saving.current || (mode === "manual" && editingColumns)) return;
       saving.current = true;
       setBusy(true);
       onBusyChange?.(true);
       try {
         const workspace = await notifyOperation(async () => {
           let configuration;
-          if (importFile) {
+          if (mode === "import") {
+            if (!importFile) throw new Error("Choose a configuration file.");
             let input: unknown;
             try { input = JSON.parse(await importFile.text()); }
             catch { throw new Error("Choose a valid JSON file."); }
             configuration = parseConfiguration(input);
           }
-          return workspaceApi.create(name, path, parseWorkspaceSetup({ columns, starterAgentIds, configuration, ...(firstRun ? { userName } : {}) }));
+          return workspaceApi.create(name, path, parseWorkspaceSetup({ ...(mode === "import" ? { configuration } : { columns, starterAgentIds }), ...(firstRun ? { userName } : {}) }));
         }, {
           loading: "Creating workspace…",
           success: "Workspace created.",
@@ -90,14 +93,21 @@ export function CreateWorkspace({ firstRun = false, onBusyChange }: { firstRun?:
         {directoryError && <p id={`${id}-directory-error`} className="text-xs text-destructive" role="status">{directoryError}</p>}
       </div>
       <div className="space-y-2 sm:col-span-2">
-        <div className="flex items-center gap-2">
-          <Label htmlFor={`${id}-import`}>Import configuration (optional)</Label>
-          <FieldHelp id={`${id}-import-help`} label="Import configuration">Choose a Todai configuration JSON file. Imported columns replace the setup columns. Agents, assignments, and memory are imported into the new workspace.</FieldHelp>
-        </div>
-        <Input id={`${id}-import`} type="file" accept=".json,application/json" disabled={busy} aria-describedby={`${id}-import-help`} onChange={(event) => setImportFile(event.target.files?.[0] ?? null)} />
+        <Label htmlFor={`${id}-setup`}>Workspace setup</Label>
+        <NativeSelect id={`${id}-setup`} value={mode} disabled={busy} onChange={(event) => { setMode(event.target.value as "manual" | "import"); setEditingColumns(false); setImportFile(null); }}>
+          <option value="manual">Set up manually</option>
+          <option value="import">Import from file</option>
+        </NativeSelect>
       </div>
+      {mode === "import" && <div className="space-y-2 sm:col-span-2">
+        <div className="flex items-center gap-2">
+          <Label htmlFor={`${id}-import`}>Import configuration</Label>
+          <FieldHelp id={`${id}-import-help`} label="Import configuration">Choose a Todai workspace export to restore all boards, columns, agents, assignments, and memory. Older configuration files restore board names with default columns where settings are missing.</FieldHelp>
+        </div>
+        <Input id={`${id}-import`} type="file" required accept=".json,application/json" disabled={busy} aria-describedby={`${id}-import-help`} onChange={(event) => setImportFile(event.target.files?.[0] ?? null)} />
+      </div>}
     </form>
-    <ColumnEditor
+    {mode === "manual" && <><ColumnEditor
       compact
       disabled={busy}
       initialColumns={columns}
@@ -115,7 +125,7 @@ export function CreateWorkspace({ firstRun = false, onBusyChange }: { firstRun?:
           <span><span className="block text-sm font-medium">{agent.name}</span><span className="block text-xs text-muted-foreground">{agent.id === "planner" ? "Plan tasks" : agent.id === "builder" ? "Implement changes" : "Review work"}</span></span>
         </label>)}
       </div>
-    </fieldset>
-    <Button type="submit" form={`${id}-form`} className="w-full" disabled={busy || editingColumns || (firstRun && !userName.trim()) || !name.trim() || !path.trim()}>{busy ? "Creating workspace…" : "Create workspace"}</Button>
+    </fieldset></>}
+    <Button type="submit" form={`${id}-form`} className="w-full" disabled={busy || (mode === "manual" && editingColumns) || (mode === "import" && !importFile) || (firstRun && !userName.trim()) || !name.trim() || !path.trim()}>{busy ? "Creating workspace…" : "Create workspace"}</Button>
   </section>;
 }

@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export function GET(request: Request) {
   try {
-    return Response.json(withTaskStore(request, (store) => store.exportConfiguration()));
+    return Response.json(withTaskStore(request, (store) => store.exportConfiguration(new URL(request.url).searchParams.get("scope") === "workspace")));
   } catch {
     return Response.json({ error: "Could not load configuration. Try again." }, { status: 500 });
   }

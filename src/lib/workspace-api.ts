@@ -108,6 +108,7 @@ export const executorApi = {
   },
 };
 export const workspaceApi = {
+  list: () => request<Workspace[]>("/api/workspaces"),
   archived: () => request<Workspace[]>("/api/workspaces?archived=true"),
   setArchived: (id: string, archived: boolean) => request<{ workspaces: Workspace[]; archived: Workspace[] }>("/api/workspaces", { method: "PATCH", body: { id, archived } }),
   create: (name: string, path: string, setup?: import("@/domain/workspace-setup").WorkspaceSetup) => request<Workspace>("/api/workspaces", { method: "POST", body: { name, path, ...setup } }),
@@ -128,7 +129,8 @@ export const workspaceApi = {
 };
 
 export const configurationApi = {
-  get: () => request<import("@/domain/configuration").Configuration>("/api/configuration"),
+  exportWorkspace: () => request<import("@/domain/configuration").Configuration>("/api/configuration?scope=workspace"),
+  get: (boardId?: string) => request<import("@/domain/configuration").Configuration>("/api/configuration", boardId ? { headers: { "X-Todai-Board": boardId } } : {}),
   import: (data: import("@/domain/configuration").Configuration, columnMode: "add" | "replace" = "add", conflictMode: "copy" | "overwrite" = "copy") =>
     request<{ agents: number; columns: number; assignments: number }>(`/api/configuration?columns=${columnMode}&conflicts=${conflictMode}`, { method: "POST", body: data }),
 };

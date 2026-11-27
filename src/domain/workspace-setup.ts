@@ -9,12 +9,21 @@ export const starterAgents = [
   { id: "reviewer", name: "Reviewer", description: "Check work for bugs and missing requirements.", permissions: "read-only", instructions: "Review the work against the task requirements. Look for bugs, regressions, and missing checks. Report actionable findings with file references. Do not change files." },
 ] as const;
 
-export type WorkspaceSetup = { columns: string[]; starterAgentIds: string[]; userName?: string; configuration?: Configuration };
+export type WorkspaceSetup = { userName?: string } & (
+  | { columns: string[]; starterAgentIds: string[]; configuration?: never }
+  | { configuration: Configuration; columns?: never; starterAgentIds?: never }
+);
 export class WorkspaceSetupError extends Error {}
 
 export function parseWorkspaceSetup(input: unknown): WorkspaceSetup {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new WorkspaceSetupError("Enter workspace setup options.");
   const value = input as Partial<WorkspaceSetup>;
+  const user = value.userName !== undefined ? { userName: parseUserName(value.userName) } : {};
+  if (value.configuration !== undefined) {
+    if (value.columns !== undefined || value.starterAgentIds !== undefined)
+      throw new WorkspaceSetupError("Choose import or manual setup, not both.");
+    return { configuration: parseConfiguration(value.configuration), ...user };
+  }
   const columns = value.columns ?? [...statuses];
   const ids = value.starterAgentIds ?? [];
   if (!Array.isArray(columns) || !columns.length || columns.some((name) => typeof name !== "string" || !name.trim()))
@@ -23,7 +32,7 @@ export function parseWorkspaceSetup(input: unknown): WorkspaceSetup {
   if (new Set(names).size !== names.length) throw new WorkspaceSetupError("Use a different name for each column.");
   if (!Array.isArray(ids) || ids.some((id) => !starterAgents.some((agent) => agent.id === id)) || new Set(ids).size !== ids.length)
     throw new WorkspaceSetupError("Choose valid starter agents.");
-  return { ...(value.configuration !== undefined ? { configuration: parseConfiguration(value.configuration) } : {}), columns: names, starterAgentIds: ids, ...(value.userName !== undefined ? { userName: parseUserName(value.userName) } : {}) };
+  return { columns: names, starterAgentIds: ids, ...user };
 }
 
 export function starterAgentProfile(id: string, profileId: string): AgentProfile {
