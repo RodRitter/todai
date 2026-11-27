@@ -29,7 +29,7 @@ export async function openRunArtifacts(store: TaskStore, run: AgentRun, signal: 
   const library = new ArtifactStore(store.databasePath, run.workspaceId, chat ? undefined : run.id, chat);
   const pending: ArtifactReference[] = [];
   let feedback: FeedbackRequest | undefined;
-  const availableTools: typeof tools = run.kind === "memory" ? memoryTools : chat ? [...tools, ...memoryTools] : [...tools, ...memoryTools, { name: "request_feedback", description: "Request Human feedback, then stop work and end your run. Use approval for Approve/Reject buttons or text for an open question. Both question and recommendation must be nonempty Markdown. This does not grant approval.", properties: { question: string, recommendation: string, responseType: { type: "string", enum: ["text", "approval"] } }, required: ["question", "recommendation", "responseType"] }];
+  const availableTools: typeof tools = run.kind === "memory" ? [...memoryTools, ...tools.filter((tool) => tool.name === "search_artifacts" || tool.name === "read_artifact")] : chat ? [...tools, ...memoryTools] : [...tools, ...memoryTools, { name: "request_feedback", description: "Request Human feedback, then stop work and end your run. Use approval for Approve/Reject buttons or text for an open question. Both question and recommendation must be nonempty Markdown. This does not grant approval.", properties: { question: string, recommendation: string, responseType: { type: "string", enum: ["text", "approval"] } }, required: ["question", "recommendation", "responseType"] }];
   const token = randomBytes(32).toString("hex");
   let closed = false;
   function assertActive() {
@@ -127,7 +127,7 @@ export async function openRunArtifacts(store: TaskStore, run: AgentRun, signal: 
     library.close();
   }
   try {
-    const context = run.kind === "memory" ? [] : library.forTask(run.taskId);
+    const context = library.forTask(run.taskId);
     await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
     signal.addEventListener("abort", close, { once: true });
     signal.throwIfAborted();

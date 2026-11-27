@@ -310,10 +310,16 @@ test("MCP text feedback accepts a written answer", async () => {
   } finally { f.close(); }
 });
 
-test("memory reviewers receive only read-only memory tools and bounded context", async () => {
+test("memory reviewers read linked artifacts and record evidence with read-only tools", async () => {
   const f = fixture();
+  const other = f.store.createWorkspace("Other", f.directory);
+  const foreign = new ArtifactStore(f.path, other.id);
   try {
-    await new ExecutionService(f.store, async () => "Complete").drain();
+    const hidden = foreign.create({ title: "Private", type: "text", content: "Foreign evidence", creator: "Human" });
+    const report = f.library.create({ title: "Settings report", type: "markdown", content: "Use shared toast helpers for settings feedback.", creator: "Human" });
+    const linked = f.library.create({ title: "Settings scope", type: "text", content: "Applies to all settings forms.", creator: "Human" });
+    f.library.linkTask("task", linked.id);
+    await new ExecutionService(f.store, async () => `See [Settings report](#artifact/${report.id}).`).drain();
     f.store.renameColumn("Done", "Done", undefined, true);
     f.store.save({ ...f.store.list()[0], status: "Done" });
     let checked = false;
@@ -322,7 +328,21 @@ test("memory reviewers receive only read-only memory tools and bounded context",
       assert.ok(connection);
       const response = await fetch(connection.url, { method: "POST", headers: { Authorization: `Bearer ${connection.token}`, "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) });
       const message = await response.json();
-      assert.deepEqual(message.result.tools.map((tool: { name: string }) => tool.name), ["read_memory_source", "search_memory", "read_memory"]);
+      assert.deepEqual(message.result.tools.map((tool: { name: string }) => tool.name), ["read_memory_source", "search_memory", "read_memory", "search_artifacts", "read_artifact"]);
+      assert.deepEqual(new Set(connection.context.map((item) => item.artifact.id)), new Set([report.id, linked.id]));
+      const prompt = agentPrompt(request);
+      assert.ok(prompt.includes(report.id) && prompt.includes(linked.id));
+      assert.match(prompt, /Read relevant artifact content with read_artifact/);
+      assert.ok(!prompt.includes("Use shared toast helpers for settings feedback."));
+      assert.equal((await rpc(connection, "search_artifacts", { search: "Settings report" }))[0].id, report.id);
+      const evidence = await rpc(connection, "read_artifact", { artifactId: report.id });
+      const scope = await rpc(connection, "read_artifact", { artifactId: linked.id });
+      assert.equal(evidence.content, "Use shared toast helpers for settings feedback.");
+      assert.equal(scope.content, "Applies to all settings forms.");
+      await assert.rejects(rpc(connection, "read_artifact", { artifactId: hidden.id }), /workspace/);
+      for (const name of ["link_artifact", "unlink_artifact", "nominate_artifact"]) {
+        await assert.rejects(rpc(connection, name, { artifactId: report.id }), /Unknown/);
+      }
       assert.deepEqual(await rpc(connection, "search_memory", { query: "settings" }), { entries: [], total: 0, hasMore: false });
       await assert.rejects(rpc(connection, "read_memory", { ids: "one" }), /Invalid argument/);
       await assert.rejects(rpc(connection, "read_memory", { ids: ["missing"] }), /unavailable/);
@@ -331,11 +351,16 @@ test("memory reviewers receive only read-only memory tools and bounded context",
       await assert.rejects(rpc(connection, "request_feedback", { question: "No", recommendation: "No", responseType: "approval" }), /Unknown/);
       assert.ok(JSON.stringify(request.workspaceMemory).length <= 4000);
       checked = true;
-      return JSON.stringify({ changes: [] });
+      return JSON.stringify({ changes: [{ operation: "add", category: "Practices", title: "Settings feedback", statement: evidence.content,
+        scope: scope.content, source: "[Task task](#task/task)", details: `[Settings report](#artifact/${report.id})`, reason: "Verified the task artifacts." }] });
     }).drain();
     assert.ok(checked);
     assert.equal(f.store.history().at(-1)!.status, "Complete");
-  } finally { f.close(); }
+    const saved = f.store.searchMemory("settings").entries[0];
+    assert.equal(saved.statement, "Use shared toast helpers for settings feedback.");
+    assert.equal(saved.details, `[Settings report](#artifact/${report.id})`);
+    assert.equal(f.store.memoryEvidence(saved.id)[0].id, "task");
+  } finally { foreign.close(); f.close(); }
 });
 
 for (const feedback of [false, true]) {

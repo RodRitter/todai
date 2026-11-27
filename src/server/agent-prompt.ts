@@ -17,6 +17,7 @@ export function agentPrompt({ run, task, artifacts, privateChat, userName, works
     JSON.stringify(workspaceMemory),
   ].join("\n\n") : "";
   if (run.kind === "memory") return [memoryReviewInstructions, agentOutputPolicy, memoryContext,
+    ...(artifacts ? [`Current task artifact metadata: ${JSON.stringify(artifacts.context)}`] : []),
     JSON.stringify({ task: { ...task, comments: task.comments?.map((comment) => ({ ...promptComment(comment), ...(comment.memoryChanges ? { memoryChanges: comment.memoryChanges } : {}) })) }, taskSource: taskReference(task.id) }),
   ].join("\n\n");
   if (privateChat?.candidates) return [
