@@ -5,6 +5,7 @@ const boards = [{ id: "default", name: "Product", columns: ["Backlog", "Build"] 
 const meta = {
   title: "Tasks/Board settings", component: BoardSettings, tags: ["autodocs"],
   args: { boards, persistence: {
+    reorder: fn(async (ids: string[]) => ids.map((id) => boards.find((board) => board.id === id)!)),
     list: fn(async () => boards),
     create: fn(async (name: string) => ({ id: "new", name, columns: ["To do"] })),
     rename: fn(async (id: string, name: string) => ({ id, name, columns: ["To do"] })),

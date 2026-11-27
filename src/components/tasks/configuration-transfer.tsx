@@ -19,6 +19,7 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
   const [operation, setOperation] = useState<"export" | "import">("export");
   const [mode, setMode] = useState<Mode>("both");
   const [agents, setAgents] = useState<string[]>([]);
+  const [includeBoardOrder, setIncludeBoardOrder] = useState(true);
   const [memory, setMemory] = useState<string[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
   const [columnMode, setColumnMode] = useState<"add" | "replace" | null>(null);
@@ -26,6 +27,7 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
   const pending = useRef(false);
 
   function prepare(data: Configuration, operation: "export" | "import") {
+    setIncludeBoardOrder(true);
     setConflictMode(null);
     setColumnMode(null);
     setSource(data);
@@ -48,7 +50,7 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
     finally { pending.current = false; setBusy(false); }
   }
 
-  const selected = source && selectConfiguration(source, mode === "columns" ? [] : agents, mode === "agents" ? [] : columns, memory);
+  const selected = source && selectConfiguration(source, mode === "columns" ? [] : agents, mode === "agents" ? [] : columns, memory, includeBoardOrder);
 
   const conflicts = operation === "import" && selected && existing ? [
     ...selected.agents.filter((agent) => existing.agents.some((item) => item.id === agent.id)).map((agent) => `Agent: ${agent.name} (${agent.id})`),
@@ -69,6 +71,11 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
             {mode !== "columns" && <Selection title="Agents" items={source.agents.map((agent) => ({ id: agent.id, label: agent.name }))} selected={agents} onChange={setAgents} />}
             {mode !== "agents" && <Selection title="Columns" items={source.columns.map((column) => ({ id: column.id, label: column.name, detail: column.id }))} selected={columns} onChange={setColumns} />}
           </div>
+          {!!source.boardOrder?.length && <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={includeBoardOrder} onChange={(event) => setIncludeBoardOrder(event.target.checked)} />Board order</label>
+            <p className="text-sm text-muted-foreground">{source.boardOrder.map((board) => board.name).join(" → ")}</p>
+            <p className="text-sm text-muted-foreground">Import matches existing boards by ID, then by name. Other boards stay at the end. Missing boards are skipped.</p>
+          </div>}
           {source.memory && <Selection title="Memory" items={source.memory.entries.map((entry) => ({ id: entry.id, label: entry.title }))} selected={memory} onChange={setMemory} />}
           {source.memory && <p className="text-sm text-muted-foreground">Memory includes linked source tasks, comments, and artifacts. Import creates archived copies of these records. Existing records stay unchanged.</p>}
           <p className="text-sm text-muted-foreground">Assignments are included only when both the column and its agent are selected. Other selected columns remain unassigned.</p>
@@ -90,10 +97,11 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
           </fieldset>}
           <p className="text-sm" role="status">{selected.agents.length} agents, {selected.columns.length} columns, {selected.assignments.length} assignments, {selected.memory?.entries.length ?? 0} memory entries selected.</p>
           <div className="flex gap-2">
-            <Button disabled={busy || (conflicts.length > 0 && conflictMode === null) || (!selected.agents.length && !selected.columns.length && !selected.memory?.entries.length) || (operation === "import" && selected.columns.length > 0 && columnMode === null)} onClick={() => run(async () => {
+            <Button disabled={busy || (conflicts.length > 0 && conflictMode === null) || (!selected.agents.length && !selected.columns.length && !selected.memory?.entries.length && !selected.boardOrder?.length) || (operation === "import" && selected.columns.length > 0 && columnMode === null)} onClick={() => run(async () => {
               if (operation === "import") {
                 await configurationApi.import(selected, columnMode ?? "add", conflicts.length ? conflictMode ?? "copy" : "copy");
                 setSource(null);
+                window.dispatchEvent(new Event("todai:boards-changed"));
                 onImported();
               } else {
                 const url = URL.createObjectURL(new Blob([JSON.stringify(selected, null, 2)], { type: "application/json" }));
@@ -117,7 +125,7 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
     <section className="space-y-4" aria-labelledby="transfer-heading">
       <div>
         <h2 id="transfer-heading" className="text-lg font-semibold">Export / import</h2>
-        <p className="text-sm text-muted-foreground">Transfer agents, columns, and memory using a JSON file. Choose individual entries before exporting or importing.</p>
+        <p className="text-sm text-muted-foreground">Transfer agents, columns, memory, and board order using a JSON file. Choose individual entries before exporting or importing.</p>
       </div>
       <div className="flex flex-wrap items-end gap-4">
         <DialogTrigger asChild><Button variant="outline" disabled={busy} onClick={() => run(async () => prepare(await configurationApi.get(), "export"))}><Download className="size-4" aria-hidden="true" />Export</Button></DialogTrigger>
@@ -143,7 +151,7 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
       <DialogContent size="wide" closeDisabled={busy} onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onInteractOutside={(event) => { if (busy) event.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle>Export configuration</DialogTitle>
-          <DialogDescription>Choose the agents, columns, and memory to include in your JSON file.</DialogDescription>
+          <DialogDescription>Choose the agents, columns, memory, and board order to include in your JSON file.</DialogDescription>
         </DialogHeader>
         {operation === "export" && selection}
       </DialogContent>

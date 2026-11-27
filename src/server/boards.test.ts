@@ -3,6 +3,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { DatabaseSync } from "node:sqlite";
+import { migrateBoards } from "./board-schema.ts";
+import { parseConfiguration, selectConfiguration } from "../domain/configuration.ts";
 import { TaskStore } from "./task-store.ts";
 
 function fixture() {
@@ -93,4 +96,57 @@ test("automatic workflow follows the task board's columns from a default-board s
     assert.equal(f.second.boardSnapshot().tasks[0].status, "Build");
     assert.equal(f.first.history(draft.id)[1].column, "Build");
   } finally { f.cleanup(); }
+});
+
+test("board order persists, appends new boards, and rejects incomplete or foreign orders", () => {
+  const f = fixture();
+  try {
+    const ids = [f.second.boardId, f.first.boardId];
+    assert.deepEqual(f.first.reorderBoards(ids).map((board) => board.id), ids);
+    const reopened = new TaskStore(f.path);
+    try { assert.deepEqual(reopened.listBoards().map((board) => board.id), ids); }
+    finally { reopened.close(); }
+    for (const invalid of [null, [], [ids[0], ids[0]], [ids[0], "foreign"]])
+      assert.throws(() => f.first.reorderBoards(invalid), /each board/);
+    assert.deepEqual(f.first.listBoards().map((board) => board.id), ids);
+    const added = f.first.saveBoard("Last");
+    assert.deepEqual(f.first.listBoards().map((board) => board.id), [...ids, added.id]);
+  } finally { f.cleanup(); }
+});
+
+test("configuration restores board order by ID or name and keeps unmatched boards at the end", () => {
+  const f = fixture();
+  try {
+    const ids = [f.second.boardId, f.first.boardId];
+    f.first.reorderBoards(ids);
+    const exported = f.first.exportConfiguration();
+    assert.deepEqual(exported.boardOrder?.map((board) => board.id), ids);
+    assert.deepEqual(parseConfiguration(exported).boardOrder, exported.boardOrder);
+    assert.deepEqual(selectConfiguration(exported, [], []).boardOrder, exported.boardOrder);
+    assert.equal(selectConfiguration(exported, [], [], [], false).boardOrder, undefined);
+    f.first.reorderBoards([...ids].reverse());
+    const orderOnly = { ...exported, agents: [], columns: [], assignments: [] };
+    f.first.importConfiguration(orderOnly);
+    assert.deepEqual(f.first.listBoards().map((board) => board.id), ids);
+    const last = f.first.saveBoard("Last");
+    f.first.importConfiguration({ ...orderOnly, boardOrder: [{ id: "other-workspace", name: "Last" }, { id: "missing", name: "Missing" }] });
+    assert.deepEqual(f.first.listBoards().map((board) => board.id), [last.id, ...ids]);
+    const before = f.first.exportConfiguration();
+    assert.throws(() => f.first.importConfiguration({ ...orderOnly, boardOrder: [{ id: "bad", name: "Last" }, { id: "bad", name: "Board" }] }), /unique/);
+    assert.deepEqual(f.first.exportConfiguration(), before);
+    f.first.importConfiguration({ format: "todai-configuration", version: 1, agents: [], columns: [{ id: "legacy", name: "Legacy" }], assignments: [] });
+    assert.deepEqual(f.first.listBoards().map((board) => board.id), [last.id, ...ids]);
+  } finally { f.cleanup(); }
+});
+
+test("board position migration preserves the existing order and is safe to repeat", () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec("CREATE TABLE workspaces (id TEXT PRIMARY KEY); CREATE TABLE tasks (boardId TEXT); CREATE TABLE boards (id TEXT PRIMARY KEY, workspaceId TEXT, name TEXT); INSERT INTO boards VALUES ('b', 'w', 'Second'), ('a', 'w', 'First');");
+    migrateBoards(db);
+    assert.deepEqual(db.prepare("SELECT id FROM boards ORDER BY position").all().map((row) => row.id), ["b", "a"]);
+    db.exec("UPDATE boards SET position = 0 WHERE id = 'a'");
+    migrateBoards(db);
+    assert.deepEqual(db.prepare("SELECT id FROM boards ORDER BY position").all().map((row) => row.id), ["a", "b"]);
+  } finally { db.close(); }
 });

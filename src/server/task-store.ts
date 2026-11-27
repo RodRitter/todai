@@ -242,8 +242,25 @@ export class TaskStore {
   }
 
   listBoards(): import("../domain/task.ts").Board[] {
-    return this.db.prepare("SELECT id, name FROM boards WHERE workspaceId = workspace_id() ORDER BY rowid").all()
+    return this.db.prepare("SELECT id, name FROM boards WHERE workspaceId = workspace_id() ORDER BY position, rowid").all()
       .map((row) => ({ id: row.id as string, name: row.name as string, columns: this.listColumns(row.id as string) }));
+  }
+
+  reorderBoards(ids: unknown) {
+    return this.transaction(() => {
+      this.assertWorkspaceActive();
+      const boards = this.listBoards();
+      if (!Array.isArray(ids) || ids.length !== boards.length || new Set(ids).size !== ids.length ||
+          ids.some((id) => typeof id !== "string" || !boards.some((board) => board.id === id)))
+        throw new ColumnValidationError("Include each board in this workspace exactly once.");
+      this.writeBoardOrder(ids);
+      return this.listBoards();
+    });
+  }
+
+  private writeBoardOrder(ids: string[]) {
+    const update = this.db.prepare("UPDATE boards SET position = ? WHERE id = ? AND workspaceId = workspace_id()");
+    ids.forEach((id, position) => update.run(position, id));
   }
 
   saveBoard(name: unknown, id?: string) {
@@ -257,7 +274,7 @@ export class TaskStore {
       const boardId = id ?? randomUUID();
       if (id) this.db.prepare("UPDATE boards SET name = ? WHERE id = ?").run(name.trim(), id);
       else {
-        this.db.prepare("INSERT INTO boards (id, workspaceId, name) VALUES (?, workspace_id(), ?)").run(boardId, name.trim());
+        this.db.prepare("INSERT INTO boards (id, workspaceId, name, position) VALUES (?, workspace_id(), ?, (SELECT COALESCE(MAX(position), -1) + 1 FROM boards WHERE workspaceId = workspace_id()))").run(boardId, name.trim());
         for (const [position, column] of ["To do", "In progress", "In review", "Done"].entries())
           this.db.prepare("INSERT INTO board_columns (id, workspaceId, boardId, name, position) VALUES (?, workspace_id(), ?, ?, ?)").run(randomUUID(), boardId, column, position);
       }
@@ -296,6 +313,7 @@ export class TaskStore {
       return {
         ...(memory ? { memory } : {}),
         format: "todai-configuration", version: 1,
+        boardOrder: this.listBoards().map(({ id, name }) => ({ id, name })),
         agents: this.listAgents(), columns: columns.map(({ completion, ...column }) => ({ ...column, ...(completion ? { completion: true } : {}) })),
         assignments: this.listColumnAgents().map((assignment) => ({
           columnId: columns.find((column) => column.name === assignment.column)!.id,
@@ -311,8 +329,8 @@ export class TaskStore {
     if (conflictMode !== "copy" && conflictMode !== "overwrite")
       throw new ConfigurationValidationError("Choose whether to overwrite matching IDs or create copies.");
     const data = parseConfiguration(input);
-    if (!data.agents.length && !data.columns.length && !data.memory?.entries.length)
-      throw new ConfigurationValidationError("Select at least one agent, column, or memory entry.");
+    if (!data.agents.length && !data.columns.length && !data.memory?.entries.length && !data.boardOrder?.length)
+      throw new ConfigurationValidationError("Select at least one agent, column, memory entry, or board order.");
     return this.transaction(() => {
       if ((columnMode === "replace" || conflictMode === "overwrite") && data.columns.length && this.db.prepare("SELECT id FROM runs WHERE runs.workspaceId = workspace_id() AND taskId IN (SELECT id FROM tasks WHERE boardId = board_id()) AND status IN ('Queued', 'Running') LIMIT 1").get())
         throw new ConfigurationValidationError("Wait for queued and active runs to finish before replacing or overwriting columns.");
@@ -363,6 +381,16 @@ export class TaskStore {
       if (columnMode === "replace" && data.columns.length) {
         this.db.prepare("UPDATE comments SET feedbackStatus = 'cancelled' WHERE comments.workspaceId = workspace_id() AND taskId IN (SELECT id FROM tasks WHERE boardId = board_id()) AND feedbackStatus = 'pending'").run();
         this.db.prepare("UPDATE tasks SET status = ?, agentStatus = 'Not started' WHERE tasks.workspaceId = workspace_id() AND tasks.boardId = board_id()").run(columnNames.get(data.columns[0].id)!);
+      }
+      if (data.boardOrder?.length) {
+        const boards = this.listBoards();
+        const ordered: string[] = [];
+        for (const imported of data.boardOrder) {
+          const board = boards.find((board) => board.id === imported.id) ??
+            boards.find((board) => board.name.toLowerCase() === imported.name.toLowerCase());
+          if (board && !ordered.includes(board.id)) ordered.push(board.id);
+        }
+        this.writeBoardOrder([...ordered, ...boards.filter((board) => !ordered.includes(board.id)).map((board) => board.id)]);
       }
       const memory = data.memory?.entries.length ? importMemory(this.db, this.workspaceId, this.boardId, data.memory) : 0;
       return { agents: data.agents.length, columns: data.columns.length, assignments: data.assignments.length, memory };

@@ -29,3 +29,14 @@ async function update(request: Request) {
 export const POST = update;
 export const PATCH = update;
 export const DELETE = update;
+
+export async function PUT(request: Request) {
+  try {
+    const ids: unknown = await request.json();
+    const headers = new Headers(request.headers);
+    headers.delete("X-Todai-Board");
+    return Response.json(withTaskStore(new Request(request.url, { headers }), (store) => store.reorderBoards(ids)));
+  } catch (error) {
+    return Response.json({ error: error instanceof ColumnValidationError ? error.message : "Could not save board order. Try again." }, { status: 400 });
+  }
+}

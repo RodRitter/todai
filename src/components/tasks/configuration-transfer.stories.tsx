@@ -42,3 +42,19 @@ export const MemoryImport: Story = {
     await expect(args.onImported).toHaveBeenCalled();
   },
 };
+
+export const BoardOrderImport: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const data: Configuration = { format: "todai-configuration", version: 1, agents: [], columns: [], assignments: [], boardOrder: [{ id: "research", name: "Research" }, { id: "product", name: "Product" }] };
+    await userEvent.upload(canvas.getByLabelText("Import configuration file"), new File([JSON.stringify(data)], "order.json", { type: "application/json" }));
+    const checkbox = await canvas.findByRole("checkbox", { name: "Board order" });
+    await expect(checkbox).toBeChecked();
+    await expect(canvas.getByText("Research → Product")).toBeVisible();
+    await userEvent.click(checkbox);
+    await expect(canvas.getByRole("button", { name: "Import selected" })).toBeDisabled();
+    await userEvent.click(checkbox);
+    await userEvent.click(canvas.getByRole("button", { name: "Import selected" }));
+    await expect(args.onImported).toHaveBeenCalled();
+  },
+};

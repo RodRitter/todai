@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, fireEvent, userEvent, waitFor, within } from "storybook/test";
 import { BoardNavigation } from "./board-navigation";
 
 const meta = {
@@ -13,6 +13,37 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Boards: Story = {};
+export const Dark: Story = { globals: { theme: "dark" } };
+export const Reorder: Story = {
+  args: { reorder: async (ids) => ids.map((id) => meta.args.initialBoards.find((board) => board.id === id)!) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const handle = canvas.getByRole("button", { name: "Reorder Product" });
+    handle.focus();
+    await userEvent.keyboard("{ArrowDown}");
+    await expect(canvas.getAllByRole("link")[1]).toHaveAccessibleName("Product");
+    await expect(handle).toHaveFocus();
+    await userEvent.keyboard("{ArrowUp}");
+    await expect(canvas.getAllByRole("link")[0]).toHaveAccessibleName("Product");
+    const dataTransfer = { effectAllowed: "", dropEffect: "", setData: () => {} };
+    await fireEvent.dragStart(handle, { dataTransfer });
+    const target = canvas.getAllByRole("link")[1].closest("[data-dragging]")!;
+    const clientY = target.getBoundingClientRect().bottom - 1;
+    await fireEvent.dragOver(target, { dataTransfer, clientY });
+    await expect(target.querySelector("[data-insertion=after]")).toBeInTheDocument();
+    await fireEvent.drop(target, { dataTransfer, clientY });
+    await expect(canvas.getAllByRole("link")[1]).toHaveAccessibleName("Product");
+  },
+};
+export const SaveFailure: Story = {
+  args: { reorder: async () => { throw new Error("Save failed"); } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    canvas.getByRole("button", { name: "Reorder Product" }).focus();
+    await userEvent.keyboard("{ArrowDown}");
+    await expect(canvas.getAllByRole("link")[0]).toHaveAccessibleName("Product");
+  },
+};
 export const Collapse: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -21,5 +52,23 @@ export const Collapse: Story = {
     await expect(canvas.queryByRole("link", { name: "Product" })).not.toBeInTheDocument();
     await userEvent.click(canvas.getByRole("button", { name: "Boards" }));
     await expect(canvas.getByRole("link", { name: "Product" })).toBeVisible();
+  },
+};
+
+export const SlidingHandles: Story = {
+  play: async ({ canvasElement }) => {
+    if (!window.matchMedia("(hover: hover)").matches) return;
+    const canvas = within(canvasElement);
+    const handle = canvas.getByRole("button", { name: "Reorder Product" });
+    const link = canvas.getByRole("link", { name: "Product" });
+    await userEvent.hover(canvas.getByRole("button", { name: "Boards" }));
+    await waitFor(() => expect(handle.getBoundingClientRect().width).toBe(0));
+    const initialLeft = link.getBoundingClientRect().left;
+    await userEvent.hover(link);
+    await waitFor(() => expect(handle.getBoundingClientRect().width).toBe(28));
+    await expect(link.getBoundingClientRect().left).toBe(initialLeft + 28);
+    await userEvent.hover(canvas.getByRole("button", { name: "Boards" }));
+    await waitFor(() => expect(handle.getBoundingClientRect().width).toBe(0));
+    await expect(link.getBoundingClientRect().left).toBe(initialLeft);
   },
 };

@@ -5,6 +5,7 @@ import { ChevronRight, LayoutGrid, Plus } from "lucide-react";
 import type { Board } from "@/domain/task";
 import { boardApi, boardSettingsApi, type BoardSnapshot } from "@/lib/workspace-api";
 import { BreadcrumbRow, Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbLink, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
+import { selectedWorkspaceId } from "@/lib/workspace-fetch";
 import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -72,7 +73,7 @@ export function BoardSettings({ boards: initialBoards, persistence = boardApi, c
         <div className="flex flex-wrap gap-2">
           <Input id="board-name" className="min-w-0 flex-1" maxLength={80} value={name} disabled={busy} onChange={(event) => setName(event.target.value)} />
           <Button variant="outline" disabled={busy || !name.trim() || name.trim() === selected.name}>Rename</Button>
-          <Button type="button" variant="ghost-destructive" disabled={busy || selected.id === boards[0]?.id} title={selected.id === boards[0]?.id ? "The original board is kept as the default board." : undefined} onClick={() => setDeleting(true)}>Delete board</Button>
+          <Button type="button" variant="ghost-destructive" disabled={busy || selected.id === (selectedWorkspaceId() ?? initialBoards[0]?.id)} title={selected.id === (selectedWorkspaceId() ?? initialBoards[0]?.id) ? "The original board is kept as the default board." : undefined} onClick={() => setDeleting(true)}>Delete board</Button>
         </div>
       </form>
       {error && !deleting && <p role="alert" className="text-sm text-destructive">{error}</p>}

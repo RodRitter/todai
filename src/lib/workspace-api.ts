@@ -138,6 +138,7 @@ export const jiraImportApi = {
 };
 
 export const boardApi = {
+  reorder: (ids: string[]) => request<import("@/domain/task").Board[]>("/api/boards", { method: "PUT", body: ids }),
   list: () => request<import("@/domain/task").Board[]>("/api/boards"),
   create: (name: string) => request<import("@/domain/task").Board>("/api/boards", { method: "POST", body: { name } }),
   rename: (id: string, name: string) => request<import("@/domain/task").Board>("/api/boards", { method: "PATCH", body: { id, name } }),

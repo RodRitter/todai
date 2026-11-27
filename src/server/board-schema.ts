@@ -6,8 +6,11 @@ export function migrateBoards(db: DatabaseSync) {
     id TEXT PRIMARY KEY, workspaceId TEXT NOT NULL REFERENCES workspaces(id), name TEXT NOT NULL,
     UNIQUE(workspaceId, name COLLATE NOCASE)
   )`);
+  if (!db.prepare("PRAGMA table_info(boards)").all().some((field) => field.name === "position")) {
+    db.exec("ALTER TABLE boards ADD COLUMN position INTEGER NOT NULL DEFAULT 0; UPDATE boards SET position = rowid;");
+  }
   if (db.prepare("PRAGMA table_info(tasks)").all().some((field) => field.name === "boardId")) return;
-  db.exec(`INSERT INTO boards SELECT id, id, 'Board' FROM workspaces;
+  db.exec(`INSERT INTO boards (id, workspaceId, name) SELECT id, id, 'Board' FROM workspaces;
     ALTER TABLE tasks ADD COLUMN boardId TEXT REFERENCES boards(id);
     UPDATE tasks SET boardId = workspaceId;
     CREATE INDEX tasks_board ON tasks(boardId);
