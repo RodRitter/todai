@@ -6,6 +6,22 @@ The local language reference is [Common writing rules](writing-rules.md). The au
 
 User-facing content is Markdown, including the `question` and `recommendation` values in the `request_feedback` MCP arguments or the legacy feedback JSON envelope. Formatting never changes execution or approval semantics.
 
+## Supporting artifacts
+
+The [artifact publication policy](../src/server/artifact-policy.ts) controls when agents publish supporting documents.
+Task prompts, reply prompts, enabled task chats, and the publication tool share this policy.
+Use linked artifacts when supporting details would make a comment too long or disrupt its structure.
+Keep the result and information needed for a decision in the comment.
+
+For example, keep the test result visible and link to detailed evidence:
+
+```markdown
+The import now preserves task IDs. All import tests passed.
+See the [verification report](#artifact/ARTIFACT_ID) for test cases and selected output.
+```
+
+Replace `ARTIFACT_ID` with the ID returned by successful publication.
+
 ## Presentation contract
 
 Apply these rules when implementing or changing output surfaces. They specify the intended presentation; adding prompt instructions alone does not implement new UI components.
@@ -66,6 +82,7 @@ Terminal output can sit inside a collapsible trace. [shadcn Terminal](https://ui
 - The answer or decision is visible first, and each section adds useful information.
 - Lists, code spans, fenced snippets, and inline citations render correctly in Markdown.
 - Reported results match recorded evidence; material limitations remain visible.
+- Long supporting details use artifacts with descriptive links inside the comment.
 - Feedback retains valid JSON with Markdown string values.
 - UI changes follow `docs/design-guidelines.md`, including shared variants, accessibility, Storybook examples, and verification.
 

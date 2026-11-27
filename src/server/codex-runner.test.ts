@@ -106,7 +106,8 @@ process.stdin.on('end', () => {
       "Earlier handover",
       "nominate_artifact",
       "Artifact operations meeting the publication policy above are authorized.",
-      "Do not create an artifact when the useful context can be found in a message.",
+      "Move supporting information into an artifact when its length or format would obscure the comment's main point or disrupt its structure.",
+      "Put the link beside the supported summary within the comment.",
       "A normal run may produce no artifacts.",
       "report the actual error and continue any independent work",
     ])
