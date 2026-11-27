@@ -79,7 +79,7 @@ export const CreationFailure: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "Create workspace" }));
     await expect(canvas.getByRole("button", { name: "Current workspace" })).toBeDisabled();
     finishCreation?.();
-    await expect(await canvas.findByRole("alert")).toHaveTextContent("already uses this folder");
+    await expect(await within(document.body).findByText(/already uses this folder/)).toBeVisible();
     await expect(canvas.getByLabelText("Workspace name")).toHaveValue("New project");
     await expect(canvas.getByRole("button", { name: "Current workspace" })).toBeEnabled();
   },

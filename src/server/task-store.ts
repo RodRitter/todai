@@ -72,21 +72,23 @@ export type AgentRun = {
 export class TaskStore {
   private db: DatabaseSync;
 
-  readonly workspaceId: string;
+  private workspaceScope: string;
+  get workspaceId(): string { return this.workspaceScope; }
   readonly databasePath: string;
-  readonly boardId: string;
+  private boardScope: string;
+  get boardId(): string { return this.boardScope; }
 
   constructor(path: string, workspaceId?: string, options: { seedWorkspace?: boolean; boardId?: string } = {}) {
     this.databasePath = path;
     mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
     initializeSchema(this.db, options.seedWorkspace);
-    this.workspaceId = workspaceId ?? (this.listWorkspaces()[0] ?? this.listArchivedWorkspaces()[0])?.id ?? "";
+    this.workspaceScope = workspaceId ?? (this.listWorkspaces()[0] ?? this.listArchivedWorkspaces()[0])?.id ?? "";
     if (workspaceId && !this.listWorkspaces().some((workspace) => workspace.id === workspaceId)) {
       this.db.close();
       throw new WorkspaceOwnershipError("Choose an existing workspace. Archived workspaces must be restored first.");
     }
-    this.boardId = options.boardId ?? this.workspaceId;
+    this.boardScope = options.boardId ?? this.workspaceId;
     // The SQL scope belongs to this connection and never follows a selected UI view.
     this.db.function("workspace_id", () => this.workspaceId);
     this.db.function("board_id", () => this.boardId);
@@ -141,6 +143,19 @@ export class TaskStore {
         const agent = starterAgentProfile(id, randomUUID());
         this.db.prepare("INSERT INTO agents (workspaceId, id, name, tool, model, effort, instructions, permissions) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
           .run(workspace.id, agent.id, agent.name, agent.tool, agent.model, agent.effort, agent.instructions, agent.permissions);
+      }
+      if (setup.configuration) {
+        // Reuse the import logic inside the creation transaction, then restore this connection's scope.
+        const previousWorkspace = this.workspaceScope;
+        const previousBoard = this.boardScope;
+        try {
+          this.workspaceScope = workspace.id;
+          this.boardScope = workspace.id;
+          this.applyConfiguration(setup.configuration, "replace", "copy");
+        } finally {
+          this.workspaceScope = previousWorkspace;
+          this.boardScope = previousBoard;
+        }
       }
       if (setup.userName !== undefined) this.setUserName(setup.userName);
       return workspace;
@@ -335,70 +350,72 @@ export class TaskStore {
     const data = parseConfiguration(input);
     if (!data.agents.length && !data.columns.length && !data.memory?.entries.length && !data.boardOrder?.length)
       throw new ConfigurationValidationError("Select at least one agent, column, memory entry, or board order.");
-    return this.transaction(() => {
-      if ((columnMode === "replace" || conflictMode === "overwrite") && data.columns.length && this.db.prepare("SELECT id FROM runs WHERE runs.workspaceId = workspace_id() AND taskId IN (SELECT id FROM tasks WHERE boardId = board_id()) AND status IN ('Queued', 'Running') LIMIT 1").get())
-        throw new ConfigurationValidationError("Wait for queued and active runs to finish before replacing or overwriting columns.");
-      if (columnMode === "replace" && data.columns.length) {
-        this.db.exec("DELETE FROM column_assignments WHERE workspaceId = workspace_id() AND boardId = board_id(); DELETE FROM board_columns WHERE workspaceId = workspace_id() AND boardId = board_id();");
-      }
-      if (conflictMode === "overwrite") {
-        for (const agent of data.agents) this.assertOwnership("agents", agent.id);
-        for (const column of data.columns) {
-          this.assertOwnership("board_columns", column.id);
-          const existing = this.db.prepare("SELECT boardId FROM board_columns WHERE id = ?").get(column.id);
-          if (existing && existing.boardId !== this.boardId) throw new ColumnValidationError("This column belongs to another board. Import a copy instead.");
-        }
-      }
-      const agentIds = new Map<string, string>();
-      for (const agent of data.agents) {
-        const id = conflictMode === "overwrite" ? agent.id : randomUUID();
-        this.saveAgent({ ...agent, id });
-        agentIds.set(agent.id, id);
-      }
-      if (data.columns.some((column) => column.completion)) this.db.prepare("UPDATE board_columns SET completion = 0 WHERE workspaceId = workspace_id() AND boardId = board_id()").run();
-      const columnNames = new Map<string, string>();
-      const existing = this.listColumns();
+    return this.transaction(() => this.applyConfiguration(data, columnMode, conflictMode));
+  }
+
+  private applyConfiguration(data: Configuration, columnMode: "add" | "replace", conflictMode: "copy" | "overwrite") {
+    if ((columnMode === "replace" || conflictMode === "overwrite") && data.columns.length && this.db.prepare("SELECT id FROM runs WHERE runs.workspaceId = workspace_id() AND taskId IN (SELECT id FROM tasks WHERE boardId = board_id()) AND status IN ('Queued', 'Running') LIMIT 1").get())
+      throw new ConfigurationValidationError("Wait for queued and active runs to finish before replacing or overwriting columns.");
+    if (columnMode === "replace" && data.columns.length) {
+      this.db.exec("DELETE FROM column_assignments WHERE workspaceId = workspace_id() AND boardId = board_id(); DELETE FROM board_columns WHERE workspaceId = workspace_id() AND boardId = board_id();");
+    }
+    if (conflictMode === "overwrite") {
+      for (const agent of data.agents) this.assertOwnership("agents", agent.id);
       for (const column of data.columns) {
-        const previous = conflictMode === "overwrite" ? this.db.prepare("SELECT name FROM board_columns WHERE board_columns.workspaceId = workspace_id() AND board_columns.boardId = board_id() AND id = ?").get(column.id)?.name as string | undefined : undefined;
-        let name = column.name;
-        let suffix = 2;
-        while (existing.some((item) => item !== previous && item.toLowerCase() === name.toLowerCase())) {
-          const ending = ` (imported ${suffix++})`;
-          name = column.name.slice(0, 80 - ending.length) + ending;
-        }
-        if (previous !== undefined) {
-          this.db.prepare("DELETE FROM column_assignments WHERE column_assignments.workspaceId = workspace_id() AND column_assignments.boardId = board_id() AND column = ?").run(previous);
-          this.db.prepare("UPDATE board_columns SET name = ? WHERE board_columns.workspaceId = workspace_id() AND board_columns.boardId = board_id() AND id = ?").run(name, column.id);
-          this.db.prepare("UPDATE tasks SET status = ? WHERE tasks.workspaceId = workspace_id() AND tasks.boardId = board_id() AND status = ?").run(name, previous);
-          existing[existing.indexOf(previous)] = name;
-        } else {
-          this.db.prepare("INSERT INTO board_columns (workspaceId, boardId, id, name, position) VALUES (workspace_id(), board_id(), ?, ?, ?)").run(conflictMode === "overwrite" ? column.id : randomUUID(), name, existing.length);
-          existing.push(name);
-        }
-        this.db.prepare("UPDATE board_columns SET instructions = ? WHERE workspaceId = workspace_id() AND boardId = board_id() AND name = ?").run(column.instructions ?? "", name);
-        if (column.completion !== undefined) this.db.prepare("UPDATE board_columns SET completion = ? WHERE workspaceId = workspace_id() AND boardId = board_id() AND name = ?").run(Number(column.completion), name);
-        columnNames.set(column.id, name);
+        this.assertOwnership("board_columns", column.id);
+        const existing = this.db.prepare("SELECT boardId FROM board_columns WHERE id = ?").get(column.id);
+        if (existing && existing.boardId !== this.boardId) throw new ColumnValidationError("This column belongs to another board. Import a copy instead.");
       }
-      for (const assignment of data.assignments) {
-        this.assignColumnAgent({ column: columnNames.get(assignment.columnId)!, agentId: agentIds.get(assignment.agentId)! });
+    }
+    const agentIds = new Map<string, string>();
+    for (const agent of data.agents) {
+      const id = conflictMode === "overwrite" ? agent.id : randomUUID();
+      this.saveAgent({ ...agent, id });
+      agentIds.set(agent.id, id);
+    }
+    if (data.columns.some((column) => column.completion)) this.db.prepare("UPDATE board_columns SET completion = 0 WHERE workspaceId = workspace_id() AND boardId = board_id()").run();
+    const columnNames = new Map<string, string>();
+    const existing = this.listColumns();
+    for (const column of data.columns) {
+      const previous = conflictMode === "overwrite" ? this.db.prepare("SELECT name FROM board_columns WHERE board_columns.workspaceId = workspace_id() AND board_columns.boardId = board_id() AND id = ?").get(column.id)?.name as string | undefined : undefined;
+      let name = column.name;
+      let suffix = 2;
+      while (existing.some((item) => item !== previous && item.toLowerCase() === name.toLowerCase())) {
+        const ending = ` (imported ${suffix++})`;
+        name = column.name.slice(0, 80 - ending.length) + ending;
       }
-      if (columnMode === "replace" && data.columns.length) {
-        this.db.prepare("UPDATE comments SET feedbackStatus = 'cancelled' WHERE comments.workspaceId = workspace_id() AND taskId IN (SELECT id FROM tasks WHERE boardId = board_id()) AND feedbackStatus = 'pending'").run();
-        this.db.prepare("UPDATE tasks SET status = ?, agentStatus = 'Not started' WHERE tasks.workspaceId = workspace_id() AND tasks.boardId = board_id()").run(columnNames.get(data.columns[0].id)!);
+      if (previous !== undefined) {
+        this.db.prepare("DELETE FROM column_assignments WHERE column_assignments.workspaceId = workspace_id() AND column_assignments.boardId = board_id() AND column = ?").run(previous);
+        this.db.prepare("UPDATE board_columns SET name = ? WHERE board_columns.workspaceId = workspace_id() AND board_columns.boardId = board_id() AND id = ?").run(name, column.id);
+        this.db.prepare("UPDATE tasks SET status = ? WHERE tasks.workspaceId = workspace_id() AND tasks.boardId = board_id() AND status = ?").run(name, previous);
+        existing[existing.indexOf(previous)] = name;
+      } else {
+        this.db.prepare("INSERT INTO board_columns (workspaceId, boardId, id, name, position) VALUES (workspace_id(), board_id(), ?, ?, ?)").run(conflictMode === "overwrite" ? column.id : randomUUID(), name, existing.length);
+        existing.push(name);
       }
-      if (data.boardOrder?.length) {
-        const boards = this.listBoards();
-        const ordered: string[] = [];
-        for (const imported of data.boardOrder) {
-          const board = boards.find((board) => board.id === imported.id) ??
-            boards.find((board) => board.name.toLowerCase() === imported.name.toLowerCase());
-          if (board && !ordered.includes(board.id)) ordered.push(board.id);
-        }
-        this.writeBoardOrder([...ordered, ...boards.filter((board) => !ordered.includes(board.id)).map((board) => board.id)]);
+      this.db.prepare("UPDATE board_columns SET instructions = ? WHERE workspaceId = workspace_id() AND boardId = board_id() AND name = ?").run(column.instructions ?? "", name);
+      if (column.completion !== undefined) this.db.prepare("UPDATE board_columns SET completion = ? WHERE workspaceId = workspace_id() AND boardId = board_id() AND name = ?").run(Number(column.completion), name);
+      columnNames.set(column.id, name);
+    }
+    for (const assignment of data.assignments) {
+      this.assignColumnAgent({ column: columnNames.get(assignment.columnId)!, agentId: agentIds.get(assignment.agentId)! });
+    }
+    if (columnMode === "replace" && data.columns.length) {
+      this.db.prepare("UPDATE comments SET feedbackStatus = 'cancelled' WHERE comments.workspaceId = workspace_id() AND taskId IN (SELECT id FROM tasks WHERE boardId = board_id()) AND feedbackStatus = 'pending'").run();
+      this.db.prepare("UPDATE tasks SET status = ?, agentStatus = 'Not started' WHERE tasks.workspaceId = workspace_id() AND tasks.boardId = board_id()").run(columnNames.get(data.columns[0].id)!);
+    }
+    if (data.boardOrder?.length) {
+      const boards = this.listBoards();
+      const ordered: string[] = [];
+      for (const imported of data.boardOrder) {
+        const board = boards.find((board) => board.id === imported.id) ??
+          boards.find((board) => board.name.toLowerCase() === imported.name.toLowerCase());
+        if (board && !ordered.includes(board.id)) ordered.push(board.id);
       }
-      const memory = data.memory?.entries.length ? importMemory(this.db, this.workspaceId, this.boardId, data.memory) : 0;
-      return { agents: data.agents.length, columns: data.columns.length, assignments: data.assignments.length, memory };
-    });
+      this.writeBoardOrder([...ordered, ...boards.filter((board) => !ordered.includes(board.id)).map((board) => board.id)]);
+    }
+    const memory = data.memory?.entries.length ? importMemory(this.db, this.workspaceId, this.boardId, data.memory) : 0;
+    return { agents: data.agents.length, columns: data.columns.length, assignments: data.assignments.length, memory };
   }
 
   listColumns(boardId = this.boardId): string[] {

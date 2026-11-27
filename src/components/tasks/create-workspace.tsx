@@ -4,6 +4,9 @@ import { useId, useRef, useState } from "react";
 import { FolderIcon } from "lucide-react";
 import { Combobox } from "@/components/ui/combobox";
 import { useDirectorySuggestions } from "./use-directory-suggestions";
+import { parseConfiguration } from "@/domain/configuration";
+import { FieldHelp } from "@/components/ui/field-help";
+import { notifyOperation } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +26,7 @@ export function CreateWorkspace({ firstRun = false, onBusyChange }: { firstRun?:
   const [path, setPath] = useState("");
   const { suggestions, directoryError, clearSuggestions } = useDirectorySuggestions(path);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [importFile, setImportFile] = useState<File | null>(null);
   const saving = useRef(false);
 
   async function updateColumns(next: string[]) {
@@ -40,12 +43,23 @@ export function CreateWorkspace({ firstRun = false, onBusyChange }: { firstRun?:
       saving.current = true;
       setBusy(true);
       onBusyChange?.(true);
-      setError("");
       try {
-        const workspace = await workspaceApi.create(name, path, parseWorkspaceSetup({ columns, starterAgentIds, ...(firstRun ? { userName } : {}) }));
+        const workspace = await notifyOperation(async () => {
+          let configuration;
+          if (importFile) {
+            let input: unknown;
+            try { input = JSON.parse(await importFile.text()); }
+            catch { throw new Error("Choose a valid JSON file."); }
+            configuration = parseConfiguration(input);
+          }
+          return workspaceApi.create(name, path, parseWorkspaceSetup({ columns, starterAgentIds, configuration, ...(firstRun ? { userName } : {}) }));
+        }, {
+          loading: "Creating workspace…",
+          success: "Workspace created.",
+          error: (error) => error instanceof Error ? error.message : "Could not create workspace.",
+        });
         window.location.assign(`/?workspace=${encodeURIComponent(workspace.id)}`);
-      } catch (error) {
-        setError(error instanceof Error ? error.message : "Could not create workspace.");
+      } catch {
         saving.current = false;
         setBusy(false);
         onBusyChange?.(false);
@@ -75,6 +89,13 @@ export function CreateWorkspace({ firstRun = false, onBusyChange }: { firstRun?:
         />
         {directoryError && <p id={`${id}-directory-error`} className="text-xs text-destructive" role="status">{directoryError}</p>}
       </div>
+      <div className="space-y-2 sm:col-span-2">
+        <div className="flex items-center gap-2">
+          <Label htmlFor={`${id}-import`}>Import configuration (optional)</Label>
+          <FieldHelp id={`${id}-import-help`} label="Import configuration">Choose a Todai configuration JSON file. Imported columns replace the setup columns. Agents, assignments, and memory are imported into the new workspace.</FieldHelp>
+        </div>
+        <Input id={`${id}-import`} type="file" accept=".json,application/json" disabled={busy} aria-describedby={`${id}-import-help`} onChange={(event) => setImportFile(event.target.files?.[0] ?? null)} />
+      </div>
     </form>
     <ColumnEditor
       compact
@@ -95,7 +116,6 @@ export function CreateWorkspace({ firstRun = false, onBusyChange }: { firstRun?:
         </label>)}
       </div>
     </fieldset>
-    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     <Button type="submit" form={`${id}-form`} className="w-full" disabled={busy || editingColumns || (firstRun && !userName.trim()) || !name.trim() || !path.trim()}>{busy ? "Creating workspace…" : "Create workspace"}</Button>
   </section>;
 }
