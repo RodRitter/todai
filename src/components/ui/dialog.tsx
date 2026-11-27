@@ -7,6 +7,33 @@ import { cn } from "@/lib/utils";
 import { ScrollArea } from "./scroll-area";
 import { Button } from "./button";
 
+// Keep conditionally mounted dialogs alive until Radix completes the exit animation.
+export function useDialogExit(onClosed: () => void) {
+  const [open, setOpen] = React.useState(true);
+  const completion = React.useRef<(() => void) | null>(null);
+  return {
+    open,
+    close: (afterClose: () => void = onClosed) => {
+      completion.current = afterClose;
+      setOpen(false);
+    },
+    onCloseAutoFocus: () => {
+      const callback = completion.current;
+      completion.current = null;
+      callback?.();
+    },
+  };
+}
+
+// Reset form state on opening, while preserving the closing session for its exit.
+export function useDialogSessionKey(open: boolean) {
+  const [session, setSession] = React.useState({ open, key: 0 });
+  if (session.open !== open) {
+    setSession({ open, key: session.key + (open ? 1 : 0) });
+  }
+  return session.key;
+}
+
 const DialogCloseContext = React.createContext({ show: true, disabled: false });
 
 export const modalContentClassName = "bg-background fixed top-1/2 left-1/2 z-50 flex flex-col max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-3xl border shadow-lg sm:max-w-lg";
@@ -55,7 +82,7 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/50",
+        "dialog-overlay-motion fixed inset-0 z-50 bg-black/50",
         className,
       )}
       {...props}
@@ -85,12 +112,12 @@ function DialogContent({
         data-slot="dialog-content"
         className={cn(
           modalContentClassName,
-          "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-200 motion-reduce:animate-none",
+          "dialog-content-motion",
           size === "wide" && "sm:max-w-2xl",
           size === "large" && "sm:max-w-3xl",
           size === "expanded" && "sm:max-w-[min(64rem,calc(100%-2rem))]",
           layout === "workspace" && "grid h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 px-4 [&>[data-slot=dialog-header]]:mt-0",
-          layout === "preview" && "px-6 sm:px-8 [&>[data-slot=dialog-header]]:mt-0 [&>[data-slot=dialog-header]]:shrink-0 [&>[data-slot=dialog-header]]:pb-6 sm:[&>[data-slot=dialog-header]]:pt-8",
+          layout === "preview" && "h-[min(48rem,calc(100dvh-2rem))] px-6 sm:px-8 [&>[data-slot=dialog-header]]:mt-0 [&>[data-slot=dialog-header]]:shrink-0 [&>[data-slot=dialog-header]]:pb-6 sm:[&>[data-slot=dialog-header]]:pt-8",
           layout === "prompt" && "rounded-xl",
           className,
         )}

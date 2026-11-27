@@ -1,6 +1,6 @@
-import type { ComponentProps } from "react";
+import { useState, type ComponentProps } from "react";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
-import { Dialog } from "./dialog";
+import { Dialog, useDialogExit } from "./dialog";
 import {
   DialogPortal,
   DialogOverlay,
@@ -110,3 +110,44 @@ export const LongContentNarrow: Story = { ...LongContent, render: () => <LongCon
 export const Prompt: Story = { args: { defaultOpen: true, layout: "prompt" } };
 
 export const Workspace: Story = { args: { defaultOpen: true, layout: "workspace" } };
+
+function ReplacementDialog({ step, onClosed }: { step: number; onClosed: () => void }) {
+  const exit = useDialogExit(onClosed);
+  return <Dialog open={exit.open} onOpenChange={(open) => { if (!open) exit.close(); }}>
+    <DialogContent onCloseAutoFocus={exit.onCloseAutoFocus}>
+      <DialogHeader>
+        <DialogTitle>Step {step}</DialogTitle>
+        <DialogDescription>Each step uses the same modal size.</DialogDescription>
+      </DialogHeader>
+      <DialogFooter><Button onClick={() => exit.close()}>{step === 1 ? "Next step" : "Finish"}</Button></DialogFooter>
+    </DialogContent>
+  </Dialog>;
+}
+
+function ReplacementExample() {
+  const [step, setStep] = useState(0);
+  return <>
+    <Button onClick={() => setStep(1)}>Open steps</Button>
+    {step > 0 && <ReplacementDialog key={step} step={step} onClosed={() => setStep(step === 1 ? 2 : 0)} />}
+  </>;
+}
+
+export const SameSizeReplacement: Story = {
+  render: () => <ReplacementExample />,
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    const trigger = body.getByRole("button", { name: "Open steps" });
+    await userEvent.click(trigger);
+    const first = await body.findByRole("dialog", { name: "Step 1" });
+    await Promise.all(first.getAnimations().map((animation) => animation.finished));
+    await userEvent.click(within(first).getByRole("button", { name: "Next step" }));
+    const second = await body.findByRole("dialog", { name: "Step 2" });
+    await expect(first).not.toBeInTheDocument();
+    await Promise.all(second.getAnimations().map((animation) => animation.finished));
+    await expect(second).toContainElement(canvasElement.ownerDocument.activeElement as HTMLElement);
+    await userEvent.click(within(second).getByRole("button", { name: "Finish" }));
+    await waitFor(() => expect(body.queryByRole("dialog")).not.toBeInTheDocument());
+  },
+};
+
+export const SameSizeReplacementDark: Story = { ...SameSizeReplacement, globals: { theme: "dark" } };

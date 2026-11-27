@@ -4,7 +4,7 @@ import { useId, useRef, useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import { notifyOperation } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, useDialogExit, useDialogSessionKey, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,10 +21,12 @@ type ColumnSettingsDialogProps = {
 };
 
 export function ColumnSettingsDialog(props: ColumnSettingsDialogProps) {
-  return <ColumnSettingsSession key={`${props.column}:${props.open}`} {...props} />;
+  const session = useDialogSessionKey(props.open);
+  return <ColumnSettingsSession key={`${props.column}:${session}`} {...props} />;
 }
 
 function ColumnSettingsSession({ column, instructions, completion = false, open, disabled = false, restoreFocus, onOpenChange, onSave }: ColumnSettingsDialogProps) {
+  const exit = useDialogExit(() => onOpenChange(false));
   const id = useId();
   const [name, setName] = useState(column);
   const [isCompletion, setCompletion] = useState(completion);
@@ -33,8 +35,9 @@ function ColumnSettingsSession({ column, instructions, completion = false, open,
   const saving = useRef(false);
   const [returnFocus] = useState(() => typeof document === "undefined" ? null : document.activeElement);
   const busy = pending || disabled;
-  return <Dialog open={open} onOpenChange={(value) => { if (!busy) onOpenChange(value); }}>
+  return <Dialog open={open && exit.open} onOpenChange={(value) => { if (!busy && !value) exit.close(); }}>
     <DialogContent closeDisabled={busy} aria-describedby={`${id}-help`} onCloseAutoFocus={(event) => {
+      exit.onCloseAutoFocus();
       if (restoreFocus) { event.preventDefault(); restoreFocus(); return; }
       if (returnFocus instanceof HTMLElement && returnFocus.isConnected) { event.preventDefault(); returnFocus.focus(); }
     }}>
@@ -44,7 +47,7 @@ function ColumnSettingsSession({ column, instructions, completion = false, open,
         event.preventDefault();
         if (saving.current || disabled) return;
         saving.current = true; setPending(true);
-        try { await notifyOperation(() => onSave(name.trim(), draft, isCompletion), { loading: "Saving column settings…", success: "Column settings saved.", error: (error) => error instanceof Error ? error.message : "Could not save column settings." }); onOpenChange(false); }
+        try { await notifyOperation(() => onSave(name.trim(), draft, isCompletion), { loading: "Saving column settings…", success: "Column settings saved.", error: (error) => error instanceof Error ? error.message : "Could not save column settings." }); exit.close(); }
         catch { /* The shared toast reports the failure. Keep the form available for retry. */ }
         finally { saving.current = false; setPending(false); }
       }}>
@@ -59,7 +62,7 @@ function ColumnSettingsSession({ column, instructions, completion = false, open,
           <div className="flex items-center gap-2"><Switch id={`${id}-completion`} checked={isCompletion} onCheckedChange={setCompletion} disabled={busy} aria-describedby={`${id}-completion-help`} /><Label htmlFor={`${id}-completion`}>Completion column</Label></div>
           <p id={`${id}-completion-help`} className="text-sm text-muted-foreground">Tasks entering this column receive a built-in memory review instead of running the assigned agent. Enabling this setting unmarks the previous completion column on this board. Memory changes require human approval.</p>
         </div>
-        <DialogFooter><Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => onOpenChange(false)}>Cancel</Button><Button size="sm" disabled={busy || !name.trim()}>{busy ? "Saving…" : "Save settings"}</Button></DialogFooter>
+        <DialogFooter><Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => exit.close()}>Cancel</Button><Button size="sm" disabled={busy || !name.trim()}>{busy ? "Saving…" : "Save settings"}</Button></DialogFooter>
       </form>
     </DialogContent>
   </Dialog>;

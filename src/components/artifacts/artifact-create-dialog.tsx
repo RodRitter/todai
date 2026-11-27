@@ -7,7 +7,7 @@ import { DescriptionEditor } from "@/components/tasks/description-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, useDialogExit, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export function ArtifactCreateDialog({ title, onSave, onCancel, onRestoreFocus }: {
   title: string;
@@ -15,6 +15,7 @@ export function ArtifactCreateDialog({ title, onSave, onCancel, onRestoreFocus }
   onCancel: () => void;
   onRestoreFocus: () => void;
 }) {
+  const exit = useDialogExit(onCancel);
   const [content, setContent] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -34,14 +35,15 @@ export function ArtifactCreateDialog({ title, onSave, onCancel, onRestoreFocus }
     try {
       const response = await workspaceFetch("/api/artifacts", { method: "POST", body: data });
       if (!response.ok) throw new Error((await response.json()).error ?? "Could not save artifact.");
-      onSave(await response.json());
+      const artifact: Artifact = await response.json();
+      exit.close(() => onSave(artifact));
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not save artifact.");
     } finally { submitting.current = false; setSaving(false); }
   }
 
-  return <Dialog open onOpenChange={(open) => { if (!open && !submitting.current) onCancel(); }}>
-    <DialogContent size="large" closeDisabled={saving} onCloseAutoFocus={(event) => { event.preventDefault(); onRestoreFocus(); }}>
+  return <Dialog open={exit.open} onOpenChange={(open) => { if (!open && !submitting.current) exit.close(); }}>
+    <DialogContent size="large" closeDisabled={saving} onCloseAutoFocus={(event) => { event.preventDefault(); exit.onCloseAutoFocus(); onRestoreFocus(); }}>
       <DialogHeader>
         <DialogTitle>Create artifact</DialogTitle>
         <DialogDescription>Save a document and insert its reference into your draft.</DialogDescription>
@@ -51,7 +53,7 @@ export function ArtifactCreateDialog({ title, onSave, onCancel, onRestoreFocus }
         <DescriptionEditor id="quick-artifact-content" label="Document content" value={content} onChange={setContent} disabled={saving} />
         {error && <p role="alert">{error}</p>}
         <DialogFooter>
-          <Button size="sm" type="button" variant="ghost" disabled={saving} onClick={onCancel}>Cancel</Button>
+          <Button size="sm" type="button" variant="ghost" disabled={saving} onClick={() => exit.close()}>Cancel</Button>
           <Button size="sm" type="submit" disabled={saving}>{saving ? "Saving…" : "Save and attach"}</Button>
         </DialogFooter>
       </form>

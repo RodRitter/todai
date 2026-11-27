@@ -141,7 +141,7 @@ export function ArtifactsPage() {
         </DropdownMenu.Root>
       </div>
     </div>
-    {creating && <Dialog open onOpenChange={(open) => { if (!saving) setCreating(open); }}><DialogContent size="large" closeDisabled={saving}>
+    <Dialog open={creating} onOpenChange={(open) => { if (!saving) setCreating(open); }}><DialogContent size="large" closeDisabled={saving}>
       <DialogHeader><DialogTitle>{editing ? "Edit artifact" : imageUpload ? "Create image" : "Create document"}</DialogTitle><DialogDescription className="sr-only">{imageUpload ? "Upload an image to your workspace." : "Write and publish a workspace document."}</DialogDescription></DialogHeader>
       <form key={editing?.id ?? type} onSubmit={publish} className="space-y-4">
       <input type="hidden" name="type" value={type} />
@@ -154,7 +154,7 @@ export function ArtifactsPage() {
         : type === "link" ? <div className="space-y-2"><Label htmlFor="artifact-url">External URL</Label><Input id="artifact-url" name="url" defaultValue={editing?.url ?? ""} type="url" required maxLength={8000} placeholder="https://example.com" disabled={saving} /><p className="text-sm text-muted-foreground">Stores the URL and metadata only. Remote content can change; upload a copy to preserve it.</p></div>
           : <><input type="hidden" name="content" value={content} /><DescriptionEditor id="artifact-content" label="Document content" value={content} onChange={setContent} disabled={saving} /></>}
       <div className="flex items-center gap-2"><Button type="submit" disabled={saving}>{saving ? "Saving…" : editing ? "Save changes" : imageUpload ? "Publish image" : "Publish document"}</Button><Button type="button" variant="ghost" disabled={saving} onClick={() => setCreating(false)}>Cancel</Button></div>
-    </form></DialogContent></Dialog>}
+    </form></DialogContent></Dialog>
     <div className="flex flex-wrap items-end gap-4">
       <div className="space-y-2"><Label htmlFor="artifact-task">Linked task</Label>
         <Select value={taskId || "all"} onValueChange={(value) => { setTaskId(value === "all" ? "" : value); setLoading(true); setArtifacts([]); }}>

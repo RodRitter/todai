@@ -38,7 +38,13 @@ const meta = {
         if (options?.method === "POST") links = [{ artifact: latest, explicit: true, comments: links[0]?.comments ?? [] }];
         return Response.json(links);
       }
-      if (url.pathname.endsWith("/download")) return new Response("Evidence");
+      if (url.pathname.endsWith("/download")) {
+        if (context.parameters.slowPreview) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          return new Response(Array.from({ length: 80 }, (_, index) => `Evidence line ${index + 1}`).join("\n"));
+        }
+        return new Response("Evidence");
+      }
       if (url.searchParams.has("id")) return Response.json(latest);
       return Response.json([latest]);
     };
@@ -177,5 +183,29 @@ export const CitationSurvivesRefresh: Story = {
     await waitFor(() => expect(Number(canvas.getByLabelText("Refresh count").textContent)).toBeGreaterThan(count + 1));
     await expect(dialog).toBeVisible();
     await expect(canvas.queryByRole("button", { name: /Open .*evidence/ })).not.toBeInTheDocument();
+  },
+};
+
+export const ActivityPreviewTransition: Story = {
+  parameters: { slowPreview: true },
+  render: () => <TaskEditor open initialTab="activity" onOpenChange={() => {}} onSave={() => {}} task={{
+    id: "task", title: "Review evidence", description: "Review the linked artifacts.", status: "To do", agentStatus: "Not started",
+    comments: [{ id: "citation", taskId: "task", authorName: "Builder", createdAt: first.createdAt,
+      body: "Review [design evidence](#artifact/evidence/r1).", artifacts: [{ artifactId: first.id }] }],
+  }} />,
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await body.findByRole("button", { name: "design evidence" }));
+    const preview = await body.findByRole("dialog", { name: latest.title });
+    await expect(within(preview).getByRole("status")).toHaveTextContent("Loading preview");
+    await Promise.all(preview.getAnimations().map((animation) => animation.finished));
+    const loading = preview.getBoundingClientRect();
+    await within(preview).findByText(/Evidence line 80/, {}, { timeout: 3000 });
+    const loaded = preview.getBoundingClientRect();
+    await expect(Math.abs(loaded.height - loading.height), "The preview must keep its height when content loads.").toBeLessThan(2);
+    await expect(Math.abs(loaded.top - loading.top), "The preview must keep its position when content loads.").toBeLessThan(2);
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(preview).not.toBeInTheDocument());
+    await expect(body.getByRole("dialog", { name: "Review evidence" })).toBeVisible();
   },
 };

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogClose,
-  DialogContent,
+  DialogContent, useDialogExit,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -40,6 +40,7 @@ export function AgentEditor({
   onClose: () => void;
   onSave: (agent: AgentProfile) => Promise<void>;
 }) {
+  const exit = useDialogExit(onClose);
   const [selectedTool, setSelectedTool] = useState(
     () =>
       executionTools.find((tool) => tool.value === (agent?.tool ?? defaultExecutor)) ??
@@ -78,7 +79,7 @@ export function AgentEditor({
         error:
           "Could not save agent. Check local database access and try again. Your draft is still open.",
       });
-      onClose();
+      exit.close();
     } catch {
       /* Keep the draft available for retry. */
     } finally {
@@ -88,12 +89,12 @@ export function AgentEditor({
   }
   return (
     <Dialog
-      open
+      open={exit.open}
       onOpenChange={(open) => {
-        if (!open && !saving.current) onClose();
+        if (!open && !saving.current) exit.close();
       }}
     >
-      <DialogContent closeDisabled={busy} size="large">
+      <DialogContent onCloseAutoFocus={exit.onCloseAutoFocus} closeDisabled={busy} size="large">
         <DialogHeader>
           <DialogTitle>{agent ? "Edit agent" : "Create agent"}</DialogTitle>
           <DialogDescription className="sr-only">

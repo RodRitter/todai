@@ -22,6 +22,7 @@ import {
   Dialog,
   DialogClose,
   DialogContent,
+  useDialogSessionKey,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -63,9 +64,10 @@ export type TaskEditorProps = {
 };
 
 export function TaskEditor(props: TaskEditorProps) {
+  const session = useDialogSessionKey(props.open);
   return (
     <TaskEditorSession
-      key={`${props.task?.id ?? "new"}:${props.open}`}
+      key={`${props.task?.id ?? "new"}:${session}`}
       {...props}
     />
   );

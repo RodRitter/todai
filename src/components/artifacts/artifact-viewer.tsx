@@ -11,7 +11,7 @@ import { artifactPreviewKind, type Artifact } from "@/domain/artifact";
 import { workspaceFetch } from "@/lib/workspace-fetch";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, useDialogExit, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { richTextClassName } from "@/components/ui/rich-text-styles";
 
 async function fetchContent(artifact: Artifact, preview: boolean, signal?: AbortSignal) {
@@ -21,6 +21,7 @@ async function fetchContent(artifact: Artifact, preview: boolean, signal?: Abort
 }
 
 export function ArtifactViewer({ artifact, onClose }: { artifact: Artifact; onClose: () => void }) {
+  const exit = useDialogExit(onClose);
   const kind = artifactPreviewKind(artifact);
   const supported = kind !== "link" && kind !== "unsupported";
   const [content, setContent] = useState<{ text?: string; url?: string } | null>(null);
@@ -65,8 +66,8 @@ export function ArtifactViewer({ artifact, onClose }: { artifact: Artifact; onCl
     finally { setDownloading(false); }
   }
 
-  return <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-    <DialogContent size="expanded" layout="preview">
+  return <Dialog open={exit.open} onOpenChange={(open) => { if (!open) exit.close(); }}>
+    <DialogContent onCloseAutoFocus={exit.onCloseAutoFocus} size="expanded" layout="preview">
       <DialogHeader variant={kind === "link" ? "default" : "actions"}>
         <div className="col-start-1 row-start-1 flex min-w-0 flex-wrap items-center gap-2">
           <ArtifactTypePill kind={kind} />

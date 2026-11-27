@@ -18,6 +18,7 @@ function ScrollArea({ className, children, orientation = "vertical", fade = "non
     <ScrollAreaPrimitive.Root data-slot="scroll-area" className={cn(
       "relative flex min-h-0 min-w-0 flex-col overflow-hidden",
       variant === "table" && "rounded-lg border",
+      variant === "preview" && "flex-1",
       variant === "code" && "my-3 rounded-lg bg-muted [&_pre]:m-0! [&_pre]:overflow-visible!",
       className,
     )} {...props}>
