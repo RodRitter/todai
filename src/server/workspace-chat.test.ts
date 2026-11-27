@@ -140,10 +140,10 @@ test("legacy usage migration preserves task history and permits workspace usage"
   try {
     db.exec(`PRAGMA foreign_keys = ON;
       CREATE TABLE workspaces (id TEXT PRIMARY KEY);
-      CREATE TABLE tasks (id TEXT PRIMARY KEY);
+      CREATE TABLE tasks (id TEXT PRIMARY KEY, workspaceId TEXT, archivedAt TEXT);
       CREATE TABLE runs (id TEXT, workspaceId TEXT, taskId TEXT, profile TEXT, status TEXT, startedAt TEXT);
       CREATE TABLE settings (workspaceId TEXT, key TEXT, value TEXT);
-      INSERT INTO workspaces VALUES ('workspace'); INSERT INTO tasks VALUES ('task');
+      INSERT INTO workspaces VALUES ('workspace'); INSERT INTO tasks VALUES ('task', 'workspace', NULL);
       CREATE TABLE task_usage (id TEXT PRIMARY KEY, workspaceId TEXT NOT NULL REFERENCES workspaces(id), taskId TEXT NOT NULL REFERENCES tasks(id), runId TEXT,
         agentName TEXT NOT NULL, model TEXT NOT NULL, kind TEXT NOT NULL, startedAt TEXT NOT NULL, finishedAt TEXT,
         outcome TEXT NOT NULL, complete INTEGER NOT NULL DEFAULT 0, tokens TEXT, rate TEXT, credits REAL, ownerPid INTEGER, ownerIdentity TEXT);

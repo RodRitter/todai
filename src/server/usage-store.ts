@@ -70,7 +70,10 @@ export class UsageStore {
       COALESCE(SUM((json_extract(tokens, '$.input_tokens') - json_extract(tokens, '$.cached_input_tokens')) * json_extract(rate, '$.input') / 1000000.0), 0) AS inputCredits,
       COALESCE(SUM(json_extract(tokens, '$.cached_input_tokens') * json_extract(rate, '$.cached') / 1000000.0), 0) AS cachedCredits,
       COALESCE(SUM(json_extract(tokens, '$.output_tokens') * json_extract(rate, '$.output') / 1000000.0), 0) AS outputCredits
-      FROM task_usage WHERE workspaceId = ?`).get(this.workspaceId)!;
+      FROM task_usage WHERE workspaceId = ? AND (taskId IS NULL OR EXISTS (
+        SELECT 1 FROM tasks WHERE tasks.id = task_usage.taskId
+          AND tasks.workspaceId = task_usage.workspaceId AND tasks.archivedAt IS NULL
+      ))`).get(this.workspaceId)!;
     return { credits: Number(row.credits), calls: Number(row.calls), priced: Number(row.priced), measured: Number(row.measured),
       breakdown: {
         uncachedInput: { tokens: Number(row.uncachedInput), credits: Number(row.inputCredits) },

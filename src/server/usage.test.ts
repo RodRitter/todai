@@ -192,6 +192,47 @@ test("header credits total all boards in the workspace and exclude other workspa
   } finally { f.close(); }
 });
 
+test("tracking and sync exclude archived tasks and preserve their usage history", async () => {
+  const f = fixture();
+  const previous = process.env.TODAI_DB_PATH;
+  process.env.TODAI_DB_PATH = f.path;
+  try {
+    const runner = async (request: RunRequest) => { request.onUsage?.(tokens); return "Done"; };
+    await runWithUsage(f.store, runner, f.request);
+    f.store.save({ id: "active", title: "Active", description: "", status: "To do" });
+    await runWithUsage(f.store, runner, { ...f.request, run: { ...f.request.run, id: "active-call", taskId: "active" } });
+    assert.equal(f.store.usage().trackedCredits().trackedCredits, 7.4);
+    f.store.delete("task");
+    assert.deepEqual(f.store.usage().workspaceCredits(), { credits: 3.7, calls: 1, priced: 1, measured: 1,
+      breakdown: { uncachedInput: { tokens: 20000, credits: 1 }, cachedInput: { tokens: 80000, credits: .2 }, output: { tokens: 10000, credits: 2.5 } } });
+    assert.equal(f.store.usage().trackedCredits().trackedCredits, 3.7);
+    assert.equal(f.store.usage().read("task").totals.credits, 3.7);
+
+    const { GET: usage, PUT: sync } = await import("../app/api/usage/route.ts");
+    const headers = { "X-Todai-Workspace": f.store.workspaceId };
+    f.store.usage().setTrackedCredits(0);
+    const total = await usage(new Request("http://localhost/api/usage", { headers })).json();
+    const response = await sync(new Request("http://localhost/api/usage", {
+      method: "PUT", headers, body: JSON.stringify({ credits: total.credits }),
+    }));
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).trackedCredits, 3.7);
+    await runWithUsage(f.store, runner, { ...f.request, run: { ...f.request.run, id: "next-active-call", taskId: "active" } });
+    assert.equal(f.store.usage().trackedCredits().trackedCredits, 7.4);
+    f.store.delete("active");
+    assert.equal(f.store.usage().trackedCredits().trackedCredits, 0);
+
+    f.store.usage().beginWorkspaceChat("workspace-chat", "gpt-6.1-sol", "medium");
+    f.store.usage().record("workspace-chat", tokens);
+    f.store.usage().finish("workspace-chat", "Complete");
+    assert.equal(f.store.usage().trackedCredits().trackedCredits, 3.7);
+  } finally {
+    if (previous === undefined) delete process.env.TODAI_DB_PATH;
+    else process.env.TODAI_DB_PATH = previous;
+    f.close();
+  }
+});
+
 test("credit limits and manual tracking are persistent and isolated by workspace", async () => {
   const f = fixture();
   try {
