@@ -85,7 +85,7 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
     ...selected.columns.filter((column) => existing.columns.some((item) => item.id === column.id)).map((column) => `Column: ${column.name} (${column.id})`),
   ] : [];
 
-  const selection = source && selected && (
+  const selection = source && selected && !source.boards && (
         <fieldset disabled={busy} className="space-y-4 rounded-lg border p-4">
           <legend className="px-1 text-sm font-semibold">{operation === "export" ? "Export selection" : "Import selection"}</legend>
           {operation === "export" && <div className="space-y-2">
@@ -163,7 +163,7 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
           if (!workspace) throw new Error("Could not find the workspace title. Reload the page and try again.");
           downloadConfiguration(data, exportFilename("workspace", workspace.name));
         }, true)}>Export workspace</Button>
-        <FieldHelp id="workspace-export-help" label="Export workspace">Export all board settings, agents, and memory for a new workspace. Active tasks and run history are not included.</FieldHelp>
+        <FieldHelp id="workspace-export-help" label="Export workspace">Export all board settings, agents, and memory for import into another workspace. Active tasks and run history are not included.</FieldHelp>
         <div className="space-y-2">
           <label htmlFor="configuration-file" className="text-sm font-medium">Import configuration file</label>
           <Input id="configuration-file" type="file" accept=".json,application/json" disabled={busy} onChange={(event) => {
@@ -176,13 +176,26 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
               try { data = JSON.parse(await file.text()); }
               catch { throw new Error("Choose a valid JSON file."); }
               const parsed = parseConfiguration(data);
-              if (parsed.boards) throw new Error("Import this workspace file when creating a new workspace.");
-              setExisting(await configurationApi.get());
+              setExisting(parsed.boards ? null : await configurationApi.get());
               prepare(parsed, "import");
             });
           }} />
         </div>
       </div>
+      {operation === "import" && source?.boards && <fieldset disabled={busy} className="space-y-4">
+        <legend className="text-sm font-semibold">Import workspace</legend>
+        <p className="text-sm text-muted-foreground">Add all boards, agents, and memory from this file to the current workspace. Matching board names receive an “imported” suffix.</p>
+        <ScrollArea className="max-h-60"><ul className="space-y-2">{source.boards.map((board) => <li key={board.id}>{board.name} · {board.columns.length} {board.columns.length === 1 ? "column" : "columns"}</li>)}</ul></ScrollArea>
+        <div className="flex gap-2">
+          <Button disabled={busy} onClick={() => run(async () => {
+            await configurationApi.import(source);
+            setSource(null);
+            window.dispatchEvent(new Event("todai:boards-changed"));
+            onImported();
+          }, true)}>{busy ? "Importing workspace…" : "Import workspace"}</Button>
+          <Button variant="ghost" disabled={busy} onClick={() => setSource(null)}>Cancel</Button>
+        </div>
+      </fieldset>}
       {operation === "import" && selection}
       <DialogContent size="wide" closeDisabled={busy} onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onInteractOutside={(event) => { if (busy) event.preventDefault(); }}>
         <DialogHeader>

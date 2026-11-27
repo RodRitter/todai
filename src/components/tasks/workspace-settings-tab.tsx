@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { CreditSettings } from "./credit-settings";
 import { Card, CardContent } from "@/components/ui/card";
 import { Archive, Plus } from "lucide-react";
@@ -11,7 +11,7 @@ import { WorkspaceSettings } from "./workspace-settings";
 import { WorkspaceArchive } from "./workspace-archive";
 import { CreateWorkspace } from "./create-workspace";
 
-export function WorkspaceSettingsTab({ transfer }: { transfer?: ReactNode }) {
+export function WorkspaceSettingsTab() {
   const [view, setView] = useState<"current" | "new" | "archive">("current");
   const [busy, setBusy] = useState(false);
 
@@ -38,7 +38,6 @@ export function WorkspaceSettingsTab({ transfer }: { transfer?: ReactNode }) {
       : <>
         <Card elevation="flat"><CardContent><WorkspaceSettings /></CardContent></Card>
         <Card elevation="flat"><CardContent><CreditSettings /></CardContent></Card>
-        {transfer && <Card elevation="flat"><CardContent>{transfer}</CardContent></Card>}
         <Card elevation="flat"><CardContent><WorkspaceCleanup onBusyChange={setBusy} /></CardContent></Card>
         <Card elevation="flat"><CardContent><WorkspaceArchive key="archive" allowRestore={false} onBusyChange={setBusy} /></CardContent></Card>
       </>}

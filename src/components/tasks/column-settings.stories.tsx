@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
-import { userEvent, within } from "storybook/test";
+import { expect, userEvent, within } from "storybook/test";
 import { ColumnSettings } from "./column-settings";
 import { statuses } from "@/domain/task";
 
@@ -46,6 +46,7 @@ const meta = {
   },
   args: {
     generalSettings: <p className="text-sm text-muted-foreground">Your name applies to all workspaces.</p>,
+    transferSettings: <h2>Transfer configuration files</h2>,
     workspaceSettings: <p className="text-sm text-muted-foreground">Workspace directory and creation settings appear here.</p>,
     initialColumns: [...statuses],
     create: async (name) => [...statuses, name],
@@ -109,3 +110,14 @@ export const LastColumn: Story = {
 export const Global: Story = { play: async ({ canvasElement }) => { await userEvent.click(within(canvasElement).getByRole("tab", { name: "Global" })); } };
 export const Workspace: Story = { play: async ({ canvasElement }) => { await userEvent.click(within(canvasElement).getByRole("tab", { name: "Workspace" })); } };
 export const Dark: Story = { globals: { theme: "dark" } };
+
+export const TransferSection: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("tab", { name: "Import and export" }));
+    await expect(canvas.getByRole("tab", { name: "Import and export" })).toHaveAttribute("aria-selected", "true");
+    await expect(canvas.getByRole("heading", { name: "Transfer configuration files" })).toBeVisible();
+    await userEvent.click(canvas.getByRole("tab", { name: "Workspace" }));
+    await expect(canvas.queryByRole("heading", { name: "Transfer configuration files" })).not.toBeInTheDocument();
+  },
+};

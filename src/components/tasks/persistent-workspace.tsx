@@ -96,7 +96,8 @@ export function PersistentWorkspace({
         )}
         executorSettings={<ExecutorSettings />}
         generalSettings={<GeneralSettings />}
-        workspaceSettings={<WorkspaceSettingsTab transfer={<ConfigurationTransfer onImported={() => setAttempt((value) => value + 1)} />} />}
+        workspaceSettings={<WorkspaceSettingsTab />}
+        transferSettings={<ConfigurationTransfer onImported={() => setAttempt((value) => value + 1)} />}
         {...columnApi}
       />
     );
@@ -133,7 +134,7 @@ export function PersistentWorkspace({
 function UrlColumnSettings(props: ComponentProps<typeof ColumnSettings>) {
   const searchParams = useSearchParams();
   const requestedTab = searchParams.get("tab");
-  const tab = requestedTab === "board" || requestedTab === "executors" || requestedTab === "workspaces" ? requestedTab : "general";
+  const tab = requestedTab === "board" || requestedTab === "executors" || requestedTab === "workspaces" || requestedTab === "transfer" ? requestedTab : "general";
 
   return (
     <ColumnSettings

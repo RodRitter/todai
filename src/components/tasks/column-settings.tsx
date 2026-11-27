@@ -15,16 +15,18 @@ export function ColumnSettings({
   rename,
   remove,
   workspaceSettings,
+  transferSettings,
   generalSettings,
   executorSettings,
   tab,
   onTabChange,
 }: {
   boardSettings?: ReactNode;
-  tab?: "general" | "workspaces" | "board" | "executors";
+  tab?: "general" | "workspaces" | "board" | "executors" | "transfer";
   executorSettings?: ReactNode;
   onTabChange?: (value: string) => void;
   workspaceSettings?: ReactNode;
+  transferSettings?: ReactNode;
   generalSettings?: ReactNode;
   initialColumns: string[];
   initialTaskCounts?: Record<string, number>;
@@ -45,6 +47,7 @@ export function ColumnSettings({
             <TabsTrigger value="general">Global</TabsTrigger>
             {workspaceSettings && <TabsTrigger value="workspaces">Workspace</TabsTrigger>}
             <TabsTrigger value="board">Board</TabsTrigger>
+            {transferSettings && <TabsTrigger value="transfer">Import and export</TabsTrigger>}
             {executorSettings && <TabsTrigger value="executors">Executors</TabsTrigger>}
           </TabsList>
           <TabsContent value="general" forceMount className="space-y-8">
@@ -52,6 +55,7 @@ export function ColumnSettings({
             {generalSettings}
           </TabsContent>
           {workspaceSettings && <TabsContent value="workspaces" forceMount className="space-y-8"><SettingsScope scope="workspace" />{workspaceSettings}</TabsContent>}
+          {transferSettings && <TabsContent value="transfer" forceMount className="space-y-8"><SettingsScope scope="workspace" />{transferSettings}</TabsContent>}
           {executorSettings && <TabsContent value="executors" forceMount className="space-y-8"><SettingsScope scope="workspace" />{executorSettings}</TabsContent>}
           <TabsContent value="board" forceMount className="space-y-8">
             <SettingsScope scope="workspace" />

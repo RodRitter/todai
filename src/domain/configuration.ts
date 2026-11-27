@@ -4,8 +4,9 @@ import { parseAgentProfile, type AgentProfile } from "./column-agent.ts";
 export type Configuration = {
   format: "todai-configuration";
   version: 1;
+  name?: string;
   memory?: MemoryTransfer;
-  // Read legacy files during workspace creation; new exports use the boards array order.
+  // Accept legacy metadata; new workspace exports use the boards array order.
   boardOrder?: { id: string; name: string }[];
   boards?: { id: string; name: string; description?: string; columns: Configuration["columns"]; assignments: Configuration["assignments"] }[];
   defaultBoardId?: string;
@@ -22,6 +23,9 @@ export function parseConfiguration(input: unknown): Configuration {
   const data = input as Configuration;
   if (data.format !== "todai-configuration" || data.version !== 1)
     return fail("Unsupported configuration format or version.");
+  if (data.name !== undefined && (typeof data.name !== "string" || !data.name.trim()))
+    return fail("Give the configuration a name.");
+  const name = data.name?.trim();
   if (!Array.isArray(data.agents) || !Array.isArray(data.columns) || !Array.isArray(data.assignments))
     return fail("Configuration must contain agents, columns, and assignments lists.");
   if (data.boardOrder !== undefined && (!Array.isArray(data.boardOrder) ||
@@ -72,12 +76,13 @@ export function parseConfiguration(input: unknown): Configuration {
   let memory: MemoryTransfer | undefined;
   try { if (data.memory !== undefined) memory = parseMemoryTransfer(data.memory); }
   catch { return fail("Invalid memory export."); }
-  return { format: "todai-configuration", version: 1, ...(boards ? { boards, defaultBoardId: data.defaultBoardId } : {}), ...(memory ? { memory } : {}), ...(boardOrder ? { boardOrder } : {}), agents, columns: data.columns.map(({ id, name, instructions, completion }) => ({ id, name, ...(instructions !== undefined ? { instructions } : {}), ...(completion !== undefined ? { completion } : {}) })), assignments };
+  return { format: "todai-configuration", version: 1, ...(name ? { name } : {}), ...(boards ? { boards, defaultBoardId: data.defaultBoardId } : {}), ...(memory ? { memory } : {}), ...(boardOrder ? { boardOrder } : {}), agents, columns: data.columns.map(({ id, name, instructions, completion }) => ({ id, name, ...(instructions !== undefined ? { instructions } : {}), ...(completion !== undefined ? { completion } : {}) })), assignments };
 }
 
 export function selectConfiguration(data: Configuration, agentIds: string[], columns: string[], memoryIds: string[] = []): Configuration {
   return {
     format: "todai-configuration", version: 1,
+    ...(data.name ? { name: data.name } : {}),
     ...(data.memory && memoryIds.length ? { memory: selectMemory(data.memory, memoryIds) } : {}),
     agents: data.agents.filter((agent) => agentIds.includes(agent.id)),
     columns: data.columns.filter((column) => columns.includes(column.id)),

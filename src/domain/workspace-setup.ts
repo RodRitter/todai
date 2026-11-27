@@ -1,4 +1,3 @@
-import { parseConfiguration, type Configuration } from "./configuration.ts";
 import { parseUserName } from "./user-name.ts";
 import { statuses } from "./task.ts";
 import type { AgentProfile } from "./column-agent.ts";
@@ -9,21 +8,15 @@ export const starterAgents = [
   { id: "reviewer", name: "Reviewer", description: "Check work for bugs and missing requirements.", permissions: "read-only", instructions: "Review the work against the task requirements. Look for bugs, regressions, and missing checks. Report actionable findings with file references. Do not change files." },
 ] as const;
 
-export type WorkspaceSetup = { userName?: string } & (
-  | { columns: string[]; starterAgentIds: string[]; configuration?: never }
-  | { configuration: Configuration; columns?: never; starterAgentIds?: never }
-);
+export type WorkspaceSetup = { userName?: string; columns: string[]; starterAgentIds: string[] };
 export class WorkspaceSetupError extends Error {}
 
 export function parseWorkspaceSetup(input: unknown): WorkspaceSetup {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new WorkspaceSetupError("Enter workspace setup options.");
   const value = input as Partial<WorkspaceSetup>;
   const user = value.userName !== undefined ? { userName: parseUserName(value.userName) } : {};
-  if (value.configuration !== undefined) {
-    if (value.columns !== undefined || value.starterAgentIds !== undefined)
-      throw new WorkspaceSetupError("Choose import or manual setup, not both.");
-    return { configuration: parseConfiguration(value.configuration), ...user };
-  }
+  if ("configuration" in input)
+    throw new WorkspaceSetupError("Import files from the Import and export settings section.");
   const columns = value.columns ?? [...statuses];
   const ids = value.starterAgentIds ?? [];
   if (!Array.isArray(columns) || !columns.length || columns.some((name) => typeof name !== "string" || !name.trim()))

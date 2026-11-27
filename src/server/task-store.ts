@@ -135,27 +135,14 @@ export class TaskStore {
     const workspace = { id: randomUUID(), name: name.trim(), path: validateWorkspace(path) };
     return this.transaction(() => {
       this.db.prepare("INSERT INTO workspaces (id, name, path) VALUES (?, ?, ?)").run(workspace.id, workspace.name, workspace.path);
-      this.db.prepare("INSERT INTO boards (id, workspaceId, name) VALUES (?, ?, 'Board')").run(workspace.id, workspace.id);
-      for (const [position, column] of (setup.columns ?? []).entries()) {
+      this.db.prepare("INSERT INTO boards (id, workspaceId, name) VALUES (?, ?, ?)").run(workspace.id, workspace.id, "Board");
+      for (const [position, column] of setup.columns.entries()) {
         this.db.prepare("INSERT INTO board_columns (id, name, position, workspaceId, boardId) VALUES (?, ?, ?, ?, ?)").run(randomUUID(), column, position, workspace.id, workspace.id);
       }
-      for (const id of setup.starterAgentIds ?? []) {
+      for (const id of setup.starterAgentIds) {
         const agent = starterAgentProfile(id, randomUUID());
         this.db.prepare("INSERT INTO agents (workspaceId, id, name, tool, model, effort, instructions, permissions) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
           .run(workspace.id, agent.id, agent.name, agent.tool, agent.model, agent.effort, agent.instructions, agent.permissions);
-      }
-      if (setup.configuration) {
-        // Reuse the import logic inside the creation transaction, then restore this connection's scope.
-        const previousWorkspace = this.workspaceScope;
-        const previousBoard = this.boardScope;
-        try {
-          this.workspaceScope = workspace.id;
-          this.boardScope = workspace.id;
-          this.applyWorkspaceConfiguration(setup.configuration);
-        } finally {
-          this.workspaceScope = previousWorkspace;
-          this.boardScope = previousBoard;
-        }
       }
       if (setup.userName !== undefined) this.setUserName(setup.userName);
       return workspace;
@@ -330,6 +317,7 @@ export class TaskStore {
       const memory = exportMemory(this.db, this.workspaceId);
       const selected: Configuration = {
         format: "todai-configuration", version: 1,
+        name: this.listBoards().find((board) => board.id === this.boardId)!.name,
         ...(memory ? { memory } : {}),
         agents: this.listAgents(),
         ...this.exportBoardConfiguration(),
@@ -342,7 +330,7 @@ export class TaskStore {
           const content = this.exportBoardConfiguration();
           return { id: board.id, name: board.name, description: board.description, columns: content.columns, assignments: content.assignments };
         });
-        return { ...selected, boards, defaultBoardId: this.workspaceId };
+        return { ...selected, name: this.listWorkspaces().find((workspace) => workspace.id === this.workspaceId)!.name, boards, defaultBoardId: this.workspaceId };
       } finally { this.boardScope = previousBoard; }
     });
   }
@@ -359,14 +347,11 @@ export class TaskStore {
   }
 
   private applyWorkspaceConfiguration(data: Configuration) {
-    const legacyBoards = data.boardOrder?.length ? data.boardOrder : [{ id: "default", name: "Board" }];
-    const defaultColumns = ["To do", "In progress", "In review", "Done"].map((name) => ({ id: randomUUID(), name }));
-    const boards: NonNullable<Configuration["boards"]> = data.boards ?? legacyBoards.map((board, index) => ({
-      ...board,
-      columns: index === 0 && data.columns.length ? data.columns : defaultColumns,
-      assignments: index === 0 ? data.assignments : [],
-    }));
-    const defaultId = data.defaultBoardId ?? boards[0].id;
+    const boards = data.boards!;
+    const existingBoards = this.listBoards();
+    const nextPosition = Number(this.db.prepare("SELECT COALESCE(MAX(position), -1) + 1 AS position FROM boards WHERE workspaceId = workspace_id()").get()!.position);
+    const names = new Set(existingBoards.map((board) => board.name.toLowerCase()));
+    let importedDefaultBoard = this.boardId;
     // Copy agents once so all imported boards share the same profiles.
     const agentIds = new Map<string, string>();
     for (const agent of data.agents) {
@@ -375,20 +360,24 @@ export class TaskStore {
       agentIds.set(agent.id, id);
     }
     for (const [position, board] of boards.entries()) {
-      const id = board.id === defaultId ? this.workspaceId : randomUUID();
-      if (id === this.workspaceId) {
-        this.db.prepare("UPDATE boards SET name = ?, description = ?, position = ? WHERE id = ?").run(board.name, board.description ?? "", position, id);
-      } else {
-        this.db.prepare("INSERT INTO boards (id, workspaceId, name, description, position) VALUES (?, ?, ?, ?, ?)").run(id, this.workspaceId, board.name, board.description ?? "", position);
+      const id = randomUUID();
+      let name = board.name;
+      let suffix = 2;
+      while (names.has(name.toLowerCase())) {
+        const ending = ` (imported ${suffix++})`;
+        name = board.name.slice(0, 80 - ending.length) + ending;
       }
+      names.add(name.toLowerCase());
+      this.db.prepare("INSERT INTO boards (id, workspaceId, name, description, position) VALUES (?, ?, ?, ?, ?)").run(id, this.workspaceId, name, board.description ?? "", nextPosition + position);
+      if (board.id === data.defaultBoardId) importedDefaultBoard = id;
       this.boardScope = id;
       this.applyConfiguration({ format: data.format, version: data.version, agents: [], columns: board.columns, assignments: [] }, "replace", "copy");
       for (const assignment of board.assignments) {
         this.assignColumnAgent({ column: board.columns.find((column) => column.id === assignment.columnId)!.name, agentId: agentIds.get(assignment.agentId)! });
       }
     }
-    this.boardScope = this.workspaceId;
-    if (data.memory?.entries.length) importMemory(this.db, this.workspaceId, this.boardId, data.memory);
+    const memory = data.memory?.entries.length ? importMemory(this.db, this.workspaceId, importedDefaultBoard, data.memory) : 0;
+    return { boards: boards.length, agents: data.agents.length, columns: boards.reduce((count, board) => count + board.columns.length, 0), assignments: boards.reduce((count, board) => count + board.assignments.length, 0), memory };
   }
 
   importConfiguration(input: unknown, columnMode: unknown = "add", conflictMode: unknown = "copy") {
@@ -397,7 +386,16 @@ export class TaskStore {
     if (conflictMode !== "copy" && conflictMode !== "overwrite")
       throw new ConfigurationValidationError("Choose whether to overwrite matching IDs or create copies.");
     const data = parseConfiguration(input);
-    if (data.boards) throw new ConfigurationValidationError("Import this workspace file when creating a new workspace.");
+    if (data.boards) {
+      if (columnMode !== "add" || conflictMode !== "copy")
+        throw new ConfigurationValidationError("Workspace imports add new copies of boards and agents.");
+      return this.transaction(() => {
+        this.assertWorkspaceActive();
+        const previousBoard = this.boardScope;
+        try { return this.applyWorkspaceConfiguration(data); }
+        finally { this.boardScope = previousBoard; }
+      });
+    }
     if (!data.agents.length && !data.columns.length && !data.memory?.entries.length)
       throw new ConfigurationValidationError("Select at least one agent, column, or memory entry.");
     return this.transaction(() => this.applyConfiguration(data, columnMode, conflictMode));

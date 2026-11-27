@@ -65,12 +65,15 @@ export const LegacyBoardOrder: Story = {
 };
 
 export const WorkspaceFile: Story = {
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole("button", { name: "Export workspace" })).toBeVisible();
     const data: Configuration = { ...configuration, boards: [{ id: "board", name: "Planning", columns: [{ id: "ready", name: "Ready" }], assignments: [] }], defaultBoardId: "board" };
     await userEvent.upload(canvas.getByLabelText("Import configuration file"), new File([JSON.stringify(data)], "workspace.json", { type: "application/json" }));
-    await expect(await within(document.body).findByText("Import this workspace file when creating a new workspace.")).toBeVisible();
+    await expect(await canvas.findByRole("button", { name: "Import workspace" })).toBeEnabled();
+    await expect(canvas.getByText("Planning · 1 column")).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Import workspace" }));
+    await expect(args.onImported).toHaveBeenCalled();
     await expect(canvas.queryByRole("button", { name: "Import selected" })).not.toBeInTheDocument();
   },
 };
@@ -105,3 +108,23 @@ export const ChooseBoard: Story = {
   },
 };
 export const ChooseBoardDark: Story = { ...ChooseBoard, globals: { theme: "dark" } };
+
+export const WorkspaceImportFailure: Story = {
+  beforeEach: () => {
+    const original = globalThis.fetch;
+    globalThis.fetch = async (input, options) => String(input).startsWith("/api/configuration") && options?.method === "POST"
+      ? Response.json({ error: "Import failed. Try again." }, { status: 500 })
+      : original(input, options);
+    return () => { globalThis.fetch = original; };
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const data: Configuration = { ...configuration, boards: [{ id: "board", name: "Planning", columns: [{ id: "ready", name: "Ready" }], assignments: [] }], defaultBoardId: "board" };
+    await userEvent.upload(canvas.getByLabelText("Import configuration file"), new File([JSON.stringify(data)], "workspace.json", { type: "application/json" }));
+    await userEvent.click(await canvas.findByRole("button", { name: "Import workspace" }));
+    await expect(await within(document.body).findByText("Import failed. Try again.")).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "Import workspace" })).toBeEnabled();
+    await expect(canvas.getByText("Planning · 1 column")).toBeVisible();
+  },
+};
+export const WorkspaceImportDark: Story = { ...WorkspaceImportFailure, globals: { theme: "dark" } };
