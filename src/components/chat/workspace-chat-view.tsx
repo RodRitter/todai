@@ -24,6 +24,7 @@ import { PromptSend } from "@/components/ui/prompt-send";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "@/components/ui/toast";
 import { ConversationComposer } from "@/components/conversation/conversation-composer";
+import { ConversationEmptyState } from "@/components/ui/conversation-empty-state";
 
 export type WorkspaceChatViewProps = {
   chats: WorkspaceChatSummary[]; session: WorkspaceChat | null; statuses: ExecutorStatus[]; busy?: boolean; loading?: boolean; failed?: boolean;
@@ -104,7 +105,7 @@ function WorkspaceConversation({ session, statuses, busy, onSend, onRename, onDe
     </div>
     <MessageScrollerProvider autoScroll>
       <MessageScroller className="min-h-0 flex-1"><MessageScrollerViewport><MessageScrollerContent className="pr-3 pb-4">
-        {!session.messages.length && <div className="space-y-3"><h3>What would you like to do?</h3><p>Ask a question or manage your workspace configuration.</p></div>}
+        {!session.messages.length && !locked && !session.error && <ConversationEmptyState variant="workspace-chat" />}
         {session.messages.map((message, index) => {
           if (message.authorRole !== "human") return null;
           const reply = session.messages[index + 1]?.authorRole === "agent" ? session.messages[index + 1] : undefined;

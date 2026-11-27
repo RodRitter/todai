@@ -29,6 +29,8 @@ export const LongHistory: Story = { args: { chats: Array.from({ length: 30 }, (_
 export const Unavailable: Story = { args: { statuses: [{ tool: "codex", installed: false, signedIn: false, message: "Codex CLI is unavailable." }] } };
 export const Narrow: Story = { ...ToolResults, decorators: [(Story) => <div className="max-w-sm"><Story /></div>] };
 export const Dark: Story = { ...ToolResults, globals: { theme: "dark" } };
+export const EmptyNarrow: Story = { decorators: [(Story) => <div className="max-w-sm"><Story /></div>] };
+export const EmptyDark: Story = { globals: { theme: "dark" } };
 
 export const EffortSelection: Story = { play: async ({ canvasElement, args }) => {
   const canvas = within(canvasElement);
