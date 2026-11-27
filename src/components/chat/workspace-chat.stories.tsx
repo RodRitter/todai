@@ -39,3 +39,10 @@ export const EffortSelection: Story = { play: async ({ canvasElement, args }) =>
   await userEvent.click(canvas.getByRole("button", { name: "Send message" }));
   await expect(args.onSend).toHaveBeenCalledWith("Explain this board", { tool: "codex", model: "gpt-6.1-sol", effort: "high" });
 } };
+
+export const ReplyTooltip: Story = { ...ToolResults, play: async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  const copy = canvas.getByRole("button", { name: "Copy reply" });
+  await userEvent.hover(copy);
+  await expect(await within(canvasElement.ownerDocument.body).findByRole("tooltip")).toHaveTextContent("Copy reply");
+} };

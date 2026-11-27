@@ -21,7 +21,7 @@ import { Trace, TraceCollapsible, TraceCollapsibleTrigger, TraceLine, TraceTitle
 import { Markdown } from "@/components/ui/markdown";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { PromptSend } from "@/components/ui/prompt-send";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "@/components/ui/toast";
 import { ConversationComposer } from "@/components/conversation/conversation-composer";
 
@@ -33,7 +33,7 @@ export type WorkspaceChatViewProps = {
 export function WorkspaceChatView(props: WorkspaceChatViewProps) {
   const { chats, session, busy, loading, failed, onSelect, onCreate, onRetry } = props;
   const [historyOpen, setHistoryOpen] = useState(false);
-  return <main className="flex h-[calc(100svh-3.5rem)] min-h-0 flex-col md:flex-row" aria-busy={loading}>
+  return <TooltipProvider><main className="flex h-[calc(100svh-3.5rem)] min-h-0 flex-col md:flex-row" aria-busy={loading}>
     <Button className="m-4 md:hidden" variant="outline" aria-expanded={historyOpen} aria-controls="chat-history" onClick={() => setHistoryOpen(!historyOpen)}><MessageSquare />Conversations<ChevronDown /></Button>
     <aside id="chat-history" aria-label="Conversations" className={`${historyOpen ? "flex" : "hidden"} min-h-0 shrink-0 md:flex md:w-60`}>
       <SidebarPanel variant="chat"><ScrollArea className="max-h-64 min-h-0 flex-1 md:max-h-none"><nav aria-label="Chat navigation" className="p-3"><Button align="navigation" variant="ghost" disabled={busy || loading} onClick={onCreate}><Plus />New chat</Button><NavigationTree label="Conversations">
@@ -46,7 +46,7 @@ export function WorkspaceChatView(props: WorkspaceChatViewProps) {
         <h2>Start a workspace conversation</h2><p>Ask a question or manage agents, boards, and columns.</p><Button onClick={onCreate} disabled={busy}><Plus />New chat</Button>
       </div>}
     </section>
-  </main>;
+  </main></TooltipProvider>;
 }
 function ToolActivity({ activity }: { activity: WorkspaceChatActivity }) {
   return <TraceCollapsible>
