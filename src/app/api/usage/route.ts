@@ -9,7 +9,7 @@ export function GET(request: Request) {
 export async function PUT(request: Request) {
   try {
     const input = await request.json();
-    return Response.json(withTaskStore(request, store => ({ ...store.usage().setTrackedCredits(input?.credits), creditLimit: store.getCreditLimit() })));
+    return Response.json(withTaskStore(request, store => ({ ...store.usage().setTrackedCredits(input?.action === "sync" ? store.usage().activeTaskCredits() : input?.credits), creditLimit: store.getCreditLimit() })));
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Could not set tracked credits." }, { status: 400 });
   }

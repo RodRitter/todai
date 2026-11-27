@@ -41,7 +41,7 @@ export function modelUsage(calls: UsageCall[]): ModelUsage[] {
 }
 
 export type WorkspaceCredits = {
-  trackedCredits?: number; creditLimit?: number;
+  trackedCredits?: number; taskCredits?: number; creditLimit?: number;
   credits: number; calls: number; priced: number; measured: number;
   breakdown: Record<"uncachedInput" | "cachedInput" | "output", { tokens: number; credits: number }>;
 };

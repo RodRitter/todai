@@ -20,8 +20,13 @@ async function setCredits(credits: number): Promise<WorkspaceCredits> {
   if (!response.ok) throw new Error("Could not update tracked credits.");
   return response.json();
 }
+async function syncCredits(): Promise<WorkspaceCredits> {
+  const response = await workspaceFetch("/api/usage", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "sync" }) });
+  if (!response.ok) throw new Error("Could not update tracked credits.");
+  return response.json();
+}
 const resetCredits = () => setCredits(0);
-export function TrackedCredits({ load = loadCredits, reset = resetCredits, sync = setCredits }: { load?: typeof loadCredits; reset?: typeof resetCredits; sync?: typeof setCredits }) {
+export function TrackedCredits({ load = loadCredits, reset = resetCredits, sync = syncCredits }: { load?: typeof loadCredits; reset?: typeof resetCredits; sync?: typeof setCredits }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const revision = useRef(0);
   const [resetting, setResetting] = useState(false);
@@ -46,7 +51,7 @@ export function TrackedCredits({ load = loadCredits, reset = resetCredits, sync 
     revision.current += 1;
     setResetting(true);
     try {
-      const next = await notifyOperation(() => action === "reset" ? reset() : sync(data.credits), {
+      const next = await notifyOperation(() => action === "reset" ? reset() : sync(data.taskCredits ?? 0), {
         loading: action === "reset" ? "Resetting tracked credits…" : "Syncing tracked credits…",
         success: action === "reset" ? "Tracking reset to zero." : "Tracked credits synced with task total.",
         error: "Could not update tracked credits.",
@@ -85,8 +90,8 @@ export function TrackedCredits({ load = loadCredits, reset = resetCredits, sync 
       {(data.priced < data.calls || data.measured < data.calls) && <UsageNote label="Partial totals" />}
     </>}
     <div className="flex items-center gap-2">
-      <Button type="button" variant="outline" size="sm" disabled={!data || resetting} onClick={() => setConfirmReset(true)}>Reset tracking</Button>
-      <Button type="button" variant="ghost" size="sm" disabled={!data || resetting} onClick={() => void updateTracking("sync")} title={data ? `Use task total: ${formatCredits(data.credits)} credits` : undefined}>Sync</Button>
+      <Button type="button" variant="outline" size="sm" disabled={!data || resetting} onClick={() => setConfirmReset(true)}>Reset</Button>
+      <Button type="button" variant="ghost" size="sm" disabled={!data || resetting} onClick={() => void updateTracking("sync")} title={data ? `Use task total: ${formatCredits(data.taskCredits ?? 0)} credits` : undefined}>Sync with Tasks</Button>
       <Button variant="ghost" size="icon-sm" className="ml-auto" asChild><WorkspaceLink href="/settings" aria-label="Settings"><Settings aria-hidden="true" /></WorkspaceLink></Button>
     </div>
     </PopoverBody>

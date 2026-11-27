@@ -41,14 +41,14 @@ export const OverLimit: Story = { args: { load: async () => ({ credits: 120, cre
 export const Reset: Story = { args: { reset: async () => ({ credits: 3.7, trackedCredits: 0, creditLimit: 100, calls: 12, priced: 12, measured: 12, breakdown }) }, play: async ({ canvasElement }) => {
   const canvas = within(canvasElement);
   await userEvent.click(await canvas.findByRole("button", { name: "3.7 tracked credits" }));
-  await userEvent.click(await within(document.body).findByRole("button", { name: "Reset tracking" }));
+  await userEvent.click(await within(document.body).findByRole("button", { name: "Reset" }));
   await userEvent.click(await within(document.body).findByRole("button", { name: "Reset to zero" }));
   await expect(await canvas.findByRole("button", { name: "0 / 100 tracked credits, 0% used" })).toBeVisible();
 } };
 
-export const Sync: Story = { args: { sync: async (credits) => ({ credits, trackedCredits: credits, creditLimit: 100, calls: 12, priced: 12, measured: 12, breakdown }) }, play: async ({ canvasElement }) => {
+export const Sync: Story = { args: { load: async () => ({ credits: 7.4, taskCredits: 3.7, calls: 12, priced: 12, measured: 12, breakdown }), sync: async (credits) => ({ credits, trackedCredits: credits, creditLimit: 100, calls: 12, priced: 12, measured: 12, breakdown }) }, play: async ({ canvasElement }) => {
   const canvas = within(canvasElement);
-  await userEvent.click(await canvas.findByRole("button", { name: "3.7 tracked credits" }));
-  await userEvent.click(await within(document.body).findByRole("button", { name: "Sync" }));
+  await userEvent.click(await canvas.findByRole("button", { name: "7.4 tracked credits" }));
+  await userEvent.click(await within(document.body).findByRole("button", { name: "Sync with Tasks" }));
   await expect(await canvas.findByRole("button", { name: "3.7 / 100 tracked credits, 3.7% used" })).toBeVisible();
 } };

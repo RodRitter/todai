@@ -27,7 +27,7 @@ export function CreditSettings() {
       if (!response.ok) throw new Error("Could not load credits.");
       return response.json();
     }).then(usage => {
-      if (active) { setTaskCredits(usage.credits); setLimit(String(usage.creditLimit ?? 0)); setCredits(String(usage.trackedCredits ?? usage.credits)); setReady(true); }
+      if (active) { setTaskCredits(usage.taskCredits ?? 0); setLimit(String(usage.creditLimit ?? 0)); setCredits(String(usage.trackedCredits ?? usage.credits)); setReady(true); }
     }).catch(() => { if (active) { setError("Could not load credit settings."); toast.error("Could not load credit settings."); } });
     return () => { active = false; };
   }, [attempt]);
@@ -36,11 +36,11 @@ export function CreditSettings() {
     setBusy(true); setError("");
     try {
       await notifyOperation(async () => {
-        const response = await workspaceFetch("/api/usage", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ credits: action === "reset" ? 0 : taskCredits }) });
+        const response = await workspaceFetch("/api/usage", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(action === "reset" ? { credits: 0 } : { action: "sync" }) });
         if (!response.ok) throw new Error("Could not set tracked credits.");
         const data = await response.json();
         setCredits(String(data.trackedCredits));
-        setTaskCredits(data.credits);
+        setTaskCredits(data.taskCredits ?? 0);
       }, { loading: "Saving credit settings…", success: action === "reset" ? "Tracking reset to zero." : action === "sync" ? "Tracked credits synced with task total." : "Credit settings saved.", error: "Could not save credit settings." });
       if (action === "reset") setConfirmReset(false);
     } catch { /* The toast reports the error. */ }
@@ -59,7 +59,7 @@ export function CreditSettings() {
             try {
               const response = await workspaceFetch("/api/usage", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ credits: Number(value) }) });
               if (!response.ok) throw new Error("Could not set tracked credits.");
-              const data = await response.json(); setCredits(String(data.trackedCredits)); setTaskCredits(data.credits);
+              const data = await response.json(); setCredits(String(data.trackedCredits)); setTaskCredits(data.taskCredits ?? 0);
             } finally { setBusy(false); }
           }} />
       </InputActionRow>

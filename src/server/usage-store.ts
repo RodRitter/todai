@@ -81,10 +81,18 @@ export class UsageStore {
         output: { tokens: Number(row.output), credits: Number(row.outputCredits) },
       } };
   }
+  activeTaskCredits(): number {
+    const row = this.db.prepare(`SELECT COALESCE(SUM(credits), 0) AS credits FROM task_usage
+      WHERE workspaceId = ? AND EXISTS (
+        SELECT 1 FROM tasks WHERE tasks.id = task_usage.taskId
+          AND tasks.workspaceId = task_usage.workspaceId AND tasks.archivedAt IS NULL
+      )`).get(this.workspaceId)!;
+    return Number(row.credits);
+  }
   trackedCredits() {
     const usage = this.workspaceCredits();
     const offset = Number(this.db.prepare("SELECT value FROM settings WHERE key = 'creditOffset' AND workspaceId = ?").get(this.workspaceId)?.value ?? 0);
-    return { ...usage, trackedCredits: Math.max(0, usage.credits + offset) };
+    return { ...usage, taskCredits: this.activeTaskCredits(), trackedCredits: Math.max(0, usage.credits + offset) };
   }
   setTrackedCredits(value: unknown) {
     const current = parseCredits(value);
