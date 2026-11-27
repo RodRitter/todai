@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { GripVertical } from "lucide-react";
 import type { Board } from "@/domain/task";
 import { boardApi } from "@/lib/workspace-api";
 import { selectedBoardId, selectedWorkspaceId } from "@/lib/workspace-fetch";
@@ -74,22 +73,22 @@ export function BoardNavigation({ active, initialBoards, reorder = boardApi.reor
               if (source !== -1) void move(source, insertion > source ? insertion - 1 : insertion);
               setDragged(null); setTarget(null);
             }}>
-            {boards.length > 1 && <Button variant="drag-handle" size="icon-xs" reveal="navigation" disabled={saving}
-              draggable={!saving} aria-label={`Reorder ${board.name}`} title="Drag to reorder. Use Up or Down arrow keys to move."
+          <Button className="min-w-0 flex-1" variant={current ? "secondary" : "ghost"} align="navigation" size="sm" asChild>
+            <a href={boardHref(board.id)} aria-current={current ? "page" : undefined} aria-label={board.name}
+              title={boards.length > 1 ? `${board.name}. Drag to reorder. Use Up or Down arrow keys to move.` : board.name}
+              draggable={boards.length > 1 && !saving}
               onDragStart={(event) => {
-                if (pending.current) { event.preventDefault(); return; }
+                if (pending.current || boards.length < 2) { event.preventDefault(); return; }
                 event.dataTransfer.effectAllowed = "move";
                 event.dataTransfer.setData("text/plain", board.id);
                 setDragged(board.id);
               }}
               onDragEnd={() => { setDragged(null); setTarget(null); }}
               onKeyDown={(event) => {
-                if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+                if (boards.length < 2 || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
                 event.preventDefault();
                 void move(index, index + (event.key === "ArrowUp" ? -1 : 1));
-              }}><GripVertical aria-hidden="true" /></Button>}
-          <Button className="min-w-0 flex-1" variant={current ? "secondary" : "ghost"} align="navigation" size="sm" asChild>
-            <a href={boardHref(board.id)} aria-current={current ? "page" : undefined} aria-label={board.name} title={board.name}>
+              }}>
               <span className="md:hidden">{index + 1}</span>
               <span className="hidden truncate md:inline">{board.name}</span>
             </a>

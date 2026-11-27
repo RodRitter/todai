@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
-import { expect, fireEvent, userEvent, waitFor, within } from "storybook/test";
+import { expect, fireEvent, userEvent, within } from "storybook/test";
 import { BoardNavigation } from "./board-navigation";
 
 const meta = {
@@ -18,15 +18,15 @@ export const Reorder: Story = {
   args: { reorder: async (ids) => ids.map((id) => meta.args.initialBoards.find((board) => board.id === id)!) },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const handle = canvas.getByRole("button", { name: "Reorder Product" });
-    handle.focus();
+    const item = canvas.getByRole("link", { name: "Product" });
+    item.focus();
     await userEvent.keyboard("{ArrowDown}");
     await expect(canvas.getAllByRole("link")[1]).toHaveAccessibleName("Product");
-    await expect(handle).toHaveFocus();
+    await expect(item).toHaveFocus();
     await userEvent.keyboard("{ArrowUp}");
     await expect(canvas.getAllByRole("link")[0]).toHaveAccessibleName("Product");
     const dataTransfer = { effectAllowed: "", dropEffect: "", setData: () => {} };
-    await fireEvent.dragStart(handle, { dataTransfer });
+    await fireEvent.dragStart(item, { dataTransfer });
     const target = canvas.getAllByRole("link")[1].closest("[data-dragging]")!;
     const clientY = target.getBoundingClientRect().bottom - 1;
     await fireEvent.dragOver(target, { dataTransfer, clientY });
@@ -39,7 +39,7 @@ export const SaveFailure: Story = {
   args: { reorder: async () => { throw new Error("Save failed"); } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    canvas.getByRole("button", { name: "Reorder Product" }).focus();
+    canvas.getByRole("link", { name: "Product" }).focus();
     await userEvent.keyboard("{ArrowDown}");
     await expect(canvas.getAllByRole("link")[0]).toHaveAccessibleName("Product");
   },
@@ -55,20 +55,20 @@ export const Collapse: Story = {
   },
 };
 
-export const SlidingHandles: Story = {
+export const DirectDragging: Story = {
   play: async ({ canvasElement }) => {
-    if (!window.matchMedia("(hover: hover)").matches) return;
     const canvas = within(canvasElement);
-    const handle = canvas.getByRole("button", { name: "Reorder Product" });
     const link = canvas.getByRole("link", { name: "Product" });
-    await userEvent.hover(canvas.getByRole("button", { name: "Boards" }));
-    await waitFor(() => expect(handle.getBoundingClientRect().width).toBe(0));
+    await expect(link).toHaveAttribute("draggable", "true");
+    await expect(canvas.queryByRole("button", { name: /Reorder/ })).not.toBeInTheDocument();
     const initialLeft = link.getBoundingClientRect().left;
     await userEvent.hover(link);
-    await waitFor(() => expect(handle.getBoundingClientRect().width).toBe(28));
-    await expect(link.getBoundingClientRect().left).toBe(initialLeft + 28);
-    await userEvent.hover(canvas.getByRole("button", { name: "Boards" }));
-    await waitFor(() => expect(handle.getBoundingClientRect().width).toBe(0));
     await expect(link.getBoundingClientRect().left).toBe(initialLeft);
+  },
+};
+export const SingleBoard: Story = {
+  args: { initialBoards: [meta.args.initialBoards[0]] },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByRole("link", { name: "Product" })).toHaveAttribute("draggable", "false");
   },
 };
