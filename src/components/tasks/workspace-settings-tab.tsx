@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { CreditSettings } from "./credit-settings";
+import { Card, CardContent } from "@/components/ui/card";
 import { Archive, Plus } from "lucide-react";
 import { BreadcrumbRow, Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbLink, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
@@ -9,7 +11,7 @@ import { WorkspaceSettings } from "./workspace-settings";
 import { WorkspaceArchive } from "./workspace-archive";
 import { CreateWorkspace } from "./create-workspace";
 
-export function WorkspaceSettingsTab() {
+export function WorkspaceSettingsTab({ transfer }: { transfer?: ReactNode }) {
   const [view, setView] = useState<"current" | "new" | "archive">("current");
   const [busy, setBusy] = useState(false);
 
@@ -33,6 +35,12 @@ export function WorkspaceSettingsTab() {
     </BreadcrumbRow>
     {view === "new" ? <CreateWorkspace onBusyChange={setBusy} />
       : view === "archive" ? <WorkspaceArchive key="restore" allowArchive={false} onBusyChange={setBusy} />
-      : <><WorkspaceSettings /><WorkspaceCleanup onBusyChange={setBusy} /><WorkspaceArchive key="archive" allowRestore={false} onBusyChange={setBusy} /></>}
+      : <>
+        <Card elevation="flat"><CardContent><WorkspaceSettings /></CardContent></Card>
+        <Card elevation="flat"><CardContent><CreditSettings /></CardContent></Card>
+        {transfer && <Card elevation="flat"><CardContent>{transfer}</CardContent></Card>}
+        <Card elevation="flat"><CardContent><WorkspaceCleanup onBusyChange={setBusy} /></CardContent></Card>
+        <Card elevation="flat"><CardContent><WorkspaceArchive key="archive" allowRestore={false} onBusyChange={setBusy} /></CardContent></Card>
+      </>}
   </section>;
 }

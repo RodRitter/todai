@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldHelp } from "@/components/ui/field-help";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useRef, useState } from "react";
 import { Download } from "lucide-react";
@@ -124,8 +125,8 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
     <Dialog open={source !== null && operation === "export"} onOpenChange={(open) => { if (!open && !pending.current) setSource(null); }}>
     <section className="space-y-4" aria-labelledby="transfer-heading">
       <div>
-        <h2 id="transfer-heading" className="text-lg font-semibold">Export / import</h2>
-        <p className="text-sm text-muted-foreground">Transfer agents, columns, memory, and board order using a JSON file. Choose individual entries before exporting or importing.</p>
+        <div className="flex items-center gap-2"><h2 id="transfer-heading" className="text-lg font-semibold">Import and export</h2>
+        <FieldHelp id="transfer-help" label="Import and export">Transfer agents, columns, memory, and board order with a JSON file. Select entries before you apply the transfer.</FieldHelp></div>
       </div>
       <div className="flex flex-wrap items-end gap-4">
         <DialogTrigger asChild><Button variant="outline" disabled={busy} onClick={() => run(async () => prepare(await configurationApi.get(), "export"))}><Download className="size-4" aria-hidden="true" />Export</Button></DialogTrigger>

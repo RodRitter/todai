@@ -4,10 +4,8 @@ import { useId, useRef, useState } from "react";
 import type { Board } from "@/domain/task";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, useDialogExit } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { EditableSetting } from "@/components/ui/editable-setting";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { notifyOperation } from "@/components/ui/toast";
 
 export function BoardSettingsDialog({ board, disabled, onClose, onSave }: {
   board: Board;
@@ -23,37 +21,28 @@ export function BoardSettingsDialog({ board, disabled, onClose, onSave }: {
   const saving = useRef(false);
   const [returnFocus] = useState(() => typeof document === "undefined" ? null : document.activeElement);
   const busy = pending || disabled;
+  async function save(nextName: string, nextDescription: string) {
+    if (saving.current || disabled) throw new Error("Wait for the current save to finish.");
+    saving.current = true; setPending(true);
+    try { await onSave(nextName, nextDescription); setName(nextName); setDescription(nextDescription); }
+    finally { saving.current = false; setPending(false); }
+  }
   return <Dialog open={exit.open} onOpenChange={(open) => { if (!busy && !open) exit.close(); }}>
     <DialogContent closeDisabled={busy} aria-describedby={undefined} onCloseAutoFocus={(event) => {
       exit.onCloseAutoFocus();
       if (returnFocus instanceof HTMLElement && returnFocus.isConnected) { event.preventDefault(); returnFocus.focus(); }
     }}>
       <DialogHeader><DialogTitle>Board settings</DialogTitle></DialogHeader>
-      <form className="space-y-4" onSubmit={async (event) => {
-        event.preventDefault();
-        if (saving.current || disabled) return;
-        saving.current = true;
-        setPending(true);
-        try {
-          await notifyOperation(() => onSave(name.trim(), description.trim()), {
-            loading: "Saving board settings…", success: "Board settings saved.",
-            error: (error) => error instanceof Error ? error.message : "Could not save board settings.",
-          });
-          exit.close();
-        } catch { /* Keep the form available for retry. The toast shows the error. */ }
-        finally { saving.current = false; setPending(false); }
-      }}>
+      <p className="text-sm text-muted-foreground">Click a value to edit it. Leave the field to save. Escape cancels edits.</p>
+      <div className="space-y-4">
         <div className="space-y-2"><Label htmlFor={`${id}-name`}>Board name</Label>
-          <Input id={`${id}-name`} required maxLength={80} disabled={busy} value={name} onChange={(event) => setName(event.target.value)} />
+          <EditableSetting id={`${id}-name`} label="Board name" value={name} maxLength={80} disabled={busy} onSave={value => save(value, description)} />
         </div>
         <div className="space-y-2"><Label htmlFor={`${id}-description`}>Description</Label>
-          <Textarea id={`${id}-description`} required maxLength={500} disabled={busy} value={description} onChange={(event) => setDescription(event.target.value)} />
+          <EditableSetting id={`${id}-description`} label="Description" multiline value={description} maxLength={500} disabled={busy} onSave={value => save(name, value)} />
         </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => exit.close()}>Cancel</Button>
-          <Button size="sm" disabled={busy || !name.trim() || !description.trim()}>{busy ? "Saving…" : "Save settings"}</Button>
-        </DialogFooter>
-      </form>
+        <DialogFooter><Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => exit.close()}>Done</Button></DialogFooter>
+      </div>
     </DialogContent>
   </Dialog>;
 }

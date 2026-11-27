@@ -86,7 +86,7 @@ export const SelectedBoard: Story = {
   args: { initialBoardId: "research" },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByLabelText("Board name")).toHaveValue("Research");
+    await expect(canvas.getByRole("button", { name: "Edit board name: Research" })).toBeVisible();
     await expect(canvas.getByLabelText("Description")).toBeVisible();
   },
 };

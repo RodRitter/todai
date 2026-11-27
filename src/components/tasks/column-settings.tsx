@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SettingsScope } from "./settings-scope";
 import { ColumnEditor } from "./column-editor";
 
 export function ColumnSettings({
@@ -36,18 +37,24 @@ export function ColumnSettings({
     <AppShell screen="settings">
       <Tabs defaultValue="general" value={tab} onValueChange={onTabChange} asChild>
         <main className="mx-auto max-w-2xl space-y-8 p-4 md:p-8">
-          <TabsList aria-label="Settings sections">
-            <TabsTrigger value="general">General</TabsTrigger>
+          <header className="space-y-2">
+            <h1 className="text-lg font-semibold">Settings</h1>
+            <p className="text-sm text-muted-foreground">Click a value to edit it. Leave the field to save, or press Enter in single-line fields. Escape cancels edits. Switches and selections save immediately.</p>
+          </header>
+          <TabsList layout="wrap" aria-label="Settings sections">
+            <TabsTrigger value="general">Global</TabsTrigger>
             {workspaceSettings && <TabsTrigger value="workspaces">Workspace</TabsTrigger>}
             <TabsTrigger value="board">Board</TabsTrigger>
             {executorSettings && <TabsTrigger value="executors">Executors</TabsTrigger>}
           </TabsList>
           <TabsContent value="general" forceMount className="space-y-8">
+            <SettingsScope scope="global" />
             {generalSettings}
           </TabsContent>
-          {workspaceSettings && <TabsContent value="workspaces" forceMount className="space-y-8">{workspaceSettings}</TabsContent>}
-          {executorSettings && <TabsContent value="executors" forceMount>{executorSettings}</TabsContent>}
+          {workspaceSettings && <TabsContent value="workspaces" forceMount className="space-y-8"><SettingsScope scope="workspace" />{workspaceSettings}</TabsContent>}
+          {executorSettings && <TabsContent value="executors" forceMount className="space-y-8"><SettingsScope scope="workspace" />{executorSettings}</TabsContent>}
           <TabsContent value="board" forceMount className="space-y-8">
+            <SettingsScope scope="workspace" />
             {boardSettings ?? <ColumnEditor initialColumns={initialColumns} initialTaskCounts={initialTaskCounts}
               create={create} reorder={reorder} rename={rename} remove={remove} />}
           </TabsContent>

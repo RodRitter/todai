@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { Button } from "@/components/ui/button";
+import { EditableSetting } from "@/components/ui/editable-setting";
 import { Input } from "@/components/ui/input";
 import { notifyOperation } from "@/components/ui/toast";
 import {
@@ -51,7 +52,6 @@ export function ColumnEditor({ initialInstructions = {}, initialCompletionColumn
   const [taskCounts, setTaskCounts] = useState(initialTaskCounts);
   const [name, setName] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [pending, setBusy] = useState(false);
   const busy = pending || disabled;
@@ -215,52 +215,18 @@ export function ColumnEditor({ initialInstructions = {}, initialCompletionColumn
                           aria-hidden="true"
                         />
                         {editing === column && !configure ? (
-                          <form
-                            className="flex min-w-0 flex-1 flex-wrap gap-2"
-                            onSubmit={(event) => {
-                              event.preventDefault();
-                              void save(async () => {
-                                const next = await rename(column, draft);
-                                const renamed =
-                                  next.find((name) => !columns.includes(name)) ??
-                                  column;
-                                setTaskCounts((counts) => {
-                                  const updated = { ...counts };
-                                  delete updated[column];
-                                  updated[renamed] = count;
-                                  return updated;
-                                });
-                                return next;
-                              }, "Column renamed.");
-                            }}
-                          >
-                            <Input
-                              aria-label={`New name for ${column}`}
-                              autoFocus
-                              value={draft}
-                              onChange={(event) => setDraft(event.target.value)}
-                              maxLength={80}
-                              required
-                              disabled={busy}
-                              className="min-w-24 flex-1"
-                            />
-                            <Button
-                              type="submit"
-                              size="sm"
-                              disabled={busy || !draft.trim()}
-                            >
-                              Save
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              disabled={busy}
-                              onClick={() => setEditing(null)}
-                            >
-                              Cancel
-                            </Button>
-                          </form>
+                          <EditableSetting id={`${id}-rename`} label={`New name for ${column}`} value={column} initialEditing maxLength={80} disabled={busy}
+                            onSave={async value => {
+                              if (saving.current) throw new Error("Wait for the current save to finish.");
+                              saving.current = true; setBusy(true);
+                              try {
+                                const next = await rename(column, value);
+                                const renamed = next.find(name => !columns.includes(name)) ?? column;
+                                setTaskCounts(counts => { const updated = { ...counts }; delete updated[column]; updated[renamed] = count; return updated; });
+                                setColumns(next); setEditing(null);
+                              } finally { saving.current = false; setBusy(false); }
+                            }} />
+
                         ) : (
                           <span className="min-w-0 flex-1 break-words font-medium">
                             {column}
@@ -302,7 +268,7 @@ export function ColumnEditor({ initialInstructions = {}, initialCompletionColumn
                               aria-label={`${configure ? "Configure" : "Rename"} ${column}`}
                               onClick={() => {
                                 setEditing(column);
-                                setDraft(column);
+
                                 setError("");
                               }}
                             >
@@ -376,6 +342,7 @@ export function ColumnEditor({ initialInstructions = {}, initialCompletionColumn
           try {
             const next = await configure(editing, name, instructionDraft, completion);
             setColumns(next);
+            setEditing(name);
             setCompletionColumn((current) => completion ? name : current === editing ? null : current);
             setInstructions((current) => ({ ...current, [name]: instructionDraft }));
             setTaskCounts((current) => ({ ...current, [name]: current[editing] ?? 0 }));

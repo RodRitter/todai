@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { expect, userEvent, within } from "storybook/test";
+import { editSetting } from "./settings-story-helpers";
 import { ColumnEditor } from "./column-editor";
 
 const meta = {
@@ -52,13 +53,11 @@ export const ColumnInstructions: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole("button", { name: "Configure To do" }));
     const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog", { name: "Column settings" }));
-    await expect(dialog.getByLabelText("Custom instructions")).toHaveValue("Check the task scope before planning.");
-    await userEvent.clear(dialog.getByLabelText("Custom instructions"));
-    await userEvent.type(dialog.getByLabelText("Custom instructions"), "Record open questions.");
-    await userEvent.click(dialog.getByRole("button", { name: "Save settings" }));
+    await editSetting(dialog, "Custom instructions", "Record open questions.", true);
+    await userEvent.click(dialog.getByRole("button", { name: "Done" }));
     await userEvent.click(canvas.getByRole("button", { name: "Configure To do" }));
     const reopened = within(await within(canvasElement.ownerDocument.body).findByRole("dialog", { name: "Column settings" }));
-    await expect(reopened.getByLabelText("Custom instructions")).toHaveValue("Record open questions.");
+    await expect(reopened.getByRole("button", { name: "Edit custom instructions: Record open questions." })).toBeVisible();
   },
 };
 export const ColumnInstructionsDark: Story = { ...ColumnInstructions, globals: { theme: "dark" } };
@@ -75,7 +74,7 @@ export const CompletionColumn: Story = {
     toggle.focus();
     await userEvent.keyboard(" ");
     await expect(toggle).toBeChecked();
-    await userEvent.click(dialog.getByRole("button", { name: "Save settings" }));
+    await userEvent.click(dialog.getByRole("button", { name: "Done" }));
     await userEvent.click(canvas.getByRole("button", { name: "Configure Done" }));
     dialog = within(await body.findByRole("dialog", { name: "Column settings" }));
     await expect(dialog.getByRole("switch", { name: "Completion column" })).not.toBeChecked();
@@ -88,7 +87,7 @@ export const CompletionSavePending: Story = {
   play: async ({ canvasElement }) => {
     await userEvent.click(within(canvasElement).getByRole("button", { name: "Configure To do" }));
     const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog", { name: "Column settings" }));
-    await userEvent.click(dialog.getByRole("button", { name: "Save settings" }));
+    await userEvent.click(dialog.getByRole("switch", { name: "Completion column" }));
     await expect(dialog.getByRole("switch", { name: "Completion column" })).toBeDisabled();
   },
 };
@@ -98,8 +97,8 @@ export const CompletionSaveError: Story = {
     await userEvent.click(within(canvasElement).getByRole("button", { name: "Configure To do" }));
     const body = within(canvasElement.ownerDocument.body);
     const dialog = within(await body.findByRole("dialog", { name: "Column settings" }));
-    await userEvent.click(dialog.getByRole("button", { name: "Save settings" }));
+    await userEvent.click(dialog.getByRole("switch", { name: "Completion column" }));
     await expect(await body.findByText("Could not save column settings. Try again.")).toBeVisible();
-    await expect(dialog.getByRole("button", { name: "Save settings" })).toBeEnabled();
+    await expect(dialog.getByRole("switch", { name: "Completion column" })).toBeEnabled();
   },
 };

@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import type { CleanupPreview, CleanupRecord } from "@/domain/workspace-cleanup";
 import { workspaceFetch } from "@/lib/workspace-fetch";
 import { Button } from "@/components/ui/button";
+import { FieldHelp } from "@/components/ui/field-help";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -66,12 +67,12 @@ export function WorkspaceCleanup({ onBusyChange }: { onBusyChange?: (busy: boole
       <h2 id="cleanup-heading" className="text-lg font-semibold">Cleanup</h2>
       <p id="cleanup-help" className="text-sm text-muted-foreground">
         Remove old archived tasks, archived artifacts, and retired memories from this workspace.
-        Cleanup keeps records needed by retained content. Freed space is available for reuse; the database file does not shrink.
       </p>
     </div>
     <div className="space-y-2">
-      <Label htmlFor="cleanup-retention">Retention period</Label>
-      <NativeSelect id="cleanup-retention" aria-describedby="cleanup-help" value={days} disabled={busy}
+      <div className="flex items-center gap-2"><Label htmlFor="cleanup-retention">Retention period</Label>
+      <FieldHelp id="cleanup-retention-help" label="Retention period">Preview records older than this period before removal. Cleanup keeps records needed by other content. The database reuses freed space; its file does not shrink.</FieldHelp></div>
+      <NativeSelect id="cleanup-retention" aria-describedby="cleanup-help cleanup-retention-help" value={days} disabled={busy}
         onChange={event => { setDays(Number(event.target.value)); setPreview(null); setFailed(false); }}>
         {[30, 90, 180].map(value => <option key={value} value={value}>{value} days</option>)}
       </NativeSelect>

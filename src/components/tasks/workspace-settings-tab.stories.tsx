@@ -23,6 +23,7 @@ const meta = {
         if (options?.method === "PATCH") worktreesEnabled = JSON.parse(String(options.body)).worktreesEnabled;
         return Response.json({ path: "/projects/todai", worktreesEnabled });
       }
+      if (url === "/api/usage") return Response.json({ creditLimit: 100, credits: 25, trackedCredits: 25 });
       if (url.startsWith("/api/directories?")) return Response.json([]);
       return original(input, options);
     };
@@ -96,3 +97,6 @@ export const WorktreeSetting: Story = {
     await expect(toggle).not.toBeChecked();
   },
 };
+
+export const Narrow: Story = { decorators: [(Story) => <div className="w-80"><Story /></div>] };
+export const Dark: Story = { globals: { theme: "dark" } };

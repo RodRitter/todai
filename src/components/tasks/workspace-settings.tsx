@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { FieldHelp } from "@/components/ui/field-help";
 import { Button } from "@/components/ui/button";
 import { workspaceApi } from "@/lib/workspace-api";
 import { useDirectorySuggestions } from "./use-directory-suggestions";
-import { FolderIcon } from "lucide-react";
-import { Combobox } from "@/components/ui/combobox";
+import { EditableSetting } from "@/components/ui/editable-setting";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { notifyOperation, toast } from "@/components/ui/toast";
@@ -51,12 +51,10 @@ export function WorkspaceSettings() {
     <section className="space-y-4" aria-labelledby="workspace-heading">
       <div>
         <h2 id="workspace-heading" className="text-lg font-semibold">
-          Workspace
+          Directory and task worktrees
         </h2>
         <p className="text-sm text-muted-foreground">
-          Stop any running agent, or pause the queue from the header, before changing
-          this directory. Saving keeps the queue paused. Resume queue will ask you to
-          confirm the new directory for affected queued jobs.
+          Stop running agents or pause the queue before changing the directory. Saving keeps the queue paused. Stop agents and wait for chats before changing task worktrees.
         </p>
       </div>
       {!failed && <div className="space-y-2">
@@ -78,12 +76,9 @@ export function WorkspaceSettings() {
               } finally { saving.current = false; setBusy(false); }
             }} />
           <Label htmlFor="workspace-worktrees">Use task worktrees</Label>
+          <FieldHelp id="workspace-worktrees-hint" label="Use task worktrees">When enabled, tasks use separate Git worktrees. Completion commits changes and removes finished worktrees. Branches remain. When disabled, agents edit this directory without commits. Existing worktrees remain.</FieldHelp>
         </div>
-        <p id="workspace-worktrees-hint" className="text-sm text-muted-foreground">
-          Off by default. When off, agents edit this directory and leave changes uncommitted.
-          When on, tasks use separate Git worktrees. Moving a task to the completion column commits its changes and removes its worktree after agents and task chats finish. The task branch remains available.
-          Existing worktrees remain intact while this setting is off. Stop agents and wait for chats before changing this setting.
-        </p>
+
       </div>}
       {failed ? (
         <Button
@@ -95,71 +90,17 @@ export function WorkspaceSettings() {
           Retry loading workspace
         </Button>
       ) : (
-        <form
-          className="space-y-2"
-          onSubmit={async (event) => {
-            event.preventDefault();
-            if (saving.current || saved === null) return;
-            saving.current = true;
-            setBusy(true);
-            try {
-              const result = await notifyOperation(
-                () => workspaceApi.save(path),
-                {
-                  loading: "Saving workspace…",
-                  success: "Workspace saved.",
-                  error: (error) =>
-                    error instanceof Error
-                      ? error.message
-                      : "Could not save workspace.",
-                },
-              );
-              setSaved(result.path);
-              setPath(result.path);
-            } catch {
-              /* Preserve the path for retry; the toast reports the error. */
-            } finally {
-              saving.current = false;
-              setBusy(false);
-            }
-          }}
-        >
-          <Label htmlFor="workspace-path">Directory</Label>
-          <div className="flex gap-2">
-            <Combobox
-              id="workspace-path"
-              value={path}
-              options={suggestions}
-              filterOptions={false}
-              closeOnSelect={false}
-              icon={FolderIcon}
-              emptyMessage={
-                directoryError ||
-                "No directory suggestions. Enter a path to continue."
-              }
-              onValueChange={(value) => {
-                setPath(value);
-                clearSuggestions();
-              }}
-              spellCheck={false}
-              placeholder="~/Projects/"
-              required
-              disabled={saved === null || busy}
-              aria-describedby="workspace-hint workspace-directory-error"
-            />
-            <Button
-              type="submit"
-              disabled={
-                saved === null || busy || !path.trim() || path === saved
-              }
-            >
-              Save
-            </Button>
-          </div>
-          <p id="workspace-hint" className="text-xs text-muted-foreground">
-            Type a path for directory suggestions. Use ~/ for your home folder
-            and a trailing / to browse inside a folder.
-          </p>
+        <div className="space-y-2">
+          <div className="flex items-center gap-2"><Label htmlFor="workspace-path">Directory</Label>
+            <FieldHelp id="workspace-hint" label="Directory">Use ~/ for your home folder. Add / to see folders inside a directory. Resume queue asks you to confirm the new directory for affected jobs.</FieldHelp></div>
+          <EditableSetting id="workspace-path" label="Directory" value={saved ?? ""} options={suggestions} disabled={saved === null || busy}
+            describedBy="workspace-hint workspace-directory-error" onDraftChange={value => { setPath(value); clearSuggestions(); }}
+            onSave={async value => {
+              if (saving.current) throw new Error("Wait for the current save to finish.");
+              saving.current = true; setBusy(true);
+              try { const result = await workspaceApi.save(value); setSaved(result.path); setPath(result.path); }
+              finally { saving.current = false; setBusy(false); }
+            }} />
           <p
             id="workspace-directory-error"
             className="text-xs text-muted-foreground"
@@ -167,7 +108,7 @@ export function WorkspaceSettings() {
           >
             {directoryError}
           </p>
-        </form>
+        </div>
       )}
     </section>
   );

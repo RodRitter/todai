@@ -95,8 +95,8 @@ export function PersistentWorkspace({
           ]),
         )}
         executorSettings={<ExecutorSettings />}
-        generalSettings={<><GeneralSettings /><ConfigurationTransfer onImported={() => setAttempt((value) => value + 1)} /></>}
-        workspaceSettings={<WorkspaceSettingsTab />}
+        generalSettings={<GeneralSettings />}
+        workspaceSettings={<WorkspaceSettingsTab transfer={<ConfigurationTransfer onImported={() => setAttempt((value) => value + 1)} />} />}
         {...columnApi}
       />
     );

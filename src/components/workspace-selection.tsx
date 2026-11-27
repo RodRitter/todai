@@ -23,6 +23,10 @@ export function WorkspaceSelection({ workspaces, children }: { workspaces: Works
   return <Selection.Provider value={{ workspace, workspaces }}>{children}</Selection.Provider>;
 }
 
+export function useSelectedWorkspace() {
+  return useContext(Selection)?.workspace;
+}
+
 export function WorkspaceLink({ href, ...props }: Omit<ComponentProps<typeof Link>, "href"> & { href: string }) {
   const selection = useContext(Selection);
   const [path, query] = href.split("?");

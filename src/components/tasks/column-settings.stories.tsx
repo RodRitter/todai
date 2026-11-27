@@ -45,7 +45,7 @@ const meta = {
     );
   },
   args: {
-    generalSettings: <p className="text-sm text-muted-foreground">Configuration import and export appear here.</p>,
+    generalSettings: <p className="text-sm text-muted-foreground">Your name applies to all workspaces.</p>,
     workspaceSettings: <p className="text-sm text-muted-foreground">Workspace directory and creation settings appear here.</p>,
     initialColumns: [...statuses],
     create: async (name) => [...statuses, name],
@@ -105,3 +105,7 @@ export const WithTaskCounts: Story = {
 export const LastColumn: Story = {
   args: { initialColumns: ["To do"] },
 };
+
+export const Global: Story = { play: async ({ canvasElement }) => { await userEvent.click(within(canvasElement).getByRole("tab", { name: "Global" })); } };
+export const Workspace: Story = { play: async ({ canvasElement }) => { await userEvent.click(within(canvasElement).getByRole("tab", { name: "Workspace" })); } };
+export const Dark: Story = { globals: { theme: "dark" } };

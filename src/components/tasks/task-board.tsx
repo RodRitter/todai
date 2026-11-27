@@ -289,6 +289,7 @@ export function TaskBoard({
               throw new Error("A column with that name already exists.");
             const next = configureColumn ? await configureColumn(previous, name, instructions, completion) : columns.map((column) => column === previous ? name : column);
             columnFocus.current = name;
+            setEditingColumn({ name, instructions });
             setCompletionColumn((current) => completion ? name : current === previous ? null : current);
             setColumns(next);
             setColumnInstructions((current) => ({ ...current, [name]: instructions }));

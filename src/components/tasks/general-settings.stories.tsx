@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { expect, userEvent, within } from "storybook/test";
+import { CreditSettings } from "./credit-settings";
 import { GeneralSettings } from "./general-settings";
 
 const meta = {
@@ -23,13 +24,11 @@ export const Dark: Story = { globals: { theme: "dark" } };
 export const SaveName: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const field = await canvas.findByLabelText("Your name");
-    await expect(field).toHaveValue("Roderick");
-    await userEvent.clear(field);
-    await userEvent.type(field, "Alex");
-    await userEvent.click(canvas.getByRole("button", { name: "Save name" }));
-    await expect(canvas.getByRole("button", { name: "Save name" })).toBeDisabled();
-    await expect(canvas.queryByText("Name saved.")).not.toBeInTheDocument();
+    await userEvent.click(await canvas.findByRole("button", { name: "Edit your name: Roderick" }));
+    const field = canvas.getByRole("textbox", { name: "Your name" });
+    await userEvent.clear(field); await userEvent.type(field, "Alex{Enter}");
+    await expect(await canvas.findByRole("button", { name: "Edit your name: Alex" })).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: /Save/ })).not.toBeInTheDocument();
   },
 };
 export const SaveError: Story = {
@@ -41,55 +40,37 @@ export const SaveError: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const field = canvas.getByLabelText("Your name");
-    await expect(field).toHaveValue("Roderick");
-    await userEvent.clear(field);
-    await userEvent.type(field, "Alex");
-    await userEvent.click(canvas.getByRole("button", { name: "Save name" }));
-    await expect(field).toHaveValue("Alex");
-    await expect(canvas.getByRole("button", { name: "Save name" })).toBeEnabled();
+    await userEvent.click(await canvas.findByRole("button", { name: "Edit your name: Roderick" }));
+    const field = canvas.getByRole("textbox", { name: "Your name" });
+    await userEvent.clear(field); await userEvent.type(field, "Alex{Enter}");
+    await expect(field).toHaveValue("Alex"); await expect(field).toBeEnabled();
   },
 };
-
-export const SetCredits: Story = { play: async ({ canvasElement }) => {
+export const SetCredits: Story = { render: () => <CreditSettings />, play: async ({ canvasElement }) => {
   const canvas = within(canvasElement);
-  const field = await canvas.findByLabelText("Current tracked credits");
-  await expect(field).toHaveValue(25);
-  await userEvent.clear(field);
-  await userEvent.type(field, "50");
-  await userEvent.click(canvas.getByRole("button", { name: "Set tracked credits" }));
-  await expect(field).toHaveValue(50);
+  await userEvent.click(await canvas.findByRole("button", { name: "Edit current tracked credits: 25" }));
+  const field = canvas.getByRole("spinbutton", { name: "Current tracked credits" });
+  await userEvent.clear(field); await userEvent.type(field, "50{Enter}");
+  await expect(await canvas.findByRole("button", { name: "Edit current tracked credits: 50" })).toBeVisible();
   await userEvent.click(canvas.getByRole("button", { name: "Reset tracking" }));
   await userEvent.click(await within(document.body).findByRole("button", { name: "Reset to zero" }));
-  await expect(field).toHaveValue(0);
+  await expect(await canvas.findByRole("button", { name: "Edit current tracked credits: 0" })).toBeVisible();
 } };
-
-export const Narrow: Story = {
-  decorators: [(Story) => <div className="w-80"><Story /></div>],
-};
+export const Narrow: Story = { decorators: [(Story) => <div className="w-80"><Story /></div>] };
 export const NarrowDark: Story = { ...Narrow, globals: { theme: "dark" } };
-
-export const SyncTaskCredits: Story = { play: async ({ canvasElement }) => {
+export const SyncTaskCredits: Story = { render: () => <CreditSettings />, play: async ({ canvasElement }) => {
   const canvas = within(canvasElement);
-  const field = await canvas.findByLabelText("Current tracked credits");
-  await expect(field).toHaveValue(25);
+  await expect(await canvas.findByRole("button", { name: "Edit current tracked credits: 25" })).toBeEnabled();
   await userEvent.click(canvas.getByRole("button", { name: "Reset tracking" }));
   await userEvent.click(await within(document.body).findByRole("button", { name: "Reset to zero" }));
-  await expect(field).toHaveValue(0);
+  await expect(await canvas.findByRole("button", { name: "Edit current tracked credits: 0" })).toBeVisible();
   await userEvent.click(canvas.getByRole("button", { name: "Use task total: 25 credits" }));
-  await expect(field).toHaveValue(25);
-  await expect(canvas.queryByRole("status")).not.toBeInTheDocument();
+  await expect(await canvas.findByRole("button", { name: "Edit current tracked credits: 25" })).toBeVisible();
 } };
-
-export const UnchangedValues: Story = { play: async ({ canvasElement }) => {
+export const UnchangedValues: Story = { render: () => <CreditSettings />, play: async ({ canvasElement }) => {
   const canvas = within(canvasElement);
-  const limit = await canvas.findByLabelText("Maximum credits");
-  await expect(limit).toHaveValue(100);
-  await expect(canvas.getByRole("button", { name: "Save credit limit" })).toBeDisabled();
-  await expect(canvas.getByRole("button", { name: "Set tracked credits" })).toBeDisabled();
-  await userEvent.clear(limit);
-  await userEvent.type(limit, "200");
-  await expect(canvas.getByRole("button", { name: "Save credit limit" })).toBeEnabled();
-  await userEvent.click(canvas.getByRole("button", { name: "Save credit limit" }));
-  await expect(canvas.getByRole("button", { name: "Save credit limit" })).toBeDisabled();
+  await userEvent.click(await canvas.findByRole("button", { name: "Edit maximum credits: 100" }));
+  await userEvent.keyboard("{Enter}");
+  await expect(await canvas.findByRole("button", { name: "Edit maximum credits: 100" })).toBeVisible();
+  await expect(canvas.queryByRole("button", { name: /Save/ })).not.toBeInTheDocument();
 } };

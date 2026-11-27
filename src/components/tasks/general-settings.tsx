@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
-import { notifyOperation, toast } from "@/components/ui/toast";
+import { useEffect, useId, useState } from "react";
+import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { generalSettingsApi } from "@/lib/workspace-api";
-import { CreditSettings } from "./credit-settings";
-import { UserNameField } from "./user-name-field";
+import { EditableSetting } from "@/components/ui/editable-setting";
+import { Label } from "@/components/ui/label";
+import { FieldHelp } from "@/components/ui/field-help";
 
 export function GeneralSettings() {
   const id = useId();
@@ -13,8 +14,6 @@ export function GeneralSettings() {
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const saving = useRef(false);
   useEffect(() => {
     let active = true;
     generalSettingsApi.get().then((data) => {
@@ -23,20 +22,14 @@ export function GeneralSettings() {
     return () => { active = false; };
   }, [attempt]);
   return <section className="space-y-4" aria-label="Personal settings">
-    <form className="space-y-4" onSubmit={async (event) => {
-      event.preventDefault();
-      if (saving.current || saved === null) return;
-      saving.current = true;
-      setBusy(true); setError("");
-      try {
-        const data = await notifyOperation(() => generalSettingsApi.save(name), { loading: "Saving name…", success: "Name saved.", error: (error) => error instanceof Error ? error.message : "Could not save your name." });
-        setName(data.userName); setSaved(data.userName);
-      } catch { /* The toast reports the save error. Keep the name for retry. */ }
-      finally { saving.current = false; setBusy(false); }
-    }}>
-      <UserNameField id={`${id}-name`} value={name} onChange={(value) => { setName(value); }} disabled={busy || saved === null} actions={<Button type="submit" aria-label="Save name" disabled={busy || saved === null || !name.trim() || name.trim() === saved}>{busy ? "Saving…" : "Save"}</Button>} />
-    </form>
+    <h2 className="text-lg font-semibold">Your identity</h2>
+    <div className="space-y-2">
+      <div className="flex items-center gap-2"><Label htmlFor={`${id}-name`}>Your name</Label>
+        <FieldHelp id={`${id}-hint`} label="Your name">Agents use this name for you. New comments and messages use this author name in all workspaces.</FieldHelp></div>
+      <EditableSetting id={`${id}-name`} label="Your name" value={name} disabled={saved === null} maxLength={100} describedBy={`${id}-hint`}
+        onSave={async value => { const data = await generalSettingsApi.save(value); setName(data.userName); setSaved(data.userName); }} />
+    </div>
     {error && saved === null && <Button onClick={() => { setError(""); setAttempt((value) => value + 1); }}>Retry loading name</Button>}
-    <CreditSettings />
+
   </section>;
 }
