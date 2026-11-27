@@ -71,3 +71,21 @@ export const Confirmation: Story = { play: async ({ canvasElement }) => {
   await userEvent.click(page.getByRole("button", { name: "Remove permanently" }));
   await expect(canvas.queryByText(/1 tasks, 0 artifacts/)).not.toBeInTheDocument();
 } };
+
+export const Immediate: Story = {
+  beforeEach: () => {
+    globalThis.fetch = async (input, options) => {
+      if (options?.method === "POST") {
+        await expect(JSON.parse(String(options.body)).retentionDays).toBe(0);
+        return Response.json({ counts: preview.counts });
+      }
+      await expect(String(input)).toContain("retentionDays=0");
+      return Response.json({ ...preview, retentionDays: 0 });
+    };
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.selectOptions(canvas.getByLabelText("Retention period"), "0");
+    await Confirmation.play!({ canvasElement } as Parameters<NonNullable<typeof Confirmation.play>>[0]);
+  },
+};

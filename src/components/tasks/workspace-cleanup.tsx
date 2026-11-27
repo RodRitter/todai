@@ -66,14 +66,15 @@ export function WorkspaceCleanup({ onBusyChange }: { onBusyChange?: (busy: boole
     <div>
       <h2 id="cleanup-heading" className="text-lg font-semibold">Cleanup</h2>
       <p id="cleanup-help" className="text-sm text-muted-foreground">
-        Remove old archived tasks, archived artifacts, and retired memories from this workspace.
+        Remove archived tasks, archived artifacts, and retired memories from this workspace. Tasks on the board and their linked records stay available.
       </p>
     </div>
     <div className="space-y-2">
       <div className="flex items-center gap-2"><Label htmlFor="cleanup-retention">Retention period</Label>
-      <FieldHelp id="cleanup-retention-help" label="Retention period">Preview records older than this period before removal. Cleanup keeps records needed by other content. The database reuses freed space; its file does not shrink.</FieldHelp></div>
+      <FieldHelp id="cleanup-retention-help" label="Retention period">Choose immediate cleanup to include all current archived records, regardless of age. Other options include only records older than the selected period. Preview records before removal. Cleanup keeps records needed by other content. The database reuses freed space; its file does not shrink.</FieldHelp></div>
       <NativeSelect id="cleanup-retention" aria-describedby="cleanup-help cleanup-retention-help" value={days} disabled={busy}
         onChange={event => { setDays(Number(event.target.value)); setPreview(null); setFailed(false); }}>
+        <option value={0}>Immediately (all current archives)</option>
         {[30, 90, 180].map(value => <option key={value} value={value}>{value} days</option>)}
       </NativeSelect>
     </div>

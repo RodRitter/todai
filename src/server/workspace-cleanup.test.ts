@@ -102,7 +102,7 @@ test("changed previews, expiration, and active chats prevent execution", () => {
     f.memory("new", "#task/old");
     assert.throws(() => f.store.executeCleanup(preview), /changed/);
     assert.throws(() => f.store.executeCleanup({ ...preview, asOf: f.old }), /expired/);
-    assert.throws(() => f.store.previewCleanup(0), /Choose/);
+    assert.throws(() => f.store.previewCleanup(-1), /Choose/);
     f.db.prepare("INSERT INTO chat_sessions(id,workspaceId,taskId,createdAt,updatedAt,lease) VALUES ('chat',?,'old',?,?,?)").run(f.store.workspaceId, f.old, f.old, "2999-01-01");
     const blocked = f.store.previewCleanup(90);
     assert.ok(blocked.blocked);
@@ -165,5 +165,29 @@ test("retained memory replacements protect retired entries and versions", () => 
     f.task("evidence"); f.memory("retired", "#task/evidence", true); f.memory("replacement", "");
     f.db.exec("UPDATE memory_entries SET supersedes = 'retired' WHERE id = 'replacement'");
     assert.deepEqual(ids(f.store.previewCleanup(90)), []);
+  } finally { f.close(); }
+});
+
+test("immediate cleanup removes recent archives but preserves board tasks and linked records", () => {
+  const f = fixture();
+  try {
+    f.task("recent");
+    f.task("board", "[linked](#task/linked)", false);
+    f.artifact("evidence");
+    f.task("linked", "[evidence](#artifact/evidence)");
+    f.artifact("unknown");
+    f.memory("retired", "", true);
+    const now = new Date().toISOString();
+    f.db.prepare("UPDATE tasks SET archivedAt = ? WHERE archivedAt IS NOT NULL").run(now);
+    f.db.exec("UPDATE artifacts SET archivedAt = NULL");
+    f.db.prepare("UPDATE memory_entries SET retiredAt = ?").run(now);
+    assert.deepEqual(ids(f.store.previewCleanup(90)), []);
+    const preview = f.store.previewCleanup(0);
+    assert.deepEqual(ids(preview), ["recent", "retired", "unknown"]);
+    f.store.executeCleanup(preview);
+    assert.ok(f.db.prepare("SELECT id FROM tasks WHERE id = 'board'").get());
+    assert.ok(f.db.prepare("SELECT id FROM tasks WHERE id = 'linked'").get());
+    assert.ok(f.db.prepare("SELECT id FROM artifacts WHERE id = 'evidence'").get());
+    assert.deepEqual(f.db.prepare("PRAGMA foreign_key_check").all(), []);
   } finally { f.close(); }
 });

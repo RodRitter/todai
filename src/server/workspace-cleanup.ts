@@ -18,7 +18,7 @@ const tables = ["tasks", "artifacts", "memory_entries", "comments", "runs", "run
   "workspace_chat_messages", "workspace_chat_activity", "agents", "settings", "board_columns", "column_assignments", "boards", "workspaces"] as const;
 
 export function previewCleanup(db: DatabaseSync, workspaceId: string, retentionDays: number, asOf = new Date().toISOString()): CleanupPreview {
-  if (![30, 90, 180].includes(retentionDays)) throw new CleanupValidationError("Choose 30, 90, or 180 days.");
+  if (![0, 30, 90, 180].includes(retentionDays)) throw new CleanupValidationError("Choose immediate cleanup, or 30, 90, or 180 days.");
   const time = Date.parse(asOf);
   if (!Number.isFinite(time) || time > Date.now() + 1000 || Date.now() - time > 15 * 60_000)
     throw new CleanupValidationError("The preview expired. Preview cleanup again.");
@@ -34,7 +34,7 @@ export function previewCleanup(db: DatabaseSync, workspaceId: string, retentionD
   const nodes = new Map<string, Node>();
   for (const [table, kind, flag, date] of [["tasks", "task", "archivedAt", "archivedAt"], ["artifacts", "artifact", "archived", "archivedAt"], ["memory_entries", "memory", "removed", "retiredAt"]] as const) {
     for (const row of rows[table]) {
-      const old = Number.isFinite(Date.parse(String(row[date]))) && Date.parse(String(row[date])) < cutoff;
+      const old = retentionDays === 0 || Number.isFinite(Date.parse(String(row[date]))) && Date.parse(String(row[date])) < cutoff;
       const worktree = kind === "task" && Boolean(row.worktree);
       const eligible = row.workspaceId === workspaceId && Boolean(row[flag]) && old && !worktree;
       nodes.set(key(kind, row.id), { eligible, archived: Boolean(row[flag]), workspaceId: row.workspaceId, links: new Set(), record: { kind, id: String(row.id), title: String(row.title),
