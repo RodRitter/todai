@@ -283,3 +283,53 @@ test("chat MCP advertises and executes inspection tools with recorded read-only 
     assert.equal(response.activities[0].status, "complete");
   } finally { f.close(); }
 });
+
+test("first-message titles use the lightweight model once and track separate usage", async () => {
+  const f = fixture();
+  try {
+    for (const tool of ["codex", "claude"] as const) {
+      const session = f.chats.create();
+      let titles = 0;
+      const titleRunner: import("./workspace-chat-runner.ts").WorkspaceChatRunner = async request => {
+        titles++;
+        assert.equal(request.kind, "workspace-chat-title");
+        assert.equal(request.session.model, tool === "codex" ? "gpt-6-luna" : "haiku");
+        assert.equal(request.session.effort, "low");
+        const args = workspaceChatArgs(request, "/tmp/title", "/tmp/title/output");
+        assert.ok(!args.some(arg => arg.includes(request.connection.token)));
+        assert.ok(!args.includes("mcp__todai_workspace"));
+        request.onUsage({ input_tokens: 20, cached_input_tokens: 0, output_tokens: 5 });
+        return "Review board setup";
+      };
+      const selection = { tool, model: tool === "codex" ? model.model : "sonnet", effort: "high" };
+      const response = await sendWorkspaceChat(f.tasks, f.chats, session.id, "Can you help me set up a board for reviews?", selection, async () => "Ready.", titleRunner);
+      assert.equal(response.title, "Review board setup");
+      assert.equal(response.model, selection.model);
+      assert.equal(response.effort, "high");
+      await sendWorkspaceChat(f.tasks, f.chats, session.id, "Next step", selection, async () => "Continue.", titleRunner);
+      assert.equal(titles, 1);
+    }
+    assert.equal(f.tasks.usage().workspaceCredits().calls, 6);
+  } finally { f.close(); }
+});
+
+test("title failures preserve responses and manual titles take priority", async () => {
+  const f = fixture();
+  try {
+    const session = f.chats.create();
+    const response = await sendWorkspaceChat(f.tasks, f.chats, session.id, "Explain columns", model,
+      async () => "Columns organize tasks.", async () => { throw new Error("Title unavailable"); });
+    assert.equal(response.title, "Explain columns");
+    assert.equal(response.error, null);
+    assert.equal(response.messages.length, 2);
+    const manual = f.chats.create();
+    f.chats.rename(manual.id, "My notes");
+    await sendWorkspaceChat(f.tasks, f.chats, manual.id, "Explain columns", model,
+      async () => "Ready.", async () => { assert.fail("Do not generate a manual title"); });
+    assert.equal(f.chats.get(manual.id).title, "My notes");
+    const renamed = f.chats.create();
+    await sendWorkspaceChat(f.tasks, f.chats, renamed.id, "Explain columns", model,
+      async () => "Ready.", async () => { f.chats.rename(renamed.id, "Custom title"); return "Column guide"; });
+    assert.equal(f.chats.get(renamed.id).title, "Custom title");
+  } finally { f.close(); }
+});

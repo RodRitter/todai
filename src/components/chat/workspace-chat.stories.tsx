@@ -46,3 +46,35 @@ export const ReplyTooltip: Story = { ...ToolResults, play: async ({ canvasElemen
   await userEvent.hover(copy);
   await expect(await within(canvasElement.ownerDocument.body).findByRole("tooltip")).toHaveTextContent("Copy reply");
 } };
+
+export const ActivityLimit: Story = {
+  args: { session: { ...Running.args!.session!, activities: Array.from({ length: 8 }, (_, index) => ({
+    id: `step-${index}`, turnId: "human", name: `operation_${index + 1}`, input: { index },
+    status: index === 7 ? "running" : "complete", mutation: false,
+  })) } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("3+ more")).toBeVisible();
+    await expect(canvas.queryByText("operation 1 — complete")).toBeNull();
+    await expect(canvas.getByText("operation 8 — running")).toBeVisible();
+  },
+};
+
+export const FormattedMessages: Story = {
+  args: { session: { ...ToolResults.args!.session!, messages: [
+    { ...ToolResults.args!.session!.messages[0], body: "Review **these settings**.\n\n- Keep the board.\n- Check `status`." },
+    { ...ToolResults.args!.session!.messages[1], body: "## Result\n\nThe board is ready.\n\n1. Open the board.\n2. Check the columns.\n\n```json\n{\"status\": \"ready\"}\n```" },
+  ] } },
+};
+
+export const FailedOperationTrace: Story = {
+  ...Failure,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByText("An operation failed")).toBeNull();
+    await userEvent.click(canvas.getByRole("button", { name: "Completed · 1 step" }));
+    await expect(canvas.getByText("create board — error")).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "create board — error" }));
+    await expect(canvas.getByText(/Move all tasks before deleting this board/)).toBeVisible();
+  },
+};

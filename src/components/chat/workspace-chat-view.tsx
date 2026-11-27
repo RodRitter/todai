@@ -11,15 +11,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Message, MessageContent, MessageFooter, MessageAgentStatus } from "@/components/ui/message";
+import { MessageFooter, MessageAgentStatus } from "@/components/ui/message";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@/components/ui/input-group";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { MessageScrollerProvider, MessageScroller, MessageScrollerViewport, MessageScrollerContent, MessageScrollerItem, MessageScrollerButton } from "@/components/ui/message-scroller";
-import { Trace, TraceCollapsible, TraceCollapsibleTrigger, TraceLine, TraceTitle, TraceIcon, TraceCollapsibleContent } from "@/components/ui/trace";
+import { Trace, TraceCollapsible, TraceCollapsibleTrigger, TraceLine, TraceTitle, TraceIcon, TraceCollapsibleContent, TraceOutput, runningTraceStepLimit } from "@/components/ui/trace";
 import { Markdown } from "@/components/ui/markdown";
-import { Bubble, BubbleContent } from "@/components/ui/bubble";
+import { ConversationMessage } from "@/components/conversation/conversation-message";
 import { PromptSend } from "@/components/ui/prompt-send";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "@/components/ui/toast";
@@ -51,18 +51,22 @@ export function WorkspaceChatView(props: WorkspaceChatViewProps) {
 function ToolActivity({ activity }: { activity: WorkspaceChatActivity }) {
   return <TraceCollapsible>
     <TraceCollapsibleTrigger><TraceLine status={activity.status}><TraceIcon>{activity.status === "error" ? <X /> : activity.status === "complete" ? <Check /> : <Wrench />}</TraceIcon><TraceTitle>{activity.name.replaceAll("_", " ")} — {activity.status}</TraceTitle></TraceLine></TraceCollapsibleTrigger>
-    <TraceCollapsibleContent keepMounted><Markdown>{"```json\n" + JSON.stringify({ input: activity.input, result: activity.result }, null, 2) + "\n```"}</Markdown></TraceCollapsibleContent>
+    <TraceCollapsibleContent keepMounted><TraceOutput>{JSON.stringify({ input: activity.input, result: activity.result }, null, 2)}</TraceOutput></TraceCollapsibleContent>
   </TraceCollapsible>;
 }
 function WorkspaceToolTrace({ activities, running }: { activities: WorkspaceChatActivity[]; running: boolean }) {
-  const failed = activities.some(activity => activity.status === "error");
-  const status = failed ? "error" : running ? "running" : "complete";
-  return <Trace><TraceCollapsible defaultOpen={running}>
+  const [open, setOpen] = useState<boolean>();
+  const hiddenCount = running ? Math.max(0, activities.length - runningTraceStepLimit) : 0;
+  const status = running ? "running" : "complete";
+  return <Trace><TraceCollapsible open={open ?? running} onOpenChange={setOpen} scrollBehavior={running ? "follow-expansion" : "preserve"}>
     <TraceCollapsibleTrigger><TraceLine status={status}>
-      <TraceIcon motion={status === "running" ? "spin" : "none"}>{failed ? <X /> : running ? <LoaderCircle /> : <Check />}</TraceIcon>
-      <TraceTitle>{failed ? "An operation failed" : running ? "Working" : "Completed"} · {activities.length} {activities.length === 1 ? "step" : "steps"}</TraceTitle>
+      <TraceIcon motion={status === "running" ? "spin" : "none"}>{running ? <LoaderCircle /> : <Check />}</TraceIcon>
+      <TraceTitle>{running ? "Working" : "Completed"} · {activities.length} {activities.length === 1 ? "step" : "steps"}</TraceTitle>
     </TraceLine></TraceCollapsibleTrigger>
-    <TraceCollapsibleContent keepMounted><Trace>{activities.map(activity => <ToolActivity key={activity.id} activity={activity} />)}</Trace></TraceCollapsibleContent>
+    <TraceCollapsibleContent keepMounted><Trace role="list" aria-label="Agent activity">
+      {hiddenCount > 0 && <TraceLine role="listitem" status="pending"><TraceTitle>{hiddenCount}+ more</TraceTitle></TraceLine>}
+      {activities.slice(hiddenCount).map(activity => <div role="listitem" key={activity.id}><ToolActivity activity={activity} /></div>)}
+    </Trace></TraceCollapsibleContent>
   </TraceCollapsible></Trace>;
 }
 function ReplyFooter({ body, model, effort }: { body: string; model?: string; effort?: string }) {
@@ -94,7 +98,7 @@ function WorkspaceConversation({ session, statuses, busy, onSend, onRename, onDe
     try { await onSend(draft, selection); } catch { setBody(draft); } finally { setSubmitting(false); }
   }
   return <>
-    <div className="flex items-center gap-2"><h2 className="min-w-0 flex-1 truncate">{session.title}</h2>
+    <div className="flex items-center gap-2"><h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{session.title}</h2>
       <Button variant="ghost" size="icon-sm" aria-label="Rename chat" disabled={locked} onClick={() => { setTitle(session.title); setRename(true); }}><Pencil /></Button>
       <Button variant="ghost-destructive" size="icon-sm" aria-label="Delete chat" disabled={locked} onClick={() => setRemove(true)}><Trash2 /></Button>
     </div>
@@ -107,11 +111,12 @@ function WorkspaceConversation({ session, statuses, busy, onSend, onRename, onDe
           const activities = session.activities.filter(activity => activity.turnId === message.id);
           const running = session.running && index === session.messages.length - 1;
           return <Fragment key={message.id}>
-            <MessageScrollerItem messageId={message.id} scrollAnchor><Message align="end"><MessageContent><Bubble align="end" variant="muted"><BubbleContent><Markdown>{message.body}</Markdown></BubbleContent></Bubble></MessageContent></Message></MessageScrollerItem>
-            {(reply || activities.length > 0) && <MessageScrollerItem messageId={reply?.id ?? `${message.id}:response`}><Message><MessageContent>
-              {activities.length > 0 && <WorkspaceToolTrace activities={activities} running={running} />}
-              {reply && <><Markdown>{reply.body}</Markdown><ReplyFooter body={reply.body} model={reply.model} effort={reply.effort} /></>}
-            </MessageContent></Message></MessageScrollerItem>}
+            <MessageScrollerItem messageId={message.id} scrollAnchor><ConversationMessage message={message} variant="chat" /></MessageScrollerItem>
+            {(reply || activities.length > 0) && <MessageScrollerItem messageId={`${message.id}:response`}>
+              <ConversationMessage message={reply ?? { id: `${message.id}:pending`, authorRole: "agent", authorName: "Assistant", body: "", createdAt: message.createdAt }} variant="chat"
+                activity={activities.length > 0 && <WorkspaceToolTrace activities={activities} running={running} />}
+                footer={reply && <ReplyFooter body={reply.body} model={reply.model} effort={reply.effort} />} />
+            </MessageScrollerItem>}
           </Fragment>;
         })}
         {(session.running || submitting) && <MessageAgentStatus status="Running" />}

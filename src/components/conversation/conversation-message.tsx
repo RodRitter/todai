@@ -10,7 +10,7 @@ import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Message, MessageAvatar, MessageContent, MessageHeader, MessageAuthor, MessageBubbleRow, MessageDisclosure } from "@/components/ui/message";
 import { Confirmation, ConfirmationStatus } from "@/components/ui/confirmation";
 
-export function ConversationMessageBody({ message, feedback, embedded = false }: { message: TaskComment; feedback?: ReactNode; embedded?: boolean }) {
+export function ConversationMessageBody({ message, feedback, embedded = false }: { message: Omit<TaskComment, "taskId"> & { taskId?: string }; feedback?: ReactNode; embedded?: boolean }) {
   return message.feedbackStatus ? <Confirmation layout={embedded ? "embedded" : "default"} state={message.feedbackStatus} statusPlacement={embedded ? "header" : "body"} question={<Markdown>{message.body}</Markdown>}
     recommendation={<div className="space-y-3">{message.recommendation && <Markdown>{message.recommendation}</Markdown>}{message.memoryChanges && <MemoryChangePreview changes={message.memoryChanges} />}</div>}>
     {feedback}
@@ -18,13 +18,15 @@ export function ConversationMessageBody({ message, feedback, embedded = false }:
 }
 
 // Presentation changes belong here. Thread structure and chat optimism remain with their callers.
-export function ConversationMessage({ message, variant, actions, feedback, attention = false, connected = false }: {
-  message: TaskComment;
+export function ConversationMessage({ message, variant, actions, feedback, attention = false, connected = false, activity, footer }: {
+  message: Omit<TaskComment, "taskId"> & { taskId?: string };
   variant: "chat" | "comment";
   actions?: ReactNode;
   feedback?: ReactNode;
   attention?: boolean;
   connected?: boolean;
+  activity?: ReactNode;
+  footer?: ReactNode;
 }) {
   const [open, setOpen] = useState(true);
   const personal = variant === "chat" && isHumanComment(message);
@@ -39,7 +41,9 @@ export function ConversationMessage({ message, variant, actions, feedback, atten
     <MessageContent connected={connected}>
       {personal ? <MessageBubbleRow>{actions}<Bubble align="end" variant="muted"><BubbleContent>{body}</BubbleContent></Bubble></MessageBubbleRow> : <>
         <MessageHeader><MessageAuthor createdAt={message.createdAt}>{message.authorName || "Agent"}</MessageAuthor>{actions}</MessageHeader>
+        {activity}
         {body}
+        {footer}
       </>}
     </MessageContent>
   </Message>;

@@ -5,10 +5,10 @@ import { CircleCheck, CircleX, Clock, List, LoaderCircle } from "lucide-react";
 import type { RunActivity as Activity } from "@/domain/execution";
 import { runDuration } from "@/domain/run-duration";
 import { activityLabel } from "@/domain/activity-summary";
-import { Trace, TraceCollapsible, TraceCollapsibleContent, TraceCollapsibleTrigger, TraceIcon, TraceLine, TraceTitle, TraceCode, TraceDuration } from "@/components/ui/trace";
+import { Trace, TraceCollapsible, TraceCollapsibleContent, TraceCollapsibleTrigger, TraceIcon, TraceLine, TraceTitle, TraceCode, TraceDuration, runningTraceStepLimit } from "@/components/ui/trace";
 
 export function RunActivity({ activity, running, agentName, queued = false, startedAt, finishedAt, active = true }: { activity: Activity[]; running: boolean; agentName?: string; queued?: boolean; startedAt?: string | null; finishedAt?: string | null; active?: boolean }) {
-  const hiddenCount = running ? Math.max(0, activity.length - 5) : 0;
+  const hiddenCount = running ? Math.max(0, activity.length - runningTraceStepLimit) : 0;
   const visibleActivity = activity.slice(hiddenCount);
   const [open, setOpen] = useState<boolean>();
   const status = running ? "running" : queued ? "pending" : "complete";

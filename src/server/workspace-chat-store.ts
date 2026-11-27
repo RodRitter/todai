@@ -92,8 +92,13 @@ export class WorkspaceChatStore {
         .run(selection.tool, selection.model, selection.effort, session.messages.length || session.title !== "New chat" ? session.title : body.trim().replace(/\s+/g, " ").slice(0, 80), lease, process.pid, processIdentity(process.pid) ?? null, now, id);
       this.db.prepare("INSERT INTO workspace_chat_messages (id, sessionId, authorRole, authorName, body, createdAt) VALUES (?, ?, 'human', ?, ?, ?)").run(turnId, id, this.tasks.getUserName() || "Human", body.trim(), now);
       this.db.exec("COMMIT");
-      return { session: this.get(id), lease, turnId };
+      return { session: this.get(id), lease, turnId, generateTitle: !session.messages.length && session.title === "New chat" };
     } catch (error) { this.db.exec("ROLLBACK"); throw error; }
+  }
+  setGeneratedTitle(id: string, lease: string, previousTitle: string, title: string) {
+    this.assertLease(id, lease);
+    this.db.prepare("UPDATE workspace_chats SET title = ? WHERE id = ? AND title = ?")
+      .run(title, id, previousTitle);
   }
   assertLease(id: string, lease: string) {
     const row = this.row(id);

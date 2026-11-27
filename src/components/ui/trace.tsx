@@ -12,6 +12,8 @@ import { ChevronRight } from "lucide-react"
 import { ScrollArea } from "./scroll-area"
 import { formatRunDuration } from "@/domain/run-duration"
 
+export const runningTraceStepLimit = 5;
+
 function Trace({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div

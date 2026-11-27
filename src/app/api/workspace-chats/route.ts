@@ -22,7 +22,7 @@ async function handle(request: Request) {
     if (request.method === "PATCH") return Response.json(input.action === "model" ? chats.setModel(input.id, input) : chats.rename(input.id, input.title));
     if (request.method === "DELETE") { chats.delete(input.id); return new Response(null, { status: 204 }); }
     if (input.action !== "send") throw new Error("Choose a chat operation.");
-    return Response.json(await sendWorkspaceChat(tasks, chats, input.id, input.body, input, createWorkspaceChatRunner()));
+    return Response.json(await sendWorkspaceChat(tasks, chats, input.id, input.body, input, createWorkspaceChatRunner(), createWorkspaceChatRunner()));
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "The chat request failed." }, { status: 400 });
   } finally { chats?.close(); tasks?.close(); }
