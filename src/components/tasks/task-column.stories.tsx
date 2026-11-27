@@ -74,4 +74,12 @@ export const EditableHeading: Story = {
   },
 };
 export const EditableHeadingDark: Story = { ...EditableHeading, globals: { theme: "dark" } };
+export const WithInstructions: Story = {
+  args: { ...EditableHeading.args, hasInstructions: true },
+};
+export const WithInstructionsDark: Story = { ...WithInstructions, globals: { theme: "dark" } };
+export const LongHeadingWithInstructions: Story = {
+  args: { ...WithInstructions.args, status: "Research and validation before implementation" },
+  decorators: [(Story) => <div className="max-w-64"><Story /></div>],
+};
 export const EditableLongHeading: Story = { args: { ...EditableHeading.args, status: "Research and validation before implementation" }, decorators: [(Story) => <div className="max-w-64"><Story /></div>] };

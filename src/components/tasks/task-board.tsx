@@ -215,6 +215,7 @@ export function TaskBoard({
               <TaskColumn
                 key={column}
                 status={column}
+                hasInstructions={Boolean(columnInstructions[column]?.trim())}
                 configureDisabled={busy}
                 onConfigure={configureColumn || !persistence ? () => { columnFocus.current = column; setEditingColumn({ name: column, instructions: columnInstructions[column] ?? "" }); } : undefined}
                 agentSelector={completionColumn === column ? <TooltipProvider><Tooltip>
