@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type SetStateAction } from "react";
 import { Plus } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { notifyOperation, toast } from "@/components/ui/toast";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import type { BoardSnapshot } from "@/lib/workspace-api";
@@ -202,7 +203,10 @@ export function TaskBoard({
                 status={column}
                 configureDisabled={busy}
                 onConfigure={configureColumn || !persistence ? () => { columnFocus.current = column; setEditingColumn({ name: column, instructions: columnInstructions[column] ?? "" }); } : undefined}
-                agentSelector={completionColumn === column ? <Label variant="metadata">Memory</Label> :
+                agentSelector={completionColumn === column ? <TooltipProvider><Tooltip>
+                  <TooltipTrigger asChild><Label asChild variant="column-tag"><span tabIndex={0}>Completion</span></Label></TooltipTrigger>
+                  <TooltipContent>Tasks in this column receive an automatic memory review. When task worktrees are enabled, Todai commits remaining changes and removes the worktree after agents and task chats finish. The task branch remains available.</TooltipContent>
+                </Tooltip></TooltipProvider> :
                   <ColumnAgentPicker
                     column={column}
                     agents={agents}

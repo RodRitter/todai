@@ -60,7 +60,7 @@ function ColumnSettingsSession({ column, instructions, completion = false, open,
         </div>
         <div className="space-y-2">
           <div className="flex items-center gap-2"><Switch id={`${id}-completion`} checked={isCompletion} onCheckedChange={setCompletion} disabled={busy} aria-describedby={`${id}-completion-help`} /><Label htmlFor={`${id}-completion`}>Completion column</Label></div>
-          <p id={`${id}-completion-help`} className="text-sm text-muted-foreground">Tasks entering this column receive a built-in memory review instead of running the assigned agent. Enabling this setting unmarks the previous completion column on this board. Memory changes require human approval.</p>
+          <p id={`${id}-completion-help`} className="text-sm text-muted-foreground">Tasks entering this column are complete. Todai reviews them for reusable knowledge and records memory changes automatically. The assigned agent does not run. When task worktrees are enabled, Todai commits remaining changes and removes the worktree after agents and task chats finish. The task branch remains available. Only one column per board can be the completion column.</p>
         </div>
         <DialogFooter><Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => exit.close()}>Cancel</Button><Button size="sm" disabled={busy || !name.trim()}>{busy ? "Saving…" : "Save settings"}</Button></DialogFooter>
       </form>

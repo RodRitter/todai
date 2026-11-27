@@ -14,6 +14,22 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
+export const CompletionColumn: Story = {
+  args: { initialCompletionColumn: "Done" },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const label = canvas.getByText("Completion", { exact: true });
+    label.focus();
+    const tooltip = await page.findByRole("tooltip");
+    await expect(tooltip).toHaveTextContent("automatic memory review");
+    await expect(tooltip).toHaveTextContent("removes the worktree");
+    await userEvent.keyboard("{Escape}");
+    await expect(page.queryByRole("tooltip")).not.toBeInTheDocument();
+  },
+};
+export const CompletionColumnDark: Story = { ...CompletionColumn, globals: { theme: "dark" } };
+export const CompletionColumnNarrow: Story = { ...CompletionColumn, globals: { viewport: { value: "mobile1" } } };
 export const LongContent: Story = {
   args: {
     initialTasks: exampleTasks.map((task) => ({

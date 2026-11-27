@@ -81,7 +81,7 @@ export function WorkspaceSettings() {
         </div>
         <p id="workspace-worktrees-hint" className="text-sm text-muted-foreground">
           Off by default. When off, agents edit this directory and leave changes uncommitted.
-          When on, tasks use separate Git worktrees. Moving a task to Done commits its changes and removes its worktree.
+          When on, tasks use separate Git worktrees. Moving a task to the completion column commits its changes and removes its worktree after agents and task chats finish. The task branch remains available.
           Existing worktrees remain intact while this setting is off. Stop agents and wait for chats before changing this setting.
         </p>
       </div>}
