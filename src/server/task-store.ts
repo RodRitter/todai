@@ -365,7 +365,28 @@ export class TaskStore {
     };
   }
 
-  private applyWorkspaceConfiguration(data: Configuration) {
+  importWorkspace(name: string, path: string, input: unknown): Workspace {
+    const data = parseConfiguration(input);
+    if (!data.boards) throw new ConfigurationValidationError("Choose a workspace export with boards.");
+    if (!name.trim()) throw new WorkspaceOwnershipError("Enter a workspace name.");
+    const workspace = { id: randomUUID(), name: name.trim(), path: validateWorkspace(path) };
+    return this.transaction(() => {
+      const previousWorkspace = this.workspaceScope;
+      const previousBoard = this.boardScope;
+      try {
+        this.db.prepare("INSERT INTO workspaces (id, name, path) VALUES (?, ?, ?)").run(workspace.id, workspace.name, workspace.path);
+        this.workspaceScope = workspace.id;
+        this.boardScope = workspace.id;
+        this.applyWorkspaceConfiguration(data, true);
+        return workspace;
+      } finally {
+        this.workspaceScope = previousWorkspace;
+        this.boardScope = previousBoard;
+      }
+    });
+  }
+
+  private applyWorkspaceConfiguration(data: Configuration, newWorkspace = false) {
     const boards = data.boards!;
     const existingBoards = this.listBoards();
     const nextPosition = Number(this.db.prepare("SELECT COALESCE(MAX(position), -1) + 1 AS position FROM boards WHERE workspaceId = workspace_id()").get()!.position);
@@ -379,7 +400,7 @@ export class TaskStore {
       agentIds.set(agent.id, id);
     }
     for (const [position, board] of boards.entries()) {
-      const id = randomUUID();
+      const id = newWorkspace && board.id === data.defaultBoardId ? this.workspaceId : randomUUID();
       let name = board.name;
       let suffix = 2;
       while (names.has(name.toLowerCase())) {

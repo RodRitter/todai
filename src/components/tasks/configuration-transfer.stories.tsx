@@ -14,6 +14,7 @@ const meta = {
   beforeEach: () => {
     const original = globalThis.fetch;
     globalThis.fetch = async (input, options) => {
+      if (String(input).startsWith("/api/directories")) return Response.json([]);
       if (String(input) === "/api/boards") return Response.json([
         { id: "planning", name: "Planning", description: "", columns: ["Ready"] },
         { id: "delivery", name: "Delivery", description: "", columns: ["Build", "Ship"] },
@@ -65,15 +66,18 @@ export const LegacyBoardOrder: Story = {
 };
 
 export const WorkspaceFile: Story = {
-  play: async ({ canvasElement, args }) => {
+  play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole("button", { name: "Export workspace" })).toBeVisible();
     const data: Configuration = { ...configuration, boards: [{ id: "board", name: "Planning", columns: [{ id: "ready", name: "Ready" }], assignments: [] }], defaultBoardId: "board" };
     await userEvent.upload(canvas.getByLabelText("Import configuration file"), new File([JSON.stringify(data)], "workspace.json", { type: "application/json" }));
-    await expect(await canvas.findByRole("button", { name: "Import workspace" })).toBeEnabled();
+    await expect(await canvas.findByRole("button", { name: "Import workspace" })).toBeDisabled();
+    await expect(canvas.getByLabelText("Workspace name")).toHaveValue("Imported workspace");
+    await userEvent.type(canvas.getByLabelText("Project folder"), "/tmp/project");
+    await expect(canvas.getByRole("button", { name: "Import workspace" })).toBeEnabled();
     await expect(canvas.getByText("Planning · 1 column")).toBeVisible();
-    await userEvent.click(canvas.getByRole("button", { name: "Import workspace" }));
-    await expect(args.onImported).toHaveBeenCalled();
+    await userEvent.clear(canvas.getByLabelText("Workspace name"));
+    await expect(canvas.getByRole("button", { name: "Import workspace" })).toBeDisabled();
     await expect(canvas.queryByRole("button", { name: "Import selected" })).not.toBeInTheDocument();
   },
 };

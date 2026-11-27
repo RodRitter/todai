@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -100,6 +100,47 @@ test("workspace file import appends ordered board copies with shared agents and 
   } finally {
     target.close();
     source.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("workspace import creates an isolated workspace linked to the chosen directory", () => {
+  const directory = mkdtempSync(join(tmpdir(), "todai-new-import-"));
+  const store = new TaskStore(join(directory, "tasks.sqlite"));
+  try {
+    const planning = store.saveBoard("Planning");
+    store.reorderBoards([planning.id, store.boardId]);
+    store.saveAgent({ id: "shared", name: "Shared", tool: "codex", model: "test", effort: "medium", instructions: "", permissions: "read-only" });
+    store.assignColumnAgent({ column: "To do", agentId: "shared" });
+    store.changeMemory({ operation: "add", category: "Decisions", title: "Decision", statement: "Keep this decision.", scope: "Workspace", source: "User", reason: "Test" });
+    const configuration = store.exportConfiguration(true);
+    const original = store.exportConfiguration(true);
+    const workspace = store.importWorkspace("Imported", directory, configuration);
+    assert.notEqual(workspace.id, store.workspaceId);
+    assert.equal(workspace.path, realpathSync(directory));
+    assert.deepEqual(store.exportConfiguration(true), original);
+    const imported = new TaskStore(store.databasePath, workspace.id);
+    try {
+      assert.deepEqual(imported.listBoards().map((board) => board.name), configuration.boards!.map((board) => board.name));
+      assert.deepEqual(imported.listColumns(), configuration.boards!.find((board) => board.id === configuration.defaultBoardId)!.columns.map((column) => column.name));
+      assert.equal(imported.exportConfiguration(true).defaultBoardId, workspace.id);
+      assert.equal(imported.listAgents().length, 1);
+      assert.notEqual(imported.listAgents()[0].id, "shared");
+      assert.equal(imported.listColumnAgents()[0].agentId, imported.listAgents()[0].id);
+      assert.equal(imported.searchMemory().entries[0].statement, "Keep this decision.");
+    } finally { imported.close(); }
+    const count = store.listWorkspaces().length;
+    assert.throws(() => store.importWorkspace("Invalid", "", configuration), /directory/);
+    assert.throws(() => store.importWorkspace("Invalid", directory, { ...configuration, defaultBoardId: "missing" }));
+    assert.equal(store.listWorkspaces().length, count);
+    const originalSave = store.saveAgent;
+    store.saveAgent = () => { throw new Error("Import failed"); };
+    assert.throws(() => store.importWorkspace("Failed", directory, configuration), /Import failed/);
+    store.saveAgent = originalSave;
+    assert.equal(store.listWorkspaces().length, count);
+    assert.deepEqual(store.exportConfiguration(true), original);
+  } finally {
+    store.close();
     rmSync(directory, { recursive: true, force: true });
   }
 });

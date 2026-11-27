@@ -2,7 +2,7 @@
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useId, useRef, useState, type ReactNode } from "react";
-import { Download, Upload } from "lucide-react";
+import { Download, Upload, FolderIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,9 @@ import { selectedBoardId, selectedWorkspaceId } from "@/lib/workspace-fetch";
 import type { Board } from "@/domain/task";
 import { boardApi, configurationApi, workspaceApi } from "@/lib/workspace-api";
 import { parseConfiguration, selectConfiguration, type Configuration } from "@/domain/configuration";
+
+import { Combobox } from "@/components/ui/combobox";
+import { useDirectorySuggestions } from "./use-directory-suggestions";
 
 function downloadConfiguration(data: Configuration, filename: string) {
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
@@ -44,8 +47,13 @@ export function ConfigurationTransfer({ onImported, scope = "all", boardId, disa
   const [columnMode, setColumnMode] = useState<"add" | "replace" | null>(null);
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [workspacePath, setWorkspacePath] = useState("");
+  const { suggestions, directoryError, clearSuggestions } = useDirectorySuggestions(workspacePath);
 
   function prepare(data: Configuration, operation: "export" | "import") {
+    setWorkspaceName(data.name ?? "Imported workspace");
+    setWorkspacePath("");
     setConflictMode(null);
     setColumnMode(null);
     setSource(data);
@@ -160,14 +168,24 @@ export function ConfigurationTransfer({ onImported, scope = "all", boardId, disa
       {operation === "import" && source?.boards && <fieldset disabled={busy} className="space-y-4">
         <legend className="text-sm font-semibold">Import workspace</legend>
 
+        <p className="text-sm text-muted-foreground">Create a new workspace from this file. Choose the project directory to link to the new workspace.</p>
+        <SettingField htmlFor={`${id}-workspace-name`} label="Workspace name">
+          <Input id={`${id}-workspace-name`} value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} required />
+        </SettingField>
+        <SettingField htmlFor={`${id}-workspace-path`} label="Project folder">
+          <Combobox id={`${id}-workspace-path`} value={workspacePath} options={suggestions} filterOptions={false} closeOnSelect={false} icon={FolderIcon}
+            emptyMessage={directoryError || "No matching folders"} required disabled={busy} placeholder="~/Projects/my-project" spellCheck={false}
+            onValueChange={(value) => { setWorkspacePath(value); clearSuggestions(); }} />
+        </SettingField>
         <ScrollArea className="max-h-60"><ul className="space-y-2">{source.boards.map((board) => <li key={board.id}>{board.name} · {board.columns.length} {board.columns.length === 1 ? "column" : "columns"}</li>)}</ul></ScrollArea>
         <div className="flex gap-2">
-          <Button disabled={busy} onClick={() => run(async () => {
-            await configurationApi.import(source);
+          <Button disabled={busy || !workspaceName.trim() || !workspacePath.trim()} onClick={() => run(async () => {
+            const workspace = await workspaceApi.import(workspaceName, workspacePath, source);
             setSource(null);
             window.dispatchEvent(new Event("todai:boards-changed"));
             setImportOpen(false);
             onImported();
+            window.location.assign(`/?workspace=${encodeURIComponent(workspace.id)}`);
           }, true)}>{busy ? "Importing workspace…" : "Import workspace"}</Button>
           <Button variant="ghost" disabled={busy} onClick={() => setSource(null)}>Cancel</Button>
         </div>

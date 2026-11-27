@@ -83,3 +83,32 @@ test("first install stays empty across reopen and creates a complete customized 
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("workspace HTTP import requires a directory and creates a separate workspace", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "todai-workspace-import-api-"));
+  const previous = process.env.TODAI_DB_PATH;
+  process.env.TODAI_DB_PATH = join(directory, "tasks.sqlite");
+  const source = new TaskStore(process.env.TODAI_DB_PATH);
+  try {
+    const configuration = source.exportConfiguration(true);
+    const create = (path: string, data: unknown = configuration) => POST(new Request("http://localhost/api/workspaces", {
+      method: "POST", body: JSON.stringify({ name: "Imported", path, configuration: data }),
+      headers: { "Content-Type": "application/json" },
+    }));
+    assert.equal((await create("")).status, 400);
+    assert.equal((await create(directory, source.exportConfiguration())).status, 400);
+    assert.equal(source.listWorkspaces().length, 1);
+    const response = await create(directory);
+    assert.equal(response.status, 201);
+    const workspace = await response.json();
+    assert.notEqual(workspace.id, source.workspaceId);
+    assert.equal(workspace.path, realpathSync(directory));
+    assert.equal(source.listWorkspaces().length, 2);
+    assert.deepEqual(source.exportConfiguration(true), configuration);
+  } finally {
+    source.close();
+    if (previous === undefined) delete process.env.TODAI_DB_PATH;
+    else process.env.TODAI_DB_PATH = previous;
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

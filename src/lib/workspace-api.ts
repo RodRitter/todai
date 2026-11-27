@@ -108,6 +108,7 @@ export const executorApi = {
   },
 };
 export const workspaceApi = {
+  import: (name: string, path: string, configuration: import("@/domain/configuration").Configuration) => request<Workspace>("/api/workspaces", { method: "POST", body: { name, path, configuration } }),
   list: () => request<Workspace[]>("/api/workspaces"),
   removeArchived: (id: string) => request<{ archived: Workspace[] }>("/api/workspaces", { method: "DELETE", body: { id } }),
   archived: () => request<Workspace[]>("/api/workspaces?archived=true"),
