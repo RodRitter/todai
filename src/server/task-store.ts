@@ -1,3 +1,4 @@
+import { exportMemory, importMemory } from "./memory-transfer.ts";
 import { discardWorktree, closeWorktree, openWorktree, planWorktree, validateBranchName, worktreeHead } from "./task-worktree.ts";
 import type { TaskWorktree } from "../domain/task.ts";
 import { searchMemoryEntries, readMemoryEntries, memoryContext, memoryHistory, prepareMemoryChanges, applyMemoryChanges, memoryDocument, memoryChangesSummary } from "./memory-entries.ts";
@@ -281,7 +282,9 @@ export class TaskStore {
   exportConfiguration(): Configuration {
     return this.transaction(() => {
       const columns = this.db.prepare("SELECT id, name, instructions, completion FROM board_columns WHERE board_columns.workspaceId = workspace_id() AND board_columns.boardId = board_id() ORDER BY position").all() as { id: string; name: string; instructions: string; completion: number }[];
+      const memory = exportMemory(this.db, this.workspaceId);
       return {
+        ...(memory ? { memory } : {}),
         format: "todai-configuration", version: 1,
         agents: this.listAgents(), columns: columns.map(({ completion, ...column }) => ({ ...column, ...(completion ? { completion: true } : {}) })),
         assignments: this.listColumnAgents().map((assignment) => ({
@@ -298,8 +301,8 @@ export class TaskStore {
     if (conflictMode !== "copy" && conflictMode !== "overwrite")
       throw new ConfigurationValidationError("Choose whether to overwrite matching IDs or create copies.");
     const data = parseConfiguration(input);
-    if (!data.agents.length && !data.columns.length)
-      throw new ConfigurationValidationError("Select at least one agent or column.");
+    if (!data.agents.length && !data.columns.length && !data.memory?.entries.length)
+      throw new ConfigurationValidationError("Select at least one agent, column, or memory entry.");
     return this.transaction(() => {
       if ((columnMode === "replace" || conflictMode === "overwrite") && data.columns.length && this.db.prepare("SELECT id FROM runs WHERE runs.workspaceId = workspace_id() AND taskId IN (SELECT id FROM tasks WHERE boardId = board_id()) AND status IN ('Queued', 'Running') LIMIT 1").get())
         throw new ConfigurationValidationError("Wait for queued and active runs to finish before replacing or overwriting columns.");
@@ -351,7 +354,8 @@ export class TaskStore {
         this.db.prepare("UPDATE comments SET feedbackStatus = 'cancelled' WHERE comments.workspaceId = workspace_id() AND taskId IN (SELECT id FROM tasks WHERE boardId = board_id()) AND feedbackStatus = 'pending'").run();
         this.db.prepare("UPDATE tasks SET status = ?, agentStatus = 'Not started' WHERE tasks.workspaceId = workspace_id() AND tasks.boardId = board_id()").run(columnNames.get(data.columns[0].id)!);
       }
-      return { agents: data.agents.length, columns: data.columns.length, assignments: data.assignments.length };
+      const memory = data.memory?.entries.length ? importMemory(this.db, this.workspaceId, this.boardId, data.memory) : 0;
+      return { agents: data.agents.length, columns: data.columns.length, assignments: data.assignments.length, memory };
     });
   }
 

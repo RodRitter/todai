@@ -6,7 +6,7 @@ import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { toast } from "@/components/ui/toast";
+import { notifyOperation, toast } from "@/components/ui/toast";
 import { configurationApi } from "@/lib/workspace-api";
 import { parseConfiguration, selectConfiguration, type Configuration } from "@/domain/configuration";
 
@@ -19,6 +19,7 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
   const [operation, setOperation] = useState<"export" | "import">("export");
   const [mode, setMode] = useState<Mode>("both");
   const [agents, setAgents] = useState<string[]>([]);
+  const [memory, setMemory] = useState<string[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
   const [columnMode, setColumnMode] = useState<"add" | "replace" | null>(null);
   const [busy, setBusy] = useState(false);
@@ -30,20 +31,24 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
     setSource(data);
     setOperation(operation);
     setMode("both");
+    setMemory(data.memory?.entries.map((entry) => entry.id) ?? []);
     setAgents(data.agents.map((agent) => agent.id));
     setColumns(data.columns.map((column) => column.id));
   }
 
-  async function run(action: () => Promise<void>) {
+  async function run(action: () => Promise<void>, transfer = false) {
     if (pending.current) return;
     pending.current = true;
     setBusy(true);
-    try { await action(); }
-    catch (error) { toast.error(error instanceof Error ? error.message : "Could not transfer configuration."); }
+    try {
+      if (transfer) await notifyOperation(action, { loading: "Transferring configuration…", success: "Configuration transferred.", error: (error) => error instanceof Error ? error.message : "Could not transfer configuration." });
+      else await action();
+    }
+    catch (error) { if (!transfer) toast.error(error instanceof Error ? error.message : "Could not load configuration."); }
     finally { pending.current = false; setBusy(false); }
   }
 
-  const selected = source && selectConfiguration(source, mode === "columns" ? [] : agents, mode === "agents" ? [] : columns);
+  const selected = source && selectConfiguration(source, mode === "columns" ? [] : agents, mode === "agents" ? [] : columns, memory);
 
   const conflicts = operation === "import" && selected && existing ? [
     ...selected.agents.filter((agent) => existing.agents.some((item) => item.id === agent.id)).map((agent) => `Agent: ${agent.name} (${agent.id})`),
@@ -54,7 +59,7 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
         <fieldset disabled={busy} className="space-y-4 rounded-lg border p-4">
           <legend className="px-1 text-sm font-semibold">{operation === "export" ? "Export selection" : "Import selection"}</legend>
           <div className="flex flex-wrap gap-4" role="radiogroup" aria-label="Configuration contents">
-            {([['agents', 'Agents only'], ['columns', 'Columns only'], ['both', 'Agents and columns']] as const).map(([value, label]) => (
+            {([['agents', 'Agents'], ['columns', 'Columns'], ['both', 'Agents and columns']] as const).map(([value, label]) => (
               <label key={value} className="flex items-center gap-2 text-sm">
                 <input type="radio" name="transfer-mode" value={value} checked={mode === value} onChange={() => setMode(value)} />{label}
               </label>
@@ -64,6 +69,8 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
             {mode !== "columns" && <Selection title="Agents" items={source.agents.map((agent) => ({ id: agent.id, label: agent.name }))} selected={agents} onChange={setAgents} />}
             {mode !== "agents" && <Selection title="Columns" items={source.columns.map((column) => ({ id: column.id, label: column.name, detail: column.id }))} selected={columns} onChange={setColumns} />}
           </div>
+          {source.memory && <Selection title="Memory" items={source.memory.entries.map((entry) => ({ id: entry.id, label: entry.title }))} selected={memory} onChange={setMemory} />}
+          {source.memory && <p className="text-sm text-muted-foreground">Memory includes linked source tasks, comments, and artifacts. Import creates archived copies of these records. Existing records stay unchanged.</p>}
           <p className="text-sm text-muted-foreground">Assignments are included only when both the column and its agent are selected. Other selected columns remain unassigned.</p>
           {operation === "import" && selected.columns.length > 0 && (
             <fieldset className="space-y-2">
@@ -81,12 +88,11 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
             <label className="flex items-center gap-2 text-sm"><input type="radio" name="conflicts" checked={conflictMode === "overwrite"} onChange={() => setConflictMode("overwrite")} />Overwrite entries with matching IDs</label>
             {conflictMode === "overwrite" && <p className="text-sm text-muted-foreground">Matching agents will receive the imported settings. Matching columns will receive the imported names and selected assignments; omitted assignments will be cleared. Replace all columns still removes every existing column.</p>}
           </fieldset>}
-          <p className="text-sm" role="status">{selected.agents.length} agents, {selected.columns.length} columns, {selected.assignments.length} assignments selected.</p>
+          <p className="text-sm" role="status">{selected.agents.length} agents, {selected.columns.length} columns, {selected.assignments.length} assignments, {selected.memory?.entries.length ?? 0} memory entries selected.</p>
           <div className="flex gap-2">
-            <Button disabled={busy || (conflicts.length > 0 && conflictMode === null) || (!selected.agents.length && !selected.columns.length) || (operation === "import" && selected.columns.length > 0 && columnMode === null)} onClick={() => run(async () => {
+            <Button disabled={busy || (conflicts.length > 0 && conflictMode === null) || (!selected.agents.length && !selected.columns.length && !selected.memory?.entries.length) || (operation === "import" && selected.columns.length > 0 && columnMode === null)} onClick={() => run(async () => {
               if (operation === "import") {
-                const result = await configurationApi.import(selected, columnMode ?? "add", conflicts.length ? conflictMode ?? "copy" : "copy");
-                toast.success(`Imported ${result.agents} agents, ${result.columns} columns, and ${result.assignments} assignments.`);
+                await configurationApi.import(selected, columnMode ?? "add", conflicts.length ? conflictMode ?? "copy" : "copy");
                 setSource(null);
                 onImported();
               } else {
@@ -98,10 +104,9 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
                 link.click();
                 link.remove();
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
-                toast.success("Configuration exported.");
                 setSource(null);
               }
-            })}>{busy ? "Working…" : operation === "export" ? "Export selected" : "Import selected"}</Button>
+            }, true)}>{busy ? "Working…" : operation === "export" ? "Export selected" : "Import selected"}</Button>
             <Button variant="ghost" onClick={() => setSource(null)}>Cancel</Button>
           </div>
         </fieldset>
@@ -112,7 +117,7 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
     <section className="space-y-4" aria-labelledby="transfer-heading">
       <div>
         <h2 id="transfer-heading" className="text-lg font-semibold">Export / import</h2>
-        <p className="text-sm text-muted-foreground">Transfer agents, columns, or both using a JSON file. Choose individual entries before exporting or importing.</p>
+        <p className="text-sm text-muted-foreground">Transfer agents, columns, and memory using a JSON file. Choose individual entries before exporting or importing.</p>
       </div>
       <div className="flex flex-wrap items-end gap-4">
         <DialogTrigger asChild><Button variant="outline" disabled={busy} onClick={() => run(async () => prepare(await configurationApi.get(), "export"))}><Download className="size-4" aria-hidden="true" />Export</Button></DialogTrigger>
@@ -138,7 +143,7 @@ export function ConfigurationTransfer({ onImported }: { onImported: () => void }
       <DialogContent size="wide" closeDisabled={busy} onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onInteractOutside={(event) => { if (busy) event.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle>Export configuration</DialogTitle>
-          <DialogDescription>Choose the agents and columns to include in your JSON file.</DialogDescription>
+          <DialogDescription>Choose the agents, columns, and memory to include in your JSON file.</DialogDescription>
         </DialogHeader>
         {operation === "export" && selection}
       </DialogContent>

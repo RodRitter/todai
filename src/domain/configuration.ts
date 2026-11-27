@@ -1,8 +1,10 @@
+import { parseMemoryTransfer, selectMemory, type MemoryTransfer } from "./memory-transfer.ts";
 import { parseAgentProfile, type AgentProfile } from "./column-agent.ts";
 
 export type Configuration = {
   format: "todai-configuration";
   version: 1;
+  memory?: MemoryTransfer;
   agents: AgentProfile[];
   columns: { id: string; name: string; instructions?: string; completion?: boolean }[];
   assignments: { columnId: string; agentId: string }[];
@@ -40,12 +42,16 @@ export function parseConfiguration(input: unknown): Configuration {
   });
   if (new Set(assignments.map((assignment) => assignment.columnId)).size !== assignments.length)
     return fail("Each column can have only one assignment.");
-  return { format: "todai-configuration", version: 1, agents, columns: data.columns.map(({ id, name, instructions, completion }) => ({ id, name, ...(instructions !== undefined ? { instructions } : {}), ...(completion !== undefined ? { completion } : {}) })), assignments };
+  let memory: MemoryTransfer | undefined;
+  try { if (data.memory !== undefined) memory = parseMemoryTransfer(data.memory); }
+  catch { return fail("Invalid memory export."); }
+  return { format: "todai-configuration", version: 1, ...(memory ? { memory } : {}), agents, columns: data.columns.map(({ id, name, instructions, completion }) => ({ id, name, ...(instructions !== undefined ? { instructions } : {}), ...(completion !== undefined ? { completion } : {}) })), assignments };
 }
 
-export function selectConfiguration(data: Configuration, agentIds: string[], columns: string[]): Configuration {
+export function selectConfiguration(data: Configuration, agentIds: string[], columns: string[], memoryIds: string[] = []): Configuration {
   return {
     format: "todai-configuration", version: 1,
+    ...(data.memory && memoryIds.length ? { memory: selectMemory(data.memory, memoryIds) } : {}),
     agents: data.agents.filter((agent) => agentIds.includes(agent.id)),
     columns: data.columns.filter((column) => columns.includes(column.id)),
     assignments: data.assignments.filter((assignment) => columns.includes(assignment.columnId) && agentIds.includes(assignment.agentId)),
