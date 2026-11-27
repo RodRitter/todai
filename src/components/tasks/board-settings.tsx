@@ -6,24 +6,29 @@ import type { Board } from "@/domain/task";
 import { boardApi, boardSettingsApi, type BoardSnapshot } from "@/lib/workspace-api";
 import { BreadcrumbRow, Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbLink, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { selectedWorkspaceId } from "@/lib/workspace-fetch";
-import { toast } from "@/components/ui/toast";
+import { notifyOperation, toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { ColumnEditor } from "./column-editor";
 
-export function BoardSettings({ boards: initialBoards, persistence = boardApi, columnsForBoard = boardSettingsApi }: {
+export function BoardSettings({ boards: initialBoards, initialBoardId, persistence = boardApi, columnsForBoard = boardSettingsApi }: {
   boards: Board[];
+  initialBoardId?: string;
   persistence?: typeof boardApi;
   columnsForBoard?: typeof boardSettingsApi;
 }) {
   const [boards, setBoards] = useState(initialBoards);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const initialBoard = initialBoards.find((board) => board.id === initialBoardId);
+  const [selectedId, setSelectedId] = useState<string | null>(initialBoard?.id ?? null);
   const selected = boards.find((board) => board.id === selectedId);
-  const [name, setName] = useState("");
+  const [name, setName] = useState(initialBoard?.name ?? "");
+  const [description, setDescription] = useState(initialBoard?.description ?? "Organize and track tasks on this board.");
+  const [newDescription, setNewDescription] = useState("");
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -33,6 +38,7 @@ export function BoardSettings({ boards: initialBoards, persistence = boardApi, c
   function select(board?: Board) {
     setSelectedId(board?.id ?? null);
     setName(board?.name ?? "");
+    setDescription(board?.description ?? "Organize and track tasks on this board.");
     setError("");
   }
   async function save(operation: () => Promise<void>) {
@@ -40,13 +46,16 @@ export function BoardSettings({ boards: initialBoards, persistence = boardApi, c
     saving.current = true;
     setBusy(true); setError("");
     try {
-      await operation();
+      await notifyOperation(operation, {
+        loading: "Saving board…", success: "Board saved.",
+        error: (error) => error instanceof Error ? error.message : "Could not save board. Try again.",
+      });
       window.dispatchEvent(new Event("todai:boards-changed"));
     } catch (error) { setError(error instanceof Error ? error.message : "Could not save board."); }
     finally { setBusy(false); saving.current = false; }
   }
   return <section className="space-y-6" aria-label="Board settings">
-    <BreadcrumbRow actions={!selected && <Button size="sm" onClick={() => { setError(""); setNewName(""); setCreating(true); }}><Plus />New</Button>}>
+    <BreadcrumbRow actions={!selected && <Button size="sm" onClick={() => { setError(""); setNewName(""); setNewDescription(""); setCreating(true); }}><Plus />New</Button>}>
       <Breadcrumb aria-label="Board breadcrumbs" className="min-w-0">
         <BreadcrumbList>
           <BreadcrumbItem>{selected
@@ -64,21 +73,23 @@ export function BoardSettings({ boards: initialBoards, persistence = boardApi, c
       <form className="space-y-2" onSubmit={(event) => {
         event.preventDefault();
         void save(async () => {
-          const renamed = await persistence.rename(selected.id, name);
+          const renamed = await persistence.rename(selected.id, name, description);
           setBoards((current) => current.map((board) => board.id === renamed.id ? renamed : board));
           setName(renamed.name);
+          setDescription(renamed.description ?? description);
         });
       }}>
         <Label htmlFor="board-name">Board name</Label>
         <div className="flex flex-wrap gap-2">
           <Input id="board-name" className="min-w-0 flex-1" maxLength={80} value={name} disabled={busy} onChange={(event) => setName(event.target.value)} />
-          <Button variant="outline" disabled={busy || !name.trim() || name.trim() === selected.name}>Rename</Button>
+          <Button variant="outline" disabled={busy || !name.trim() || (name.trim() === selected.name && description.trim() === selected.description) || !description.trim()}>Save</Button>
           <Button type="button" variant="ghost-destructive" disabled={busy || selected.id === (selectedWorkspaceId() ?? initialBoards[0]?.id)} title={selected.id === (selectedWorkspaceId() ?? initialBoards[0]?.id) ? "The original board is kept as the default board." : undefined} onClick={() => setDeleting(true)}>Delete board</Button>
         </div>
+        <Label htmlFor="board-description">Description</Label>
+        <Textarea id="board-description" required maxLength={500} disabled={busy} value={description} onChange={(event) => setDescription(event.target.value)} />
       </form>
-      {error && !deleting && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <BoardColumns key={selected.id} boardId={selected.id} persistence={columnsForBoard} disabled={busy} onColumnsChange={(columns) => setBoards((current) => current.map((board) => board.id === selected.id ? { ...board, columns } : board))} />
-      <DeleteConfirmation open={deleting} onOpenChange={setDeleting} busy={busy} error={error} title={`Delete ${selected.name}?`} description="Move all tasks out of this board first. Its columns and agent assignments will be removed; shared agents will remain." onConfirm={() => void save(async () => {
+      <DeleteConfirmation open={deleting} onOpenChange={setDeleting} busy={busy} title={`Delete ${selected.name}?`} description="Move all tasks out of this board first. Its columns and agent assignments will be removed; shared agents will remain." onConfirm={() => void save(async () => {
         await persistence.remove(selected.id);
         setBoards((current) => current.filter((board) => board.id !== selected.id));
         setDeleting(false);
@@ -103,17 +114,19 @@ export function BoardSettings({ boards: initialBoards, persistence = boardApi, c
         <form className="space-y-4" onSubmit={(event) => {
           event.preventDefault();
           void save(async () => {
-            const board = await persistence.create(newName);
+            const board = await persistence.create(newName, newDescription);
             setBoards((current) => [...current, board]);
             setCreating(false);
             select(board);
           });
         }}>
           <div className="space-y-2"><Label htmlFor="new-board-name">Board name</Label>
-            <Input id="new-board-name" autoFocus maxLength={80} disabled={busy} value={newName} onChange={(event) => setNewName(event.target.value)} aria-invalid={!!error} aria-describedby={error ? "new-board-error" : undefined} />
+            <Input id="new-board-name" autoFocus maxLength={80} disabled={busy} value={newName} onChange={(event) => setNewName(event.target.value)} aria-invalid={!!error} />
           </div>
-          {error && <p id="new-board-error" role="alert" className="text-sm text-destructive">{error}</p>}
-          <DialogFooter><Button size="sm" type="button" variant="outline" disabled={busy} onClick={() => setCreating(false)}>Cancel</Button><Button size="sm" disabled={busy || !newName.trim()}>{busy ? "Creating…" : "Create board"}</Button></DialogFooter>
+          <div className="space-y-2"><Label htmlFor="new-board-description">Description</Label>
+            <Textarea id="new-board-description" required maxLength={500} disabled={busy} value={newDescription} onChange={(event) => setNewDescription(event.target.value)} />
+          </div>
+          <DialogFooter><Button size="sm" type="button" variant="outline" disabled={busy} onClick={() => setCreating(false)}>Cancel</Button><Button size="sm" disabled={busy || !newName.trim() || !newDescription.trim()}>{busy ? "Creating…" : "Create board"}</Button></DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

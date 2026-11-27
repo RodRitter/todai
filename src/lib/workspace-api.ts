@@ -140,8 +140,8 @@ export const jiraImportApi = {
 export const boardApi = {
   reorder: (ids: string[]) => request<import("@/domain/task").Board[]>("/api/boards", { method: "PUT", body: ids }),
   list: () => request<import("@/domain/task").Board[]>("/api/boards"),
-  create: (name: string) => request<import("@/domain/task").Board>("/api/boards", { method: "POST", body: { name } }),
-  rename: (id: string, name: string) => request<import("@/domain/task").Board>("/api/boards", { method: "PATCH", body: { id, name } }),
+  create: (name: string, description?: string) => request<import("@/domain/task").Board>("/api/boards", { method: "POST", body: { name, description } }),
+  rename: (id: string, name: string, description?: string) => request<import("@/domain/task").Board>("/api/boards", { method: "PATCH", body: { id, name, description } }),
   remove: (id: string) => request<void>("/api/boards", { method: "DELETE", body: { id } }),
 };
 

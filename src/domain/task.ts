@@ -15,7 +15,7 @@ export const agentStatuses = [
   "Blocked",
 ] as const;
 export type AgentStatus = (typeof agentStatuses)[number];
-export type Board = { id: string; name: string; columns: string[] };
+export type Board = { id: string; name: string; description?: string; columns: string[] };
 export type TaskWorktree = {
   repository: string;
   path: string;

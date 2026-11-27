@@ -3,6 +3,8 @@
 import type { ArtifactReference } from "@/domain/artifact";
 import { useEffect, useRef, useState, type SetStateAction } from "react";
 import { Plus } from "lucide-react";
+import { BoardSettingsDialog } from "./board-settings-dialog";
+import { BoardHeader } from "./board-header";
 import { AppShell } from "@/components/app-shell";
 import { notifyOperation, toast } from "@/components/ui/toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -19,8 +21,9 @@ import { type AgentProfile, type ColumnAssignment } from "@/domain/column-agent"
 import { TaskEditor } from "./task-editor";
 
 export function TaskBoard({
-  boards,
+  boards: initialBoards,
   boardId,
+  configureBoard,
   columns: initialColumns = statuses,
   initialTasks = [],
   initialAgents = [],
@@ -35,6 +38,7 @@ export function TaskBoard({
 }: {
   boards?: import("@/domain/task").Board[];
   boardId?: string;
+  configureBoard?: (id: string, name: string, description: string) => Promise<import("@/domain/task").Board>;
   columns?: readonly string[];
   initialTasks?: Task[];
   initialAgents?: AgentProfile[];
@@ -61,6 +65,9 @@ export function TaskBoard({
     answerFeedback?: (taskId: string, commentId: string, body: string) => Promise<Task>;
   };
 }) {
+  const [boards, setBoards] = useState(initialBoards);
+  const [editingBoard, setEditingBoard] = useState(false);
+  const currentBoard = boards?.find((board) => board.id === boardId);
   const [agents] = useState(initialAgents);
   const [columns, setColumns] = useState(initialColumns);
   const [worktreesEnabled, setWorktreesEnabled] = useState(initialWorktreesEnabled);
@@ -178,7 +185,6 @@ export function TaskBoard({
 
   return (
     <AppShell
-      boardName={boards?.find((board) => board.id === boardId)?.name}
       headerActions={
         <Button size="sm" disabled={busy} onClick={() => openEditor()}>
           <Plus /> New task
@@ -191,6 +197,14 @@ export function TaskBoard({
         aria-label="Task board"
         tabIndex={-1}
       >
+        <BoardHeader board={currentBoard} disabled={busy} onEdit={() => setEditingBoard(true)} />
+        {editingBoard && currentBoard && <BoardSettingsDialog board={currentBoard} disabled={busy}
+          onClose={() => setEditingBoard(false)}
+          onSave={(name, description) => mutate(async () => {
+            const saved = configureBoard ? await configureBoard(currentBoard.id, name, description) : { ...currentBoard, name, description };
+            setBoards((current) => current?.map((board) => board.id === saved.id ? saved : board));
+            window.dispatchEvent(new Event("todai:boards-changed"));
+          })} />}
         <div
           ref={boardRef}
           className="grid flex-1 grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] items-stretch gap-2"

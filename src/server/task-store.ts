@@ -242,8 +242,8 @@ export class TaskStore {
   }
 
   listBoards(): import("../domain/task.ts").Board[] {
-    return this.db.prepare("SELECT id, name FROM boards WHERE workspaceId = workspace_id() ORDER BY position, rowid").all()
-      .map((row) => ({ id: row.id as string, name: row.name as string, columns: this.listColumns(row.id as string) }));
+    return this.db.prepare("SELECT id, name, description FROM boards WHERE workspaceId = workspace_id() ORDER BY position, rowid").all()
+      .map((row) => ({ id: row.id as string, name: row.name as string, description: row.description as string, columns: this.listColumns(row.id as string) }));
   }
 
   reorderBoards(ids: unknown) {
@@ -263,11 +263,13 @@ export class TaskStore {
     ids.forEach((id, position) => update.run(position, id));
   }
 
-  saveBoard(name: unknown, id?: string) {
+  saveBoard(name: unknown, id?: string, description?: unknown) {
     return this.transaction(() => {
       this.assertWorkspaceActive();
       if (typeof name !== "string" || !name.trim() || name.trim().length > 80)
         throw new ColumnValidationError("Enter a board name between 1 and 80 characters.");
+      if (description !== undefined && (typeof description !== "string" || !description.trim() || description.trim().length > 500))
+        throw new ColumnValidationError("Enter a board description between 1 and 500 characters.");
       if (id) this.requireBoard(id);
       if (this.listBoards().some((board) => board.id !== id && board.name.toLowerCase() === name.trim().toLowerCase()))
         throw new ColumnValidationError("A board with that name already exists.");
@@ -278,6 +280,8 @@ export class TaskStore {
         for (const [position, column] of ["To do", "In progress", "In review", "Done"].entries())
           this.db.prepare("INSERT INTO board_columns (id, workspaceId, boardId, name, position) VALUES (?, workspace_id(), ?, ?, ?)").run(randomUUID(), boardId, column, position);
       }
+      if (typeof description === "string")
+        this.db.prepare("UPDATE boards SET description = ? WHERE id = ?").run(description.trim(), boardId);
       return this.listBoards().find((board) => board.id === boardId)!;
     });
   }

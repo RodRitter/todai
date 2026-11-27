@@ -18,13 +18,19 @@ test("board HTTP lifecycle validates names and ownership, and lists boards even 
   try {
     for (const input of [null, {}, { name: " " }, { name: 12 }, { name: "x".repeat(81) }])
       assert.equal((await POST(request("POST", input))).status, 400);
-    const created = await POST(request("POST", { name: " Product " }));
+    const created = await POST(request("POST", { name: " Product ", description: " Plan product work. " }));
     assert.equal(created.status, 200);
     const board = await created.json();
     assert.equal(board.name, "Product");
+    assert.equal(board.description, "Plan product work.");
+    for (const description of [null, 12, " ", "x".repeat(501)])
+      assert.equal((await POST(request("POST", { name: "Invalid", description }))).status, 400);
     assert.equal((await POST(request("POST", { name: "product" }))).status, 400);
     assert.equal((await PATCH(request("PATCH", { id: board.id, name: "Research" }, board.id))).status, 200);
     assert.equal(store.listBoards()[1].name, "Research");
+    assert.equal(store.listBoards()[1].description, "Plan product work.");
+    assert.equal((await PATCH(request("PATCH", { id: board.id, name: "Research", description: "Investigate product ideas." }))).status, 200);
+    assert.equal(store.listBoards()[1].description, "Investigate product ideas.");
     assert.equal((await PUT(request("PUT", [board.id, store.boardId], "stale"))).status, 200);
     assert.equal((await GET(request("GET")).json())[0].id, board.id);
     assert.equal((await PUT(request("PUT", [board.id, board.id]))).status, 400);

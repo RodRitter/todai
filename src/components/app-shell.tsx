@@ -16,12 +16,10 @@ import { ThemeSwitcher } from "@/components/theme-switcher";
 export function AppShell({
   children,
   headerActions,
-  boardName,
   screen = "board",
 }: {
   children: ReactNode;
   headerActions?: ReactNode;
-  boardName?: string;
   screen?: "chat" | "board" | "agents" | "skills" | "artifacts" | "memory" | "settings";
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -113,7 +111,7 @@ export function AppShell({
           >
             <PanelLeft />
           </Button>
-          <h1 className="text-sm font-medium">
+          {screen !== "board" && <h1 className="text-sm font-medium">
             {screen === "chat" ? "Chat" : screen === "settings"
               ? "Settings"
               : screen === "agents"
@@ -124,8 +122,8 @@ export function AppShell({
                     ? "Artifacts"
                     : screen === "memory"
                       ? "Memory"
-                      : boardName ?? "Task board"}
-          </h1>
+                      : "Task board"}
+          </h1>}
           <TrackedCredits />
           <div className="ml-auto flex items-center gap-2">
             {headerActions}

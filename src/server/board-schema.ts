@@ -9,6 +9,9 @@ export function migrateBoards(db: DatabaseSync) {
   if (!db.prepare("PRAGMA table_info(boards)").all().some((field) => field.name === "position")) {
     db.exec("ALTER TABLE boards ADD COLUMN position INTEGER NOT NULL DEFAULT 0; UPDATE boards SET position = rowid;");
   }
+  if (!db.prepare("PRAGMA table_info(boards)").all().some((field) => field.name === "description")) {
+    db.exec("ALTER TABLE boards ADD COLUMN description TEXT NOT NULL DEFAULT 'Organize and track tasks on this board.';");
+  }
   if (db.prepare("PRAGMA table_info(tasks)").all().some((field) => field.name === "boardId")) return;
   db.exec(`INSERT INTO boards (id, workspaceId, name) SELECT id, id, 'Board' FROM workspaces;
     ALTER TABLE tasks ADD COLUMN boardId TEXT REFERENCES boards(id);

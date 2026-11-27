@@ -7,8 +7,8 @@ const meta = {
   args: { boards, persistence: {
     reorder: fn(async (ids: string[]) => ids.map((id) => boards.find((board) => board.id === id)!)),
     list: fn(async () => boards),
-    create: fn(async (name: string) => ({ id: "new", name, columns: ["To do"] })),
-    rename: fn(async (id: string, name: string) => ({ id, name, columns: ["To do"] })),
+    create: fn(async (name: string, description?: string) => ({ id: "new", name, description, columns: ["To do"] })),
+    rename: fn(async (id: string, name: string, description?: string) => ({ id, name, description, columns: ["To do"] })),
     remove: fn(async () => {}),
   }, columnsForBoard: (id: string) => {
     let columns = [...(boards.find((board) => board.id === id)?.columns ?? ["To do"])];
@@ -50,8 +50,9 @@ export const Create: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "New" }));
     const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
     await userEvent.type(dialog.getByLabelText("Board name"), "Marketing");
+    await userEvent.type(dialog.getByLabelText("Description"), "Plan marketing tasks.");
     await userEvent.click(dialog.getByRole("button", { name: "Create board" }));
-    await expect(args.persistence?.create).toHaveBeenCalledWith("Marketing");
+    await expect(args.persistence?.create).toHaveBeenCalledWith("Marketing", "Plan marketing tasks.");
     await expect(await canvas.findByRole("navigation", { name: "Board breadcrumbs" })).toHaveTextContent("Marketing");
     await userEvent.click(canvas.getByRole("button", { name: "All boards" }));
     await expect(canvas.getByRole("button", { name: "Marketing" })).toBeVisible();
@@ -64,8 +65,9 @@ export const DuplicateName: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "New" }));
     const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
     await userEvent.type(dialog.getByLabelText("Board name"), "Product");
+    await userEvent.type(dialog.getByLabelText("Description"), "Plan marketing tasks.");
     await userEvent.click(dialog.getByRole("button", { name: "Create board" }));
-    await expect(await dialog.findByRole("alert")).toHaveTextContent("already exists");
+    await expect(dialog.getByLabelText("Board name")).toHaveAttribute("aria-invalid", "true");
     await expect(dialog.getByLabelText("Board name")).toHaveValue("Product");
   },
 };
@@ -77,5 +79,14 @@ export const LoadingFailure: Story = {
     await expect(await canvas.findByRole("button", { name: "Retry" })).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "All boards" }));
     await expect(canvas.getByRole("list", { name: "Boards" })).toBeVisible();
+  },
+};
+
+export const SelectedBoard: Story = {
+  args: { initialBoardId: "research" },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByLabelText("Board name")).toHaveValue("Research");
+    await expect(canvas.getByLabelText("Description")).toBeVisible();
   },
 };

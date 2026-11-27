@@ -86,7 +86,7 @@ export function PersistentWorkspace({
     return (
       <UrlColumnSettings
         key={attempt}
-        boardSettings={<BoardSettings boards={boards} />}
+        boardSettings={<BoardSettings boards={boards} initialBoardId={typeof window === "undefined" ? undefined : new URL(window.location.href).searchParams.get("board") ?? undefined} />}
         initialColumns={columns}
         initialTaskCounts={Object.fromEntries(
           columns.map((column) => [
@@ -122,6 +122,7 @@ export function PersistentWorkspace({
       initialCompletionColumn={board.completionColumn}
       initialWorktreesEnabled={board.worktreesEnabled}
       initialTaskId={typeof window === "undefined" ? undefined : new URL(window.location.href).searchParams.get("task") ?? undefined}
+      configureBoard={boardApi.rename}
       configureColumn={columnApi.rename}
       assignAgent={agentApi.assign}
       persistence={taskApi}

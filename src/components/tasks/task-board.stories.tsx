@@ -433,3 +433,38 @@ export const ColumnSettingsFailure: Story = {
   },
 };
 export const ColumnSettingsDark: Story = { ...ColumnSettings, globals: { theme: "dark" } };
+
+export const BoardDescription: Story = {
+  args: { boardId: "product", boards: [{ id: "product", name: "Product development", description: "Plan product changes and track work through review.", columns: ["To do", "In progress", "In review", "Done"] }] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole("heading", { level: 1, name: "Product development" })).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "Edit Product development" })).toBeInTheDocument();
+    await expect(canvas.getByText("Plan product changes and track work through review.")).toBeVisible();
+  },
+};
+export const BoardDescriptionDark: Story = { ...BoardDescription, globals: { theme: "dark" } };
+export const BoardDescriptionNarrow: Story = { ...BoardDescription, globals: { viewport: { value: "mobile1" } } };
+
+export const EditBoardSettings: Story = {
+  args: BoardDescription.args,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole("button", { name: "Edit Product development" }));
+    const dialog = within(await page.findByRole("dialog", { name: "Board settings" }));
+    await userEvent.clear(dialog.getByLabelText("Board name"));
+    await userEvent.type(dialog.getByLabelText("Board name"), "Release planning");
+    await userEvent.clear(dialog.getByLabelText("Description"));
+    await userEvent.type(dialog.getByLabelText("Description"), "Track release tasks.");
+    await userEvent.click(dialog.getByRole("button", { name: "Save settings" }));
+    await waitFor(() => expect(page.queryByRole("dialog")).not.toBeInTheDocument());
+    await expect(canvas.getByRole("heading", { level: 1, name: "Release planning" })).toBeVisible();
+    await expect(canvas.getByText("Track release tasks.")).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "Edit Release planning" })).toHaveFocus();
+    await userEvent.click(canvas.getByRole("button", { name: "Edit Release planning" }));
+    const reopened = within(await page.findByRole("dialog", { name: "Board settings" }));
+    await expect(reopened.getByLabelText("Board name")).toHaveValue("Release planning");
+    await userEvent.click(reopened.getByRole("button", { name: "Cancel" }));
+  },
+};
