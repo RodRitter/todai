@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { DatabaseSync } from "node:sqlite";
+import { ArtifactStore } from "./artifact-store.ts";
 import { TaskStore } from "./task-store.ts";
 import { WorkspaceChatStore, chatModel } from "./workspace-chat-store.ts";
 import { sendWorkspaceChat } from "./workspace-chat-service.ts";
-import { callWorkspaceTool, openWorkspaceChatTools } from "./workspace-chat-tools.ts";
+import { callWorkspaceTool, openWorkspaceChatTools, workspaceChatTools } from "./workspace-chat-tools.ts";
 import { workspaceChatArgs, workspaceChatPrompt } from "./workspace-chat-runner.ts";
 
 function fixture() {
@@ -109,7 +110,7 @@ test("MCP requires authentication and active leases; partial changes survive res
     try { assert.equal((await fetch(server.connection.url, { method: "POST", headers: { Authorization: `Bearer ${server.connection.token}` }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) })).status, 400); } finally { server.close(); }
   } finally { f.close(); }
 });
-test("both runner configurations expose only management tools and selected model/effort", () => {
+test("both runner configurations expose workspace tools and selected model/effort", () => {
   const f = fixture();
   try {
     const session = { ...f.chats.create(), effort: "high" as const }, connection = { url: "http://127.0.0.1:1234/mcp", token: "test-token" };
@@ -185,5 +186,100 @@ test("expired workspace usage recovers before a new chat takes the database lock
     const session = f.chats.create(), { lease } = f.chats.begin(session.id, "Hello", model);
     assert.equal(db.prepare("SELECT outcome FROM task_usage WHERE id = 'expired'").get()!.outcome, "Interrupted");
     f.chats.finish(session.id, lease, "Hello"); db.close();
+  } finally { f.close(); }
+});
+
+
+test("inspection tools read project files, tickets, memories, and artifacts within the workspace", () => {
+  const f = fixture();
+  try {
+    const root = join(f.directory, "project"); mkdirSync(root);
+    f.tasks.setWorkspacePath(root);
+    mkdirSync(join(root, "src"));
+    writeFileSync(join(root, "src", "example.ts"), "export const greeting = 'hello';\n");
+    writeFileSync(join(root, ".env"), "PRIVATE=value");
+    writeFileSync(join(f.directory, "outside.txt"), "outside");
+    symlinkSync(join(f.directory, "outside.txt"), join(root, "escape.txt"));
+    const call = (name: string, args = {}) => callWorkspaceTool(f.tasks, name, args);
+    assert.equal((call("read_workspace") as { path: string }).path, root);
+    assert.match(JSON.stringify(call("list_project_files")), /src/);
+    assert.doesNotMatch(JSON.stringify(call("list_project_files")), /\.env|escape/);
+    assert.equal((call("read_project_file", { path: "src/example.ts", limit: 6 }) as { content: string }).content, "export");
+    assert.match(JSON.stringify(call("search_project_files", { query: "GREETING" })), /src\/example.ts/);
+    assert.equal((call("read_project_file", { path: "src/example.ts", offset: 7, limit: 5 }) as { content: string }).content, "const");
+    writeFileSync(join(root, "src", "many.txt"), "needle\n".repeat(101));
+    const search = call("search_project_files", { query: "needle", path: "src" }) as { matches: unknown[]; truncated: boolean };
+    assert.equal(search.matches.length, 100); assert.equal(search.truncated, true);
+    const files = call("list_project_files", { path: "src", limit: 1 }) as { entries: unknown[]; nextOffset: number };
+    assert.equal(files.entries.length, 1); assert.equal(files.nextOffset, 1);
+    for (const path of ["../outside.txt", "escape.txt", ".env", join(f.directory, "outside.txt")]) {
+      assert.throws(() => call("read_project_file", { path }), /project path/);
+    }
+    assert.throws(() => call("list_project_files", { offset: -1 }), /whole number/);
+    assert.throws(() => call("list_tasks", { limit: 0 }), /greater than zero/);
+    const task = f.tasks.save({ id: "inspect", title: "Inspect code", description: "Find the greeting", status: "To do" });
+    f.tasks.postComment(task.id, "Check the saved evidence.");
+    assert.match(JSON.stringify(call("list_tasks", { query: "saved evidence" })), /Inspect code/);
+    assert.match(JSON.stringify(call("read_task", { id: task.id })), /Check the saved evidence/);
+    f.tasks.changeMemory({ operation: "add", category: "Practices", title: "Project checks", statement: "Read tests.", scope: "Project", source: `#task/${task.id}`, reason: "Confirmed." });
+    const artifacts = new ArtifactStore(f.path, f.tasks.workspaceId);
+    try {
+      const artifact = artifacts.create({ title: "Inspection report", type: "markdown", creator: "Human", content: "Saved inspection evidence" });
+      artifacts.linkTask(task.id, artifact.id);
+      assert.match(JSON.stringify(call("list_artifacts", { taskId: task.id })), /Inspection report/);
+      assert.equal((call("read_artifact", { id: artifact.id, offset: 6, limit: 10 }) as { content: string }).content, "inspection");
+      const otherArtifacts = new ArtifactStore(f.path, f.tasks.createWorkspace("Artifact isolation", f.directory).id);
+      try {
+        const privateArtifact = otherArtifacts.create({ title: "Private", type: "text", creator: "Human", content: "Private content" });
+        assert.throws(() => call("read_artifact", { id: privateArtifact.id }));
+      } finally { otherArtifacts.close(); }
+    } finally { artifacts.close(); }
+    const memory = f.tasks.searchMemory().entries[0];
+    assert.match(JSON.stringify(call("search_memories", { query: "Project" })), /Project checks/);
+    assert.match(JSON.stringify(call("read_memory", { id: memory.id })), /Read tests/);
+    assert.ok(call("list_runs", { taskId: task.id }));
+    assert.throws(() => call("read_run", { id: "missing" }), /this workspace/);
+    const foreign = f.tasks.createWorkspace("Other", f.directory), other = new TaskStore(f.path, foreign.id);
+    try {
+      const privateTask = other.save({ id: "private", title: "Private", description: "", status: "To do" });
+      assert.throws(() => call("read_task", { id: privateTask.id }));
+      assert.throws(() => call("list_runs", { taskId: privateTask.id }));
+      assert.doesNotMatch(JSON.stringify(call("list_tasks")), /Private/);
+      other.changeMemory({ operation: "add", category: "Practices", title: "Private memory", statement: "Other workspace.", scope: "Other", source: "Human", reason: "Confirmed." });
+      assert.throws(() => call("read_memory", { id: other.searchMemory().entries[0].id }), /unavailable/);
+    } finally { other.close(); }
+    const prompt = workspaceChatPrompt(f.chats.create());
+    assert.match(prompt, /read_workspace/);
+    assert.doesNotMatch(prompt, /Do not read or write project files/);
+    for (const name of ["read_workspace", "list_project_files", "read_project_file", "search_project_files", "list_tasks", "read_task", "search_memories", "read_memory", "list_runs", "read_run", "list_artifacts", "read_artifact"]) {
+      assert.equal(workspaceChatTools.find(tool => tool.name === name)?.mutation, false);
+    }
+  } finally { f.close(); }
+});
+
+
+test("chat MCP advertises and executes inspection tools with recorded read-only activity", async () => {
+  const f = fixture();
+  try {
+    const root = join(f.directory, "project"); mkdirSync(root); f.tasks.setWorkspacePath(root);
+    writeFileSync(join(root, "README.md"), "Project overview");
+    const response = await sendWorkspaceChat(f.tasks, f.chats, f.chats.create().id, "Inspect the project", model, async request => {
+      const call = async (method: string, params?: unknown) => (await fetch(request.connection.url, {
+        method: "POST", headers: { Authorization: `Bearer ${request.connection.token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+      })).json();
+      const list = await call("tools/list");
+      for (const tool of workspaceChatTools.filter(tool => !tool.mutation)) {
+        assert.equal(list.result.tools.find((item: { name: string }) => item.name === tool.name)?.annotations.readOnlyHint, true);
+      }
+      const result = await call("tools/call", { name: "read_project_file", arguments: { path: "README.md" } });
+      assert.equal(result.result.isError, undefined);
+      assert.equal(JSON.parse(result.result.content[0].text).content, "Project overview");
+      return "Read the project overview.";
+    });
+    assert.equal(response.error, null);
+    assert.equal(response.activities[0].name, "read_project_file");
+    assert.equal(response.activities[0].mutation, false);
+    assert.equal(response.activities[0].status, "complete");
   } finally { f.close(); }
 });
